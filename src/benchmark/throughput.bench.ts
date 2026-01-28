@@ -4,6 +4,7 @@
  */
 
 import { QueueManager } from '../application/queueManager';
+import type { JobId } from '../domain/types/job';
 
 const QUEUE_NAME = 'benchmark-queue';
 
@@ -76,9 +77,9 @@ async function benchmarkAck(qm: QueueManager, count: number): Promise<BenchmarkR
 
   let idx = 0;
   return runBenchmark('ACK', count, async () => {
-    const jobId = jobIds[idx++];
+    const jobId = jobIds[idx++] as JobId | undefined;
     if (jobId !== undefined) {
-      await qm.ack(jobId as any);
+      await qm.ack(jobId);
     }
   });
 }
@@ -88,7 +89,7 @@ async function benchmarkFullCycle(qm: QueueManager, count: number): Promise<Benc
   const start = performance.now();
 
   for (let i = 0; i < count; i++) {
-    const job = await qm.push(QUEUE_NAME, { data: { id: i } });
+    await qm.push(QUEUE_NAME, { data: { id: i } });
     const pulled = await qm.pull(QUEUE_NAME, 0);
     if (pulled) {
       await qm.ack(pulled.id);
@@ -103,7 +104,11 @@ async function benchmarkFullCycle(qm: QueueManager, count: number): Promise<Benc
 }
 
 /** Benchmark batch push */
-async function benchmarkBatchPush(qm: QueueManager, totalJobs: number, batchSize: number): Promise<BenchmarkResult> {
+async function benchmarkBatchPush(
+  qm: QueueManager,
+  totalJobs: number,
+  batchSize: number
+): Promise<BenchmarkResult> {
   const batches = Math.ceil(totalJobs / batchSize);
   const jobs = Array.from({ length: batchSize }, (_, i) => ({ data: { id: i } }));
 
@@ -117,7 +122,12 @@ async function benchmarkBatchPush(qm: QueueManager, totalJobs: number, batchSize
   const durationMs = end - start;
   const jobsPerSecond = (actualJobs / durationMs) * 1000;
 
-  return { operation: `BATCH PUSH (batch=${batchSize})`, totalJobs: actualJobs, durationMs, jobsPerSecond };
+  return {
+    operation: `BATCH PUSH (batch=${batchSize})`,
+    totalJobs: actualJobs,
+    durationMs,
+    jobsPerSecond,
+  };
 }
 
 /** Print results table */
@@ -127,18 +137,18 @@ function printResults(results: BenchmarkResult[]): void {
   console.log('='.repeat(70));
   console.log(
     'Operation'.padEnd(35) +
-    'Jobs'.padStart(10) +
-    'Time (ms)'.padStart(12) +
-    'Jobs/sec'.padStart(13)
+      'Jobs'.padStart(10) +
+      'Time (ms)'.padStart(12) +
+      'Jobs/sec'.padStart(13)
   );
   console.log('-'.repeat(70));
 
   for (const r of results) {
     console.log(
       r.operation.padEnd(35) +
-      formatNumber(r.totalJobs).padStart(10) +
-      formatNumber(r.durationMs).padStart(12) +
-      formatNumber(r.jobsPerSecond).padStart(13)
+        formatNumber(r.totalJobs).padStart(10) +
+        formatNumber(r.durationMs).padStart(12) +
+        formatNumber(r.jobsPerSecond).padStart(13)
     );
   }
 
@@ -156,10 +166,10 @@ async function main(): Promise<void> {
   const SMALL = 10_000;
   // Medium test
   const MEDIUM = 50_000;
-  // Large test
+  // Test with different job counts (add LARGE for extended benchmarks)
   const LARGE = 100_000;
+  void LARGE; // Available for extended benchmarks
 
-  // Test with different job counts
   for (const count of [SMALL, MEDIUM]) {
     console.log(`\nRunning benchmarks with ${formatNumber(count)} jobs...`);
 
@@ -193,7 +203,6 @@ async function main(): Promise<void> {
       console.log('  Testing BATCH PUSH...');
       results.push(await benchmarkBatchPush(qm, count, 100));
       results.push(await benchmarkBatchPush(qm, count, 1000));
-
     } finally {
       qm.shutdown();
     }
@@ -202,9 +211,9 @@ async function main(): Promise<void> {
   printResults(results);
 
   // Summary
-  const pushResults = results.filter(r => r.operation === 'PUSH');
-  const pullResults = results.filter(r => r.operation === 'PULL');
-  const ackResults = results.filter(r => r.operation === 'ACK');
+  const pushResults = results.filter((r) => r.operation === 'PUSH');
+  const pullResults = results.filter((r) => r.operation === 'PULL');
+  const ackResults = results.filter((r) => r.operation === 'ACK');
 
   console.log('\nSUMMARY');
   console.log('-'.repeat(40));

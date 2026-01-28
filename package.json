@@ -24,6 +24,7 @@
     "README.md"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .husky",
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
     "build": "bun build --compile --minify src/main.ts --outfile dist/bunq",
