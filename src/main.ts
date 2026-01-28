@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 /**
  * bunqueue - High-performance job queue server for Bun
  * Main entry point
