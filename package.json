@@ -1,33 +1,33 @@
 {
-  "name": "bunq",
-  "version": "0.1.0",
-  "description": "High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ.",
+  "name": "bunqueue",
+  "version": "1.0.0",
+  "description": "High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ. Zero external dependencies.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "bin": {
+    "bunqueue": "./dist/main.js"
+  },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/main.d.ts",
+      "import": "./dist/main.js"
     },
-    "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.js"
-    },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "import": "./dist/server.js"
+    "./queue": {
+      "types": "./dist/application/queueManager.d.ts",
+      "import": "./dist/application/queueManager.js"
     }
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .husky",
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
-    "build": "bun build --compile --minify src/main.ts --outfile dist/bunq",
+    "build": "bun build --compile --minify src/main.ts --outfile dist/bunqueue",
     "build:lib": "tsc -p tsconfig.build.json",
     "test": "bun test",
     "bench": "bun run benchmarks/index.ts",
@@ -65,10 +65,18 @@
     "worker",
     "queue"
   ],
-  "author": "",
+  "author": "egeominotti",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/egeominotti/bunq"
+    "url": "git+https://github.com/egeominotti/bunQ.git"
+  },
+  "bugs": {
+    "url": "https://github.com/egeominotti/bunQ/issues"
+  },
+  "homepage": "https://github.com/egeominotti/bunQ#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
   }
 }
