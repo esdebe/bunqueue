@@ -1,5 +1,5 @@
 /**
- * bunQ - High-performance job queue server for Bun
+ * bunqueue - High-performance job queue server for Bun
  * Main entry point
  */
 
@@ -37,7 +37,7 @@ function printBanner(config: ServerConfig): void {
   console.log(`
   ╔═══════════════════════════════════════════════════════════╗
   ║                                                           ║
-  ║   🐰 bunQ                                                 ║
+  ║   🐰 bunqueue                                                 ║
   ║   High-performance job queue server for Bun               ║
   ║                                                           ║
   ╠═══════════════════════════════════════════════════════════╣

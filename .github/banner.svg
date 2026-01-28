@@ -44,9 +44,9 @@
     <circle cx="55" cy="55" r="5" fill="#f97316"/>
   </g>
 
-  <!-- Text: bunQ -->
-  <text x="150" y="125" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="white">
-    bun<tspan fill="url(#orangeGrad)">Q</tspan>
+  <!-- Text: bunqueue -->
+  <text x="150" y="125" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="bold" fill="white">
+    bun<tspan fill="url(#orangeGrad)">queue</tspan>
   </text>
 
   <!-- Tagline -->

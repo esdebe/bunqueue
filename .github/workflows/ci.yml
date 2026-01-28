@@ -81,15 +81,15 @@ jobs:
       matrix:
         include:
           - target: bun-linux-x64
-            artifact: bunq-linux-x64
+            artifact: bunqueue-linux-x64
           - target: bun-linux-arm64
-            artifact: bunq-linux-arm64
+            artifact: bunqueue-linux-arm64
           - target: bun-darwin-x64
-            artifact: bunq-darwin-x64
+            artifact: bunqueue-darwin-x64
           - target: bun-darwin-arm64
-            artifact: bunq-darwin-arm64
+            artifact: bunqueue-darwin-arm64
           - target: bun-windows-x64
-            artifact: bunq-windows-x64.exe
+            artifact: bunqueue-windows-x64.exe
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -189,7 +189,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          pattern: bunq-*
+          pattern: bunqueue-*
           merge-multiple: false
 
       - name: Prepare release assets
@@ -197,23 +197,23 @@ jobs:
           mkdir -p release
 
           # Linux x64
-          cp artifacts/bunq-linux-x64/bunq-linux-x64 release/bunq-linux-x64
-          chmod +x release/bunq-linux-x64
+          cp artifacts/bunqueue-linux-x64/bunqueue-linux-x64 release/bunqueue-linux-x64
+          chmod +x release/bunqueue-linux-x64
 
           # Linux arm64
-          cp artifacts/bunq-linux-arm64/bunq-linux-arm64 release/bunq-linux-arm64
-          chmod +x release/bunq-linux-arm64
+          cp artifacts/bunqueue-linux-arm64/bunqueue-linux-arm64 release/bunqueue-linux-arm64
+          chmod +x release/bunqueue-linux-arm64
 
           # macOS x64
-          cp artifacts/bunq-darwin-x64/bunq-darwin-x64 release/bunq-darwin-x64
-          chmod +x release/bunq-darwin-x64
+          cp artifacts/bunqueue-darwin-x64/bunqueue-darwin-x64 release/bunqueue-darwin-x64
+          chmod +x release/bunqueue-darwin-x64
 
           # macOS arm64 (Apple Silicon)
-          cp artifacts/bunq-darwin-arm64/bunq-darwin-arm64 release/bunq-darwin-arm64
-          chmod +x release/bunq-darwin-arm64
+          cp artifacts/bunqueue-darwin-arm64/bunqueue-darwin-arm64 release/bunqueue-darwin-arm64
+          chmod +x release/bunqueue-darwin-arm64
 
           # Windows x64
-          cp artifacts/bunq-windows-x64.exe/bunq-windows-x64.exe release/bunq-windows-x64.exe
+          cp artifacts/bunqueue-windows-x64.exe/bunqueue-windows-x64.exe release/bunqueue-windows-x64.exe
 
           ls -la release/
 
@@ -224,11 +224,11 @@ jobs:
           name: Release v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
-            release/bunq-linux-x64
-            release/bunq-linux-arm64
-            release/bunq-darwin-x64
-            release/bunq-darwin-arm64
-            release/bunq-windows-x64.exe
+            release/bunqueue-linux-x64
+            release/bunqueue-linux-arm64
+            release/bunqueue-darwin-x64
+            release/bunqueue-darwin-arm64
+            release/bunqueue-windows-x64.exe
           body: |
             ## Installation
 
@@ -243,14 +243,14 @@ jobs:
 
             | Platform | Architecture | Download |
             |----------|-------------|----------|
-            | Linux | x64 | `bunq-linux-x64` |
-            | Linux | arm64 | `bunq-linux-arm64` |
-            | macOS | x64 (Intel) | `bunq-darwin-x64` |
-            | macOS | arm64 (Apple Silicon) | `bunq-darwin-arm64` |
-            | Windows | x64 | `bunq-windows-x64.exe` |
+            | Linux | x64 | `bunqueue-linux-x64` |
+            | Linux | arm64 | `bunqueue-linux-arm64` |
+            | macOS | x64 (Intel) | `bunqueue-darwin-x64` |
+            | macOS | arm64 (Apple Silicon) | `bunqueue-darwin-arm64` |
+            | Windows | x64 | `bunqueue-windows-x64.exe` |
 
             ```bash
             # Example: Linux x64
-            chmod +x bunq-linux-x64
-            ./bunq-linux-x64
+            chmod +x bunqueue-linux-x64
+            ./bunqueue-linux-x64
             ```

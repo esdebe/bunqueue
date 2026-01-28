@@ -1,5 +1,5 @@
 /**
- * bunQ Throughput Benchmark
+ * bunqueue Throughput Benchmark
  * Measures jobs per second for push, pull, ack operations
  */
 
@@ -157,7 +157,7 @@ function printResults(results: BenchmarkResult[]): void {
 
 /** Main benchmark runner */
 async function main(): Promise<void> {
-  console.log('bunQ Throughput Benchmark');
+  console.log('bunqueue Throughput Benchmark');
   console.log('========================\n');
 
   const results: BenchmarkResult[] = [];

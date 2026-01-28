@@ -1,4 +1,4 @@
-# bunQ 🐰
+# bunqueue 🐰
 
 High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ. Zero external dependencies.
 
@@ -6,7 +6,7 @@ High-performance job queue server for Bun. SQLite persistence, cron jobs, priori
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      bunQ server                            │
+│                      bunqueue server                            │
 ├─────────────────────────────────────────────────────────────┤
 │  HTTP API (Bun.serve)  │  TCP Protocol (Bun.listen)        │
 ├─────────────────────────────────────────────────────────────┤
@@ -386,9 +386,9 @@ bun run bench
 bun run dev
 
 # Build single executable
-bun build --compile --minify src/main.ts --outfile bunQ
+bun build --compile --minify src/main.ts --outfile bunqueue
 
 # Docker
-docker build -t bunQ .
-docker run -p 6789:6789 -p 6790:6790 bunQ
+docker build -t bunqueue .
+docker run -p 6789:6789 -p 6790:6790 bunqueue
 ```

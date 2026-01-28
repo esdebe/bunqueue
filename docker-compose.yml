@@ -1,20 +1,20 @@
 version: "3.8"
 
 services:
-  bunq:
+  bunqueue:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bunq
+    container_name: bunqueue
     ports:
       - "6789:6789"  # TCP Protocol
       - "6790:6790"  # HTTP API
     volumes:
-      - bunq-data:/app/data
+      - bunqueue-data:/app/data
     environment:
       - TCP_PORT=6789
       - HTTP_PORT=6790
-      - DATA_PATH=/app/data/bunq.db
+      - DATA_PATH=/app/data/bunqueue.db
       - NODE_ENV=production
       # Uncomment to enable auth
       # - AUTH_TOKENS=your-secret-token
@@ -27,9 +27,9 @@ services:
       start_period: 5s
 
   # Optional: Development with hot reload
-  bunq-dev:
+  bunqueue-dev:
     image: oven/bun:1-alpine
-    container_name: bunq-dev
+    container_name: bunqueue-dev
     working_dir: /app
     ports:
       - "6789:6789"
@@ -37,16 +37,16 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      - bunq-dev-data:/app/data
+      - bunqueue-dev-data:/app/data
     environment:
       - TCP_PORT=6789
       - HTTP_PORT=6790
-      - DATA_PATH=/app/data/bunq.db
+      - DATA_PATH=/app/data/bunqueue.db
       - NODE_ENV=development
     command: bun run dev
     profiles:
       - dev
 
 volumes:
-  bunq-data:
-  bunq-dev-data:
+  bunqueue-data:
+  bunqueue-dev-data:

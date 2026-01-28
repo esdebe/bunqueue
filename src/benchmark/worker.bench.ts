@@ -1,5 +1,5 @@
 /**
- * bunQ Worker Benchmark
+ * bunqueue Worker Benchmark
  * Realistic benchmark: push -> pull -> ack with events
  */
 
@@ -58,7 +58,7 @@ async function benchmark(name: string, jobCount: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log('bunQ Worker Benchmark');
+  console.log('bunqueue Worker Benchmark');
   console.log('=====================');
 
   await benchmark('10,000 jobs', 10_000);

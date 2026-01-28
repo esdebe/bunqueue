@@ -34,9 +34,9 @@ describe('Metrics Exporter', () => {
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
       // Should contain HELP and TYPE comments
-      expect(output).toContain('# HELP bunq_jobs_waiting');
-      expect(output).toContain('# TYPE bunq_jobs_waiting gauge');
-      expect(output).toContain('bunq_jobs_waiting 10');
+      expect(output).toContain('# HELP bunqueue_jobs_waiting');
+      expect(output).toContain('# TYPE bunqueue_jobs_waiting gauge');
+      expect(output).toContain('bunqueue_jobs_waiting 10');
 
       workerManager.stop();
     });
@@ -54,11 +54,11 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_jobs_waiting 100');
-      expect(output).toContain('bunq_jobs_delayed 50');
-      expect(output).toContain('bunq_jobs_active 25');
-      expect(output).toContain('bunq_jobs_dlq 5');
-      expect(output).toContain('bunq_jobs_completed 1000');
+      expect(output).toContain('bunqueue_jobs_waiting 100');
+      expect(output).toContain('bunqueue_jobs_delayed 50');
+      expect(output).toContain('bunqueue_jobs_active 25');
+      expect(output).toContain('bunqueue_jobs_dlq 5');
+      expect(output).toContain('bunqueue_jobs_completed 1000');
 
       workerManager.stop();
     });
@@ -75,10 +75,10 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_jobs_pushed_total 10000');
-      expect(output).toContain('bunq_jobs_pulled_total 9500');
-      expect(output).toContain('bunq_jobs_completed_total 9000');
-      expect(output).toContain('bunq_jobs_failed_total 500');
+      expect(output).toContain('bunqueue_jobs_pushed_total 10000');
+      expect(output).toContain('bunqueue_jobs_pulled_total 9500');
+      expect(output).toContain('bunqueue_jobs_completed_total 9000');
+      expect(output).toContain('bunqueue_jobs_failed_total 500');
 
       workerManager.stop();
     });
@@ -90,7 +90,7 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_uptime_seconds 3600');
+      expect(output).toContain('bunqueue_uptime_seconds 3600');
 
       workerManager.stop();
     });
@@ -102,7 +102,7 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_cron_jobs_total 5');
+      expect(output).toContain('bunqueue_cron_jobs_total 5');
 
       workerManager.stop();
     });
@@ -121,10 +121,10 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_workers_total 2');
-      expect(output).toContain('bunq_workers_active 2');
-      expect(output).toContain('bunq_workers_processed_total 1');
-      expect(output).toContain('bunq_workers_failed_total 1');
+      expect(output).toContain('bunqueue_workers_total 2');
+      expect(output).toContain('bunqueue_workers_active 2');
+      expect(output).toContain('bunqueue_workers_processed_total 1');
+      expect(output).toContain('bunqueue_workers_failed_total 1');
 
       workerManager.stop();
     });
@@ -142,8 +142,8 @@ describe('Metrics Exporter', () => {
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
-      expect(output).toContain('bunq_webhooks_total 3');
-      expect(output).toContain('bunq_webhooks_enabled 2');
+      expect(output).toContain('bunqueue_webhooks_total 3');
+      expect(output).toContain('bunqueue_webhooks_enabled 2');
 
       workerManager.stop();
     });
@@ -156,13 +156,13 @@ describe('Metrics Exporter', () => {
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 
       // Gauges
-      expect(output).toContain('# TYPE bunq_jobs_waiting gauge');
-      expect(output).toContain('# TYPE bunq_jobs_delayed gauge');
-      expect(output).toContain('# TYPE bunq_jobs_active gauge');
+      expect(output).toContain('# TYPE bunqueue_jobs_waiting gauge');
+      expect(output).toContain('# TYPE bunqueue_jobs_delayed gauge');
+      expect(output).toContain('# TYPE bunqueue_jobs_active gauge');
 
       // Counters
-      expect(output).toContain('# TYPE bunq_jobs_pushed_total counter');
-      expect(output).toContain('# TYPE bunq_jobs_pulled_total counter');
+      expect(output).toContain('# TYPE bunqueue_jobs_pushed_total counter');
+      expect(output).toContain('# TYPE bunqueue_jobs_pulled_total counter');
 
       workerManager.stop();
     });

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src=".github/banner.svg" alt="bunQ - High-performance job queue for Bun" width="700" />
+  <img src=".github/banner.svg" alt="bunqueue - High-performance job queue for Bun" width="700" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/egeominotti/bunq/actions"><img src="https://github.com/egeominotti/bunq/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/egeominotti/bunq/releases"><img src="https://img.shields.io/github/v/release/egeominotti/bunq" alt="Release"></a>
-  <a href="https://github.com/egeominotti/bunq/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunq" alt="License"></a>
+  <a href="https://github.com/egeominotti/bunqueue/actions"><img src="https://github.com/egeominotti/bunqueue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/egeominotti/bunqueue/releases"><img src="https://img.shields.io/github/v/release/egeominotti/bunqueue" alt="Release"></a>
+  <a href="https://github.com/egeominotti/bunqueue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunqueue" alt="License"></a>
 </p>
 
 <p align="center">
@@ -18,9 +18,55 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/flashq"><img src="https://img.shields.io/npm/v/flashq" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/v/bunqueue?label=bunqueue" alt="bunqueue npm"></a>
+  <a href="https://www.npmjs.com/package/flashq"><img src="https://img.shields.io/npm/v/flashq?label=flashq" alt="flashq npm"></a>
   <a href="https://www.npmjs.com/package/flashq"><img src="https://img.shields.io/npm/dm/flashq" alt="npm downloads"></a>
 </p>
+
+---
+
+## Quick Install
+
+bunqueue requires two packages: the **server** and the **SDK**.
+
+```bash
+# Install both packages
+bun add bunqueue flashq
+```
+
+| Package | Description |
+|---------|-------------|
+| [bunqueue](https://www.npmjs.com/package/bunqueue) | Job queue server |
+| [flashq](https://www.npmjs.com/package/flashq) | TypeScript SDK for clients |
+
+### Start Server
+
+```bash
+# Option 1: Run directly
+bunqueue
+
+# Option 2: Run via npx
+npx bunqueue
+
+# Option 3: Docker
+docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunqueue
+```
+
+### Use SDK
+
+```typescript
+import { Queue, Worker } from 'flashq';
+
+// Producer: add jobs
+const queue = new Queue('emails');
+await queue.add('send-welcome', { to: 'user@example.com' });
+
+// Consumer: process jobs
+const worker = new Worker('emails', async (job) => {
+  console.log('Sending email to:', job.data.to);
+  return { sent: true };
+});
+```
 
 ---
 
@@ -42,17 +88,15 @@
 - **Authentication** — Token-based auth for secure access
 - **Dual Protocol** — TCP (high performance) and HTTP/REST (compatibility)
 
-## SDK
+## SDK (flashq)
 
-Install the official TypeScript SDK to use bunQ in your Bun applications.
-
-> **Note:** The SDK requires Bun runtime and a running bunQ server.
-
-### Install
+The [flashq](https://www.npmjs.com/package/flashq) SDK provides a type-safe TypeScript interface for bunqueue.
 
 ```bash
 bun add flashq
 ```
+
+> **Prerequisites:** A running bunqueue server (see [Quick Install](#quick-install))
 
 ### Basic Usage
 
@@ -187,7 +231,7 @@ For more examples, see the [SDK documentation](https://www.npmjs.com/package/fla
 bun run src/main.ts
 
 # Or with Docker
-docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunq
+docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunqueue
 ```
 
 ### Push a Job (HTTP)
@@ -214,11 +258,46 @@ curl -X POST http://localhost:6790/jobs/1/ack \
 
 ## Installation
 
+### Server + SDK
+
+bunqueue is composed of two packages:
+
+| Package | Description | Install |
+|---------|-------------|---------|
+| **bunqueue** | Job queue server | `bun add bunqueue` |
+| **flashq** | TypeScript SDK | `bun add flashq` |
+
+```bash
+# Install both
+bun add bunqueue flashq
+```
+
+### Quick Setup
+
+```bash
+# 1. Start the server
+bunqueue
+
+# 2. Use the SDK in your app
+```
+
+```typescript
+import { Queue, Worker } from 'flashq';
+
+const queue = new Queue('tasks');
+await queue.add('my-job', { data: 'hello' });
+
+const worker = new Worker('tasks', async (job) => {
+  console.log(job.data);
+  return { done: true };
+});
+```
+
 ### From Source
 
 ```bash
-git clone https://github.com/egeominotti/bunq.git
-cd bunq
+git clone https://github.com/egeominotti/bunqueue.git
+cd bunqueue
 bun install
 bun run start
 ```
@@ -227,18 +306,18 @@ bun run start
 
 ```bash
 bun run build
-./dist/bunq
+./dist/bunqueue
 ```
 
 ### Docker
 
 ```bash
-docker pull ghcr.io/egeominotti/bunq
+docker pull ghcr.io/egeominotti/bunqueue
 docker run -d \
   -p 6789:6789 \
   -p 6790:6790 \
-  -v bunq-data:/app/data \
-  ghcr.io/egeominotti/bunq
+  -v bunqueue-data:/app/data \
+  ghcr.io/egeominotti/bunqueue
 ```
 
 ### Docker Compose
@@ -246,18 +325,18 @@ docker run -d \
 ```yaml
 version: "3.8"
 services:
-  bunq:
-    image: ghcr.io/egeominotti/bunq
+  bunqueue:
+    image: ghcr.io/egeominotti/bunqueue
     ports:
       - "6789:6789"
       - "6790:6790"
     volumes:
-      - bunq-data:/app/data
+      - bunqueue-data:/app/data
     environment:
       - AUTH_TOKENS=your-secret-token
 
 volumes:
-  bunq-data:
+  bunqueue-data:
 ```
 
 ## Usage
@@ -514,10 +593,10 @@ curl http://localhost:6790/prometheus
 ```
 
 Metrics include:
-- `bunq_jobs_total{queue,state}` — Job counts by state
-- `bunq_jobs_processed_total{queue}` — Total processed jobs
-- `bunq_jobs_failed_total{queue}` — Total failed jobs
-- `bunq_queue_latency_seconds{queue}` — Processing latency
+- `bunqueue_jobs_total{queue,state}` — Job counts by state
+- `bunqueue_jobs_processed_total{queue}` — Total processed jobs
+- `bunqueue_jobs_failed_total{queue}` — Total failed jobs
+- `bunqueue_queue_latency_seconds{queue}` — Processing latency
 
 ### Statistics
 
@@ -548,25 +627,25 @@ curl http://localhost:6790/stats
 ### Build
 
 ```bash
-docker build -t bunq .
+docker build -t bunqueue .
 ```
 
 ### Run
 
 ```bash
 # Basic
-docker run -p 6789:6789 -p 6790:6790 bunq
+docker run -p 6789:6789 -p 6790:6790 bunqueue
 
 # With persistence
 docker run -p 6789:6789 -p 6790:6790 \
-  -v bunq-data:/app/data \
-  -e DATA_PATH=/app/data/bunq.db \
-  bunq
+  -v bunqueue-data:/app/data \
+  -e DATA_PATH=/app/data/bunqueue.db \
+  bunqueue
 
 # With authentication
 docker run -p 6789:6789 -p 6790:6790 \
   -e AUTH_TOKENS=secret1,secret2 \
-  bunq
+  bunqueue
 ```
 
 ### Docker Compose
@@ -576,14 +655,14 @@ docker run -p 6789:6789 -p 6790:6790 \
 docker compose up -d
 
 # Development (hot reload)
-docker compose --profile dev up bunq-dev
+docker compose --profile dev up bunqueue-dev
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        bunQ Server                          │
+│                        bunqueue Server                          │
 ├─────────────────────────────────────────────────────────────┤
 │   HTTP/WS (Bun.serve)    │    TCP Protocol (Bun.listen)    │
 ├─────────────────────────────────────────────────────────────┤
