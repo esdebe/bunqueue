@@ -58,16 +58,11 @@ export class SqliteStorage {
 
   // ============ Job Operations ============
 
-  nextJobId(): JobId {
-    const result = this.statements.get('nextJobId')!.get() as { value: number };
-    return jobId(BigInt(result.value));
-  }
-
   insertJob(job: Job): void {
     this.statements
       .get('insertJob')!
       .run(
-        Number(job.id),
+        job.id,
         job.queue,
         JSON.stringify(job.data),
         job.priority,
@@ -80,8 +75,8 @@ export class SqliteStorage {
         job.timeout,
         job.uniqueKey,
         job.customId,
-        job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn.map(String)) : null,
-        job.parentId ? Number(job.parentId) : null,
+        job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn) : null,
+        job.parentId,
         job.tags.length > 0 ? JSON.stringify(job.tags) : null,
         job.runAt > Date.now() ? 'delayed' : 'waiting',
         job.lifo ? 1 : 0,
@@ -93,40 +88,40 @@ export class SqliteStorage {
   }
 
   markActive(jobId: JobId, startedAt: number): void {
-    this.statements.get('updateJobState')!.run('active', startedAt, Number(jobId));
+    this.statements.get('updateJobState')!.run('active', startedAt, jobId);
   }
 
   markCompleted(jobId: JobId, completedAt: number): void {
-    this.statements.get('completeJob')!.run('completed', completedAt, Number(jobId));
+    this.statements.get('completeJob')!.run('completed', completedAt, jobId);
   }
 
   markFailed(job: Job, error: string | null): void {
     this.statements
       .get('insertDlq')!
-      .run(Number(job.id), job.queue, JSON.stringify(job.data), error, Date.now(), job.attempts);
+      .run(job.id, job.queue, JSON.stringify(job.data), error, Date.now(), job.attempts);
   }
 
   updateForRetry(job: Job): void {
     this.db
       .prepare('UPDATE jobs SET attempts = ?, run_at = ?, state = ? WHERE id = ?')
-      .run(job.attempts, job.runAt, 'waiting', Number(job.id));
+      .run(job.attempts, job.runAt, 'waiting', job.id);
   }
 
   deleteJob(jobId: JobId): void {
-    this.statements.get('deleteJob')!.run(Number(jobId));
+    this.statements.get('deleteJob')!.run(jobId);
   }
 
   getJob(id: JobId): Job | null {
-    const row = this.statements.get('getJob')!.get(Number(id)) as DbJob | null;
+    const row = this.statements.get('getJob')!.get(id) as DbJob | null;
     return row ? this.rowToJob(row) : null;
   }
 
   storeResult(jobId: JobId, result: unknown): void {
-    this.statements.get('insertResult')!.run(Number(jobId), JSON.stringify(result), Date.now());
+    this.statements.get('insertResult')!.run(jobId, JSON.stringify(result), Date.now());
   }
 
   getResult(jobId: JobId): unknown {
-    const row = this.statements.get('getResult')!.get(Number(jobId)) as { result: string } | null;
+    const row = this.statements.get('getResult')!.get(jobId) as { result: string } | null;
     return row ? safeJsonParse(row.result, null, `getResult:${jobId}`) : null;
   }
 
@@ -137,7 +132,7 @@ export class SqliteStorage {
     this.db.transaction(() => {
       for (const job of jobs) {
         stmt.run(
-          Number(job.id),
+          job.id,
           job.queue,
           JSON.stringify(job.data),
           job.priority,
@@ -150,8 +145,8 @@ export class SqliteStorage {
           job.timeout,
           job.uniqueKey,
           job.customId,
-          job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn.map(String)) : null,
-          job.parentId ? Number(job.parentId) : null,
+          job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn) : null,
+          job.parentId,
           job.tags.length > 0 ? JSON.stringify(job.tags) : null,
           job.runAt > Date.now() ? 'delayed' : 'waiting',
           job.lifo ? 1 : 0,
@@ -232,7 +227,7 @@ export class SqliteStorage {
       : [];
 
     return {
-      id: jobId(BigInt(row.id)),
+      id: jobId(row.id),
       queue: row.queue,
       data: safeJsonParse(row.data, {}, `${jobContext}:data`),
       priority: row.priority,
@@ -247,9 +242,9 @@ export class SqliteStorage {
       timeout: row.timeout,
       uniqueKey: row.unique_key,
       customId: row.custom_id,
-      dependsOn: dependsOn.map((s) => jobId(BigInt(s))),
-      parentId: row.parent_id ? jobId(BigInt(row.parent_id)) : null,
-      childrenIds: childrenIds.map((s) => jobId(BigInt(s))),
+      dependsOn: dependsOn.map((s) => jobId(s)),
+      parentId: row.parent_id ? jobId(row.parent_id) : null,
+      childrenIds: childrenIds.map((s) => jobId(s)),
       childrenCompleted: 0,
       tags,
       lifo: row.lifo === 1,

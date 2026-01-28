@@ -8,7 +8,7 @@ import { createJob, jobId } from '../src/domain/types/job';
 
 describe('IndexedPriorityQueue', () => {
   function makeJob(id: number, priority = 0, runAt = Date.now()) {
-    const job = createJob(jobId(BigInt(id)), 'test', { data: { id } }, runAt);
+    const job = createJob(jobId(`test-job-${id}`), 'test', { data: { id } }, runAt);
     (job as { priority: number }).priority = priority;
     return job;
   }
@@ -59,7 +59,7 @@ describe('IndexedPriorityQueue', () => {
 
     expect(queue.find(job1.id)?.id).toBe(job1.id);
     expect(queue.find(job2.id)?.id).toBe(job2.id);
-    expect(queue.find(jobId(BigInt(999)))).toBeNull();
+    expect(queue.find(jobId('test-job-999'))).toBeNull();
   });
 
   test('should remove job by id', () => {

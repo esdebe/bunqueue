@@ -3,16 +3,19 @@
  * Job push and batch push logic
  */
 
-import { type Job, type JobId, type JobInput, createJob, jobId } from '../../domain/types/job';
+import {
+  type Job,
+  type JobId,
+  type JobInput,
+  createJob,
+  generateJobId,
+} from '../../domain/types/job';
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import { RWLock, withWriteLock } from '../../shared/lock';
 import { shardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
-
-/** In-memory ID counter for when storage is not available */
-let inMemoryIdCounter = 0n;
 
 /** Push operation context */
 export interface PushContext {
@@ -35,9 +38,8 @@ export interface PushContext {
  * Push a single job to queue
  */
 export async function pushJob(queue: string, input: JobInput, ctx: PushContext): Promise<Job> {
-  // Generate ID (use storage or fallback to counter-based ID)
-  const id =
-    ctx.storage?.nextJobId() ?? jobId(BigInt(Date.now()) * 1_000_000n + inMemoryIdCounter++);
+  // Generate UUIDv7 ID
+  const id = generateJobId();
 
   // Handle custom ID idempotency
   if (input.customId) {
@@ -113,7 +115,7 @@ export async function pushJobBatch(
 
   // Generate all jobs
   for (const input of inputs) {
-    const id = ctx.storage?.nextJobId() ?? jobId(BigInt(now) * 1_000_000n + inMemoryIdCounter++);
+    const id = generateJobId();
     jobs.push(createJob(id, queue, input, now));
   }
 

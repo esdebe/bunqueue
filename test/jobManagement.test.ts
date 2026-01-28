@@ -31,7 +31,7 @@ describe('Job Management', () => {
 
     test('should return false for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const cancelled = await qm.cancel(jobId(BigInt(999999)));
+      const cancelled = await qm.cancel(jobId('non-existent'));
       expect(cancelled).toBe(false);
     });
 
@@ -115,7 +115,7 @@ describe('Job Management', () => {
 
     test('should return false for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const updated = await qm.updateJobData(jobId(BigInt(999999)), { data: 'new' });
+      const updated = await qm.updateJobData(jobId('non-existent'), { data: 'new' });
       expect(updated).toBe(false);
     });
   });
@@ -231,7 +231,7 @@ describe('Job Management', () => {
 
     test('should return false for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const discarded = await qm.discard(jobId(BigInt(999999)));
+      const discarded = await qm.discard(jobId('non-existent'));
       expect(discarded).toBe(false);
     });
   });

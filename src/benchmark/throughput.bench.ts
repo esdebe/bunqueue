@@ -66,7 +66,7 @@ async function benchmarkPull(qm: QueueManager, count: number): Promise<Benchmark
 /** Benchmark ACK operation */
 async function benchmarkAck(qm: QueueManager, count: number): Promise<BenchmarkResult> {
   // Pre-pull jobs
-  const jobIds: bigint[] = [];
+  const jobIds: JobId[] = [];
   for (let i = 0; i < count + 100; i++) {
     await qm.push(QUEUE_NAME, { data: { id: i } });
   }
@@ -77,9 +77,9 @@ async function benchmarkAck(qm: QueueManager, count: number): Promise<BenchmarkR
 
   let idx = 0;
   return runBenchmark('ACK', count, async () => {
-    const jobId = jobIds[idx++] as JobId | undefined;
-    if (jobId !== undefined) {
-      await qm.ack(jobId);
+    const jid = jobIds[idx++];
+    if (jid !== undefined) {
+      await qm.ack(jid);
     }
   });
 }

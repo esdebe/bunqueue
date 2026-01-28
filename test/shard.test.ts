@@ -8,7 +8,7 @@ import { createJob, jobId } from '../src/domain/types/job';
 
 describe('Shard', () => {
   function makeJob(id: number, queue = 'test') {
-    return createJob(jobId(BigInt(id)), queue, { data: { id } }, Date.now());
+    return createJob(jobId(`test-job-${id}`), queue, { data: { id } }, Date.now());
   }
 
   test('should create and get queue', () => {

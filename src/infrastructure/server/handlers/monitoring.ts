@@ -3,7 +3,7 @@
  * Handles logs, workers, webhooks, and prometheus metrics
  */
 
-import type { JobId } from '../../../domain/types/job';
+import { jobId } from '../../../domain/types/job';
 import type {
   AddLogCommand,
   GetLogsCommand,
@@ -28,9 +28,9 @@ export async function handleAddLog(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const jobId = BigInt(cmd.id) as JobId;
+  const jid = jobId(cmd.id);
   const level = cmd.level ?? 'info';
-  const success = ctx.queueManager.addLog(jobId, cmd.message, level);
+  const success = ctx.queueManager.addLog(jid, cmd.message, level);
 
   if (success) {
     return resp.data({ added: true }, reqId);
@@ -43,8 +43,8 @@ export async function handleGetLogs(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const jobId = BigInt(cmd.id) as JobId;
-  const logs = ctx.queueManager.getLogs(jobId);
+  const jid = jobId(cmd.id);
+  const logs = ctx.queueManager.getLogs(jid);
   return resp.data({ logs }, reqId);
 }
 

@@ -48,7 +48,7 @@ export async function handlePush(
     timeout: cmd.timeout,
     uniqueKey: cmd.uniqueKey,
     customId: cmd.jobId,
-    dependsOn: cmd.dependsOn?.map((id) => jobId(BigInt(id))),
+    dependsOn: cmd.dependsOn?.map((id) => jobId(id)),
     tags: cmd.tags,
     groupId: cmd.groupId,
     lifo: cmd.lifo,
@@ -117,7 +117,7 @@ export async function handleAck(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  await ctx.queueManager.ack(jobId(BigInt(cmd.id)), cmd.result);
+  await ctx.queueManager.ack(jobId(cmd.id), cmd.result);
   return resp.ok(undefined, reqId);
 }
 
@@ -128,7 +128,7 @@ export async function handleAckBatch(
   reqId?: string
 ): Promise<Response> {
   for (const id of cmd.ids) {
-    await ctx.queueManager.ack(jobId(BigInt(id)));
+    await ctx.queueManager.ack(jobId(id));
   }
   return resp.ok(undefined, reqId);
 }
@@ -139,6 +139,6 @@ export async function handleFail(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  await ctx.queueManager.fail(jobId(BigInt(cmd.id)), cmd.error);
+  await ctx.queueManager.fail(jobId(cmd.id), cmd.error);
   return resp.ok(undefined, reqId);
 }

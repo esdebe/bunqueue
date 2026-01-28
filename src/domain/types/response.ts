@@ -3,7 +3,7 @@
  * All response types for TCP/HTTP protocol
  */
 
-import type { Job, JobId, JobState } from './job';
+import type { Job, JobState } from './job';
 
 /** Base response interface */
 interface BaseResponse {
@@ -183,18 +183,18 @@ export type Response =
 
 // ============ Response Builders ============
 
-export function ok(id?: bigint, reqId?: string): OkResponse {
+export function ok(id?: string, reqId?: string): OkResponse {
   return {
     ok: true,
-    id: id?.toString(),
+    id,
     reqId,
   };
 }
 
-export function batch(ids: bigint[], reqId?: string): BatchResponse {
+export function batch(ids: string[], reqId?: string): BatchResponse {
   return {
     ok: true,
-    ids: ids.map((id) => id.toString()),
+    ids,
     reqId,
   };
 }
@@ -202,35 +202,24 @@ export function batch(ids: bigint[], reqId?: string): BatchResponse {
 export function job(j: Job, reqId?: string): JobResponse {
   return {
     ok: true,
-    job: serializeJobForResponse(j),
+    job: j,
     reqId,
-  } as JobResponse;
+  };
 }
 
 export function nullableJob(j: Job | null, reqId?: string): NullableJobResponse {
   return {
     ok: true,
-    job: j ? serializeJobForResponse(j) : null,
+    job: j,
     reqId,
-  } as NullableJobResponse;
+  };
 }
 
 export function jobs(list: Job[], reqId?: string): JobsResponse {
   return {
     ok: true,
-    jobs: list.map(serializeJobForResponse),
+    jobs: list,
     reqId,
-  } as JobsResponse;
-}
-
-/** Serialize job for JSON response (convert BigInt to string) */
-function serializeJobForResponse(j: Job): Job {
-  return {
-    ...j,
-    id: j.id.toString() as unknown as JobId,
-    dependsOn: j.dependsOn.map((id) => id.toString() as unknown as JobId),
-    parentId: j.parentId ? (j.parentId.toString() as unknown as JobId) : null,
-    childrenIds: j.childrenIds.map((id) => id.toString() as unknown as JobId),
   };
 }
 

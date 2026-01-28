@@ -121,7 +121,7 @@ export const enum EventType {
 export interface JobEvent {
   readonly eventType: EventType;
   readonly queue: string;
-  readonly jobId: bigint;
+  readonly jobId: string;
   readonly timestamp: number;
   readonly data?: unknown;
   readonly error?: string;

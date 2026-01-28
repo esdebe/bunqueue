@@ -55,7 +55,7 @@ describe('Job Logs Manager', () => {
 
     test('should return false for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const added = qm.addLog(jobId(BigInt(999999)), 'Test');
+      const added = qm.addLog(jobId('non-existent'), 'Test');
       expect(added).toBe(false);
     });
 
@@ -80,7 +80,7 @@ describe('Job Logs Manager', () => {
 
     test('should return empty array for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const logs = qm.getLogs(jobId(BigInt(999999)));
+      const logs = qm.getLogs(jobId('non-existent'));
       expect(logs).toEqual([]);
     });
 

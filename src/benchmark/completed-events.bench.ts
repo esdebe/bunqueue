@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   qm.subscribe((event) => {
     if (event.eventType === EventType.Completed) {
       completedEvents++;
-      receivedJobIds.add(String(event.jobId));
+      receivedJobIds.add(event.jobId);
     }
   });
 

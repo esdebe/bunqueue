@@ -14,9 +14,9 @@ PRAGMA page_size = 4096;
 
 /** Main schema creation */
 export const SCHEMA = `
--- Jobs table
+-- Jobs table (using UUIDv7 for job IDs)
 CREATE TABLE IF NOT EXISTS jobs (
-    id INTEGER PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     queue TEXT NOT NULL,
     data TEXT NOT NULL,
     priority INTEGER NOT NULL DEFAULT 0,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     unique_key TEXT,
     custom_id TEXT,
     depends_on TEXT,
-    parent_id INTEGER,
+    parent_id TEXT,
     children_ids TEXT,
     tags TEXT,
     state TEXT NOT NULL DEFAULT 'waiting',
@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_parent
 
 -- Job results storage
 CREATE TABLE IF NOT EXISTS job_results (
-    job_id INTEGER PRIMARY KEY,
+    job_id TEXT PRIMARY KEY,
     result TEXT,
     completed_at INTEGER NOT NULL
 );
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS job_results (
 -- Dead letter queue
 CREATE TABLE IF NOT EXISTS dlq (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_id INTEGER NOT NULL,
+    job_id TEXT NOT NULL,
     queue TEXT NOT NULL,
     data TEXT NOT NULL,
     error TEXT,
@@ -92,15 +92,6 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     max_limit INTEGER
 );
 
--- Sequence for job IDs
-CREATE TABLE IF NOT EXISTS sequences (
-    name TEXT PRIMARY KEY,
-    value INTEGER NOT NULL DEFAULT 0
-);
-
--- Initialize job_id sequence
-INSERT OR IGNORE INTO sequences (name, value) VALUES ('job_id', 0);
-
 -- Queue state persistence (optional)
 CREATE TABLE IF NOT EXISTS queue_state (
     name TEXT PRIMARY KEY,
@@ -119,7 +110,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {

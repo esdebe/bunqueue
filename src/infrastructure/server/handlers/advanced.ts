@@ -17,7 +17,7 @@ export async function handleUpdate(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.updateJobData(jobId(BigInt(cmd.id)), cmd.data);
+  const success = await ctx.queueManager.updateJobData(jobId(cmd.id), cmd.data);
   return success
     ? resp.ok(undefined, reqId)
     : resp.error('Job not found or cannot be updated', reqId);
@@ -29,7 +29,7 @@ export async function handleChangePriority(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.changePriority(jobId(BigInt(cmd.id)), cmd.priority);
+  const success = await ctx.queueManager.changePriority(jobId(cmd.id), cmd.priority);
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not in queue', reqId);
 }
 
@@ -39,7 +39,7 @@ export async function handlePromote(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.promote(jobId(BigInt(cmd.id)));
+  const success = await ctx.queueManager.promote(jobId(cmd.id));
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
 }
 
@@ -49,7 +49,7 @@ export async function handleMoveToDelayed(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.moveToDelayed(jobId(BigInt(cmd.id)), cmd.delay);
+  const success = await ctx.queueManager.moveToDelayed(jobId(cmd.id), cmd.delay);
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not active', reqId);
 }
 
@@ -59,7 +59,7 @@ export async function handleDiscard(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.discard(jobId(BigInt(cmd.id)));
+  const success = await ctx.queueManager.discard(jobId(cmd.id));
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found', reqId);
 }
 
@@ -69,7 +69,7 @@ export async function handleWaitJob(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const jid = jobId(BigInt(cmd.id));
+  const jid = jobId(cmd.id);
   const timeout = cmd.timeout ?? 30000;
   const deadline = Date.now() + timeout;
 

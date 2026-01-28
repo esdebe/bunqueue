@@ -60,15 +60,15 @@ describe('shardIndex', () => {
 describe('processingShardIndex', () => {
   test('should return index within shard count', () => {
     for (let i = 0; i < 100; i++) {
-      const idx = processingShardIndex(BigInt(i));
+      const idx = processingShardIndex(`shard-test-${i}`);
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(idx).toBeLessThan(SHARD_COUNT);
     }
   });
 
   test('should be deterministic', () => {
-    const idx1 = processingShardIndex(BigInt(12345));
-    const idx2 = processingShardIndex(BigInt(12345));
+    const idx1 = processingShardIndex('shard-test-12345');
+    const idx2 = processingShardIndex('shard-test-12345');
     expect(idx1).toBe(idx2);
   });
 });

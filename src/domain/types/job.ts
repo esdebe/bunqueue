@@ -3,12 +3,17 @@
  * Core job structure and related types
  */
 
-/** Branded type for Job IDs */
-export type JobId = bigint & { readonly __brand: 'JobId' };
+/** Branded type for Job IDs (UUIDv7) */
+export type JobId = string & { readonly __brand: 'JobId' };
 
-/** Create a JobId from bigint */
-export function jobId(id: bigint): JobId {
+/** Create a JobId from string */
+export function jobId(id: string): JobId {
   return id as JobId;
+}
+
+/** Generate a new UUIDv7 JobId */
+export function generateJobId(): JobId {
+  return Bun.randomUUIDv7() as JobId;
 }
 
 /** Job state enumeration */

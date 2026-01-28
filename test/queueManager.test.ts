@@ -172,7 +172,7 @@ describe('QueueManager', () => {
 
     test('should return null for unknown id', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const job = await qm.getJob(jobId(BigInt(999999)));
+      const job = await qm.getJob(jobId('non-existent'));
       expect(job).toBeNull();
     });
   });

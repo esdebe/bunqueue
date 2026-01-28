@@ -15,7 +15,7 @@ export async function handleGetJob(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const job = await ctx.queueManager.getJob(jobId(BigInt(cmd.id)));
+  const job = await ctx.queueManager.getJob(jobId(cmd.id));
   return job ? resp.job(job, reqId) : resp.error('Job not found', reqId);
 }
 
@@ -25,7 +25,7 @@ export async function handleGetState(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const job = await ctx.queueManager.getJob(jobId(BigInt(cmd.id)));
+  const job = await ctx.queueManager.getJob(jobId(cmd.id));
   if (!job) return resp.error('Job not found', reqId);
 
   let state: string;
@@ -48,7 +48,7 @@ export async function handleGetResult(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const result = ctx.queueManager.getResult(jobId(BigInt(cmd.id)));
+  const result = ctx.queueManager.getResult(jobId(cmd.id));
   return { ok: true, id: cmd.id, result, reqId } as Response;
 }
 

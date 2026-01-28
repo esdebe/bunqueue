@@ -12,7 +12,6 @@ export type StatementName =
   | 'completeJob'
   | 'deleteJob'
   | 'getJob'
-  | 'nextJobId'
   | 'insertResult'
   | 'getResult'
   | 'insertDlq'
@@ -41,8 +40,6 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
   deleteJob: 'DELETE FROM jobs WHERE id = ?',
 
   getJob: 'SELECT * FROM jobs WHERE id = ?',
-
-  nextJobId: "UPDATE sequences SET value = value + 1 WHERE name = 'job_id' RETURNING value",
 
   insertResult:
     'INSERT OR REPLACE INTO job_results (job_id, result, completed_at) VALUES (?, ?, ?)',
@@ -74,7 +71,7 @@ export function prepareStatements(
 
 /** Database row type for jobs */
 export interface DbJob {
-  id: number;
+  id: string;
   queue: string;
   data: string;
   priority: number;
@@ -90,7 +87,7 @@ export interface DbJob {
   unique_key: string | null;
   custom_id: string | null;
   depends_on: string | null;
-  parent_id: number | null;
+  parent_id: string | null;
   children_ids: string | null;
   tags: string | null;
   state: string;

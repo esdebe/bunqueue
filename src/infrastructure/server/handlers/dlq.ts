@@ -25,7 +25,7 @@ export async function handleRetryDlq(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const jid = cmd.jobId ? jobId(BigInt(cmd.jobId)) : undefined;
+  const jid = cmd.jobId ? jobId(cmd.jobId) : undefined;
   const count = ctx.queueManager.retryDlq(cmd.queue, jid);
   return {
     ok: true,

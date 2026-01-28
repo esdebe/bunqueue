@@ -10,7 +10,7 @@ const qm = new QueueManager();
 qm.subscribe((event) => {
   if (event.eventType === EventType.Completed) {
     console.log('\n=== COMPLETED EVENT ===');
-    console.log('  jobId:', String(event.jobId));
+    console.log('  jobId:', event.jobId);
     console.log('  queue:', event.queue);
     console.log('  data (result):', JSON.stringify(event.data));
     console.log('=======================\n');

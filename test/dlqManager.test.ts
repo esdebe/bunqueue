@@ -99,7 +99,7 @@ describe('DLQ Manager', () => {
 
     test('should return 0 for non-existent job', async () => {
       const { jobId } = await import('../src/domain/types/job');
-      const count = qm.retryDlq('test-queue', jobId(BigInt(999999)));
+      const count = qm.retryDlq('test-queue', jobId('non-existent'));
       expect(count).toBe(0);
     });
   });

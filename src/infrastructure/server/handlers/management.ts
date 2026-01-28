@@ -15,7 +15,7 @@ export async function handleCancel(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.cancel(jobId(BigInt(cmd.id)));
+  const success = await ctx.queueManager.cancel(jobId(cmd.id));
   return success
     ? resp.ok(undefined, reqId)
     : resp.error('Job not found or cannot be cancelled', reqId);
@@ -27,11 +27,7 @@ export async function handleProgress(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.updateProgress(
-    jobId(BigInt(cmd.id)),
-    cmd.progress,
-    cmd.message
-  );
+  const success = await ctx.queueManager.updateProgress(jobId(cmd.id), cmd.progress, cmd.message);
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not active', reqId);
 }
 
@@ -41,7 +37,7 @@ export async function handleGetProgress(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const progress = ctx.queueManager.getProgress(jobId(BigInt(cmd.id)));
+  const progress = ctx.queueManager.getProgress(jobId(cmd.id));
   if (!progress) return resp.error('Job not found or not active', reqId);
   return {
     ok: true,

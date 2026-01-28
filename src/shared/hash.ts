@@ -31,10 +31,10 @@ export function shardIndex(key: string): number {
 }
 
 /**
- * Calculate processing shard index from job ID
+ * Calculate processing shard index from job ID (UUIDv7 string)
  */
-export function processingShardIndex(jobId: bigint): number {
-  return Number(jobId & BigInt(SHARD_MASK));
+export function processingShardIndex(jobId: string): number {
+  return fnv1a(jobId) & SHARD_MASK;
 }
 
 /**

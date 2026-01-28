@@ -18,6 +18,7 @@ interface HeapEntry {
 /**
  * Compare two heap entries
  * Order: higher priority first, earlier runAt first, LIFO/FIFO by ID
+ * Note: UUIDv7 strings are time-ordered, so string comparison works for FIFO
  */
 function compareEntries(a: HeapEntry, b: HeapEntry): number {
   // Higher priority first
@@ -28,11 +29,12 @@ function compareEntries(a: HeapEntry, b: HeapEntry): number {
   if (a.runAt !== b.runAt) {
     return a.runAt - b.runAt;
   }
-  // LIFO: higher ID first, FIFO: lower ID first
+  // LIFO: higher (newer) ID first, FIFO: lower (older) ID first
+  // UUIDv7 is time-ordered so string comparison works
   if (a.lifo) {
-    return Number(b.jobId - a.jobId);
+    return b.jobId.localeCompare(a.jobId);
   }
-  return Number(a.jobId - b.jobId);
+  return a.jobId.localeCompare(b.jobId);
 }
 
 /**
