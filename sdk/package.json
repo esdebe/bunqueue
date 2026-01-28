@@ -1,0 +1,87 @@
+{
+  "name": "flashq",
+  "version": "0.4.0",
+  "description": "Official TypeScript SDK for flashQ - High-Performance Job Queue (BullMQ-compatible API)",
+  "author": "Egeo Minotti",
+  "license": "MIT",
+  "homepage": "https://github.com/egeominotti/flashq",
+  "bugs": {
+    "url": "https://github.com/egeominotti/flashq/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egeominotti/flashq.git",
+    "directory": "sdk/typescript"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint src tests --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "queue",
+    "job-queue",
+    "task-queue",
+    "background-jobs",
+    "worker",
+    "bullmq",
+    "bullmq-compatible",
+    "flashq",
+    "high-performance",
+    "rust",
+    "bun",
+    "nodejs",
+    "ai",
+    "llm",
+    "rag",
+    "ml",
+    "machine-learning",
+    "inference",
+    "agents"
+  ],
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@grpc/grpc-js": ">=1.9.0",
+    "@grpc/proto-loader": ">=0.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@grpc/grpc-js": {
+      "optional": true
+    },
+    "@grpc/proto-loader": {
+      "optional": true
+    }
+  }
+}

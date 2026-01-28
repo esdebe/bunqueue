@@ -49,7 +49,10 @@ export class EventsManager {
     const webhookEvent = this.mapEventToWebhook(event.eventType);
     if (webhookEvent) {
       this.webhookManager
-        .trigger(webhookEvent, String(event.jobId), event.queue, { error: event.error })
+        .trigger(webhookEvent, String(event.jobId), event.queue, {
+          data: event.data,
+          error: event.error,
+        })
         .catch(() => {});
     }
   }

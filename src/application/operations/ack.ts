@@ -27,6 +27,7 @@ export interface AckContext {
     queue: string;
     jobId: JobId;
     timestamp: number;
+    data?: unknown;
     error?: string;
   }) => void;
   onJobCompleted: (jobId: JobId) => void;
@@ -78,6 +79,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
     queue: job.queue,
     jobId,
     timestamp: Date.now(),
+    data: result,
   });
 
   // Notify completion (for dependencies and parent jobs)
