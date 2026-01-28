@@ -7,7 +7,7 @@ on:
     branches: [main, master]
 
 env:
-  BUN_VERSION: "1.1"
+  BUN_VERSION: "latest"
 
 jobs:
   # ============================================
