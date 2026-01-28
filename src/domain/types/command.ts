@@ -1,0 +1,402 @@
+/**
+ * Protocol commands
+ * All supported commands for TCP/HTTP protocol
+ */
+
+import type { JobInput, JobState } from './job';
+
+/** Base command interface */
+interface BaseCommand {
+  readonly cmd: string;
+  readonly reqId?: string;
+}
+
+// ============ Core Commands ============
+
+export interface PushCommand extends BaseCommand {
+  readonly cmd: 'PUSH';
+  readonly queue: string;
+  readonly data: unknown;
+  readonly priority?: number;
+  readonly delay?: number;
+  readonly maxAttempts?: number;
+  readonly backoff?: number;
+  readonly ttl?: number;
+  readonly timeout?: number;
+  readonly uniqueKey?: string;
+  readonly jobId?: string; // customId
+  readonly dependsOn?: string[];
+  readonly tags?: string[];
+  readonly groupId?: string;
+  readonly lifo?: boolean;
+  readonly removeOnComplete?: boolean;
+  readonly removeOnFail?: boolean;
+}
+
+export interface PushBatchCommand extends BaseCommand {
+  readonly cmd: 'PUSHB';
+  readonly queue: string;
+  readonly jobs: JobInput[];
+}
+
+export interface PullCommand extends BaseCommand {
+  readonly cmd: 'PULL';
+  readonly queue: string;
+  readonly timeout?: number;
+}
+
+export interface PullBatchCommand extends BaseCommand {
+  readonly cmd: 'PULLB';
+  readonly queue: string;
+  readonly count: number;
+  readonly timeout?: number;
+}
+
+export interface AckCommand extends BaseCommand {
+  readonly cmd: 'ACK';
+  readonly id: string;
+  readonly result?: unknown;
+}
+
+export interface AckBatchCommand extends BaseCommand {
+  readonly cmd: 'ACKB';
+  readonly ids: string[];
+}
+
+export interface FailCommand extends BaseCommand {
+  readonly cmd: 'FAIL';
+  readonly id: string;
+  readonly error?: string;
+}
+
+// ============ Query Commands ============
+
+export interface GetJobCommand extends BaseCommand {
+  readonly cmd: 'GetJob';
+  readonly id: string;
+}
+
+export interface GetStateCommand extends BaseCommand {
+  readonly cmd: 'GetState';
+  readonly id: string;
+}
+
+export interface GetResultCommand extends BaseCommand {
+  readonly cmd: 'GetResult';
+  readonly id: string;
+}
+
+export interface GetJobsCommand extends BaseCommand {
+  readonly cmd: 'GetJobs';
+  readonly queue: string;
+  readonly state?: JobState;
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+export interface GetJobCountsCommand extends BaseCommand {
+  readonly cmd: 'GetJobCounts';
+  readonly queue: string;
+}
+
+export interface GetJobByCustomIdCommand extends BaseCommand {
+  readonly cmd: 'GetJobByCustomId';
+  readonly customId: string;
+}
+
+export interface CountCommand extends BaseCommand {
+  readonly cmd: 'Count';
+  readonly queue: string;
+}
+
+export interface GetProgressCommand extends BaseCommand {
+  readonly cmd: 'GetProgress';
+  readonly id: string;
+}
+
+// ============ Management Commands ============
+
+export interface CancelCommand extends BaseCommand {
+  readonly cmd: 'Cancel';
+  readonly id: string;
+}
+
+export interface ProgressCommand extends BaseCommand {
+  readonly cmd: 'Progress';
+  readonly id: string;
+  readonly progress: number;
+  readonly message?: string;
+}
+
+export interface UpdateCommand extends BaseCommand {
+  readonly cmd: 'Update';
+  readonly id: string;
+  readonly data: unknown;
+}
+
+export interface ChangePriorityCommand extends BaseCommand {
+  readonly cmd: 'ChangePriority';
+  readonly id: string;
+  readonly priority: number;
+}
+
+export interface PromoteCommand extends BaseCommand {
+  readonly cmd: 'Promote';
+  readonly id: string;
+}
+
+export interface WaitJobCommand extends BaseCommand {
+  readonly cmd: 'WaitJob';
+  readonly id: string;
+  readonly timeout?: number;
+}
+
+export interface MoveToDelayedCommand extends BaseCommand {
+  readonly cmd: 'MoveToDelayed';
+  readonly id: string;
+  readonly delay: number;
+}
+
+export interface DiscardCommand extends BaseCommand {
+  readonly cmd: 'Discard';
+  readonly id: string;
+}
+
+// ============ Queue Control Commands ============
+
+export interface PauseCommand extends BaseCommand {
+  readonly cmd: 'Pause';
+  readonly queue: string;
+}
+
+export interface ResumeCommand extends BaseCommand {
+  readonly cmd: 'Resume';
+  readonly queue: string;
+}
+
+export interface IsPausedCommand extends BaseCommand {
+  readonly cmd: 'IsPaused';
+  readonly queue: string;
+}
+
+export interface DrainCommand extends BaseCommand {
+  readonly cmd: 'Drain';
+  readonly queue: string;
+}
+
+export interface ObliterateCommand extends BaseCommand {
+  readonly cmd: 'Obliterate';
+  readonly queue: string;
+}
+
+export interface ListQueuesCommand extends BaseCommand {
+  readonly cmd: 'ListQueues';
+}
+
+export interface CleanCommand extends BaseCommand {
+  readonly cmd: 'Clean';
+  readonly queue: string;
+  readonly grace: number; // ms - jobs older than this
+  readonly state?: JobState;
+  readonly limit?: number;
+}
+
+// ============ DLQ Commands ============
+
+export interface DlqCommand extends BaseCommand {
+  readonly cmd: 'Dlq';
+  readonly queue: string;
+  readonly count?: number;
+}
+
+export interface RetryDlqCommand extends BaseCommand {
+  readonly cmd: 'RetryDlq';
+  readonly queue: string;
+  readonly jobId?: string;
+}
+
+export interface PurgeDlqCommand extends BaseCommand {
+  readonly cmd: 'PurgeDlq';
+  readonly queue: string;
+}
+
+// ============ Rate Limiting Commands ============
+
+export interface RateLimitCommand extends BaseCommand {
+  readonly cmd: 'RateLimit';
+  readonly queue: string;
+  readonly limit: number;
+}
+
+export interface SetConcurrencyCommand extends BaseCommand {
+  readonly cmd: 'SetConcurrency';
+  readonly queue: string;
+  readonly limit: number;
+}
+
+export interface RateLimitClearCommand extends BaseCommand {
+  readonly cmd: 'RateLimitClear';
+  readonly queue: string;
+}
+
+export interface ClearConcurrencyCommand extends BaseCommand {
+  readonly cmd: 'ClearConcurrency';
+  readonly queue: string;
+}
+
+// ============ Cron Commands ============
+
+export interface CronCommand extends BaseCommand {
+  readonly cmd: 'Cron';
+  readonly name: string;
+  readonly queue: string;
+  readonly data: unknown;
+  readonly schedule?: string;
+  readonly repeatEvery?: number;
+  readonly priority?: number;
+  readonly maxLimit?: number;
+}
+
+export interface CronDeleteCommand extends BaseCommand {
+  readonly cmd: 'CronDelete';
+  readonly name: string;
+}
+
+export interface CronListCommand extends BaseCommand {
+  readonly cmd: 'CronList';
+}
+
+// ============ Job Logs Commands ============
+
+export interface AddLogCommand extends BaseCommand {
+  readonly cmd: 'AddLog';
+  readonly id: string;
+  readonly message: string;
+  readonly level?: 'info' | 'warn' | 'error';
+}
+
+export interface GetLogsCommand extends BaseCommand {
+  readonly cmd: 'GetLogs';
+  readonly id: string;
+}
+
+// ============ Heartbeat & Workers ============
+
+export interface HeartbeatCommand extends BaseCommand {
+  readonly cmd: 'Heartbeat';
+  readonly id: string;
+}
+
+export interface RegisterWorkerCommand extends BaseCommand {
+  readonly cmd: 'RegisterWorker';
+  readonly name: string;
+  readonly queues: string[];
+}
+
+export interface UnregisterWorkerCommand extends BaseCommand {
+  readonly cmd: 'UnregisterWorker';
+  readonly workerId: string;
+}
+
+export interface ListWorkersCommand extends BaseCommand {
+  readonly cmd: 'ListWorkers';
+}
+
+// ============ Webhooks ============
+
+export interface AddWebhookCommand extends BaseCommand {
+  readonly cmd: 'AddWebhook';
+  readonly url: string;
+  readonly events: string[];
+  readonly queue?: string;
+  readonly secret?: string;
+}
+
+export interface RemoveWebhookCommand extends BaseCommand {
+  readonly cmd: 'RemoveWebhook';
+  readonly webhookId: string;
+}
+
+export interface ListWebhooksCommand extends BaseCommand {
+  readonly cmd: 'ListWebhooks';
+}
+
+// ============ Monitoring Commands ============
+
+export interface StatsCommand extends BaseCommand {
+  readonly cmd: 'Stats';
+}
+
+export interface MetricsCommand extends BaseCommand {
+  readonly cmd: 'Metrics';
+}
+
+export interface PrometheusCommand extends BaseCommand {
+  readonly cmd: 'Prometheus';
+}
+
+// ============ Auth Commands ============
+
+export interface AuthCommand extends BaseCommand {
+  readonly cmd: 'Auth';
+  readonly token: string;
+}
+
+/** Union of all commands */
+export type Command =
+  | PushCommand
+  | PushBatchCommand
+  | PullCommand
+  | PullBatchCommand
+  | AckCommand
+  | AckBatchCommand
+  | FailCommand
+  | GetJobCommand
+  | GetStateCommand
+  | GetResultCommand
+  | GetJobsCommand
+  | GetJobCountsCommand
+  | GetJobByCustomIdCommand
+  | CountCommand
+  | GetProgressCommand
+  | CancelCommand
+  | ProgressCommand
+  | UpdateCommand
+  | ChangePriorityCommand
+  | PromoteCommand
+  | WaitJobCommand
+  | MoveToDelayedCommand
+  | DiscardCommand
+  | PauseCommand
+  | ResumeCommand
+  | IsPausedCommand
+  | DrainCommand
+  | ObliterateCommand
+  | ListQueuesCommand
+  | CleanCommand
+  | DlqCommand
+  | RetryDlqCommand
+  | PurgeDlqCommand
+  | RateLimitCommand
+  | SetConcurrencyCommand
+  | RateLimitClearCommand
+  | ClearConcurrencyCommand
+  | CronCommand
+  | CronDeleteCommand
+  | CronListCommand
+  | AddLogCommand
+  | GetLogsCommand
+  | HeartbeatCommand
+  | RegisterWorkerCommand
+  | UnregisterWorkerCommand
+  | ListWorkersCommand
+  | AddWebhookCommand
+  | RemoveWebhookCommand
+  | ListWebhooksCommand
+  | StatsCommand
+  | MetricsCommand
+  | PrometheusCommand
+  | AuthCommand;
+
+/** Extract command type */
+export type CommandType = Command['cmd'];

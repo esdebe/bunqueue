@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  bunq:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bunq
+    ports:
+      - "6789:6789"  # TCP Protocol
+      - "6790:6790"  # HTTP API
+    volumes:
+      - bunq-data:/app/data
+    environment:
+      - TCP_PORT=6789
+      - HTTP_PORT=6790
+      - DATA_PATH=/app/data/bunq.db
+      - NODE_ENV=production
+      # Uncomment to enable auth
+      # - AUTH_TOKENS=your-secret-token
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6790/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Development with hot reload
+  bunq-dev:
+    image: oven/bun:1-alpine
+    container_name: bunq-dev
+    working_dir: /app
+    ports:
+      - "6789:6789"
+      - "6790:6790"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - bunq-dev-data:/app/data
+    environment:
+      - TCP_PORT=6789
+      - HTTP_PORT=6790
+      - DATA_PATH=/app/data/bunq.db
+      - NODE_ENV=development
+    command: bun run dev
+    profiles:
+      - dev
+
+volumes:
+  bunq-data:
+  bunq-dev-data:
