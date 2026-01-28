@@ -9,14 +9,15 @@ import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import { RWLock, withWriteLock } from '../../shared/lock';
 import { shardIndex } from '../../shared/hash';
+import type { SetLike, MapLike } from '../../shared/lru';
 
 /** Push operation context */
 export interface PushContext {
   storage: SqliteStorage | null;
   shards: Shard[];
   shardLocks: RWLock[];
-  completedJobs: Set<JobId>;
-  customIdMap: Map<string, JobId>;
+  completedJobs: SetLike<JobId>;
+  customIdMap: MapLike<string, JobId>;
   jobIndex: Map<JobId, JobLocation>;
   totalPushed: { value: bigint };
   broadcast: (event: {

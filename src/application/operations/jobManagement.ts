@@ -8,14 +8,17 @@ import type { JobLocation } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { WebhookManager } from '../webhookManager';
-import { shardIndex } from '../../shared/hash';
+import { shardIndex, processingShardIndex } from '../../shared/hash';
 import { webhookLog } from '../../shared/logger';
+import { type RWLock, withWriteLock } from '../../shared/lock';
 
 /** Context for job management operations */
 export interface JobManagementContext {
   storage: SqliteStorage | null;
   shards: Shard[];
+  shardLocks: RWLock[];
   processingShards: Map<JobId, Job>[];
+  processingLocks: RWLock[];
   jobIndex: Map<JobId, JobLocation>;
   webhookManager: WebhookManager;
 }
@@ -26,14 +29,17 @@ export async function cancelJob(jobId: JobId, ctx: JobManagementContext): Promis
   if (!location) return false;
 
   if (location.type === 'queue') {
-    const shard = ctx.shards[location.shardIdx];
-    const job = shard.getQueue(location.queueName).remove(jobId);
-    if (job) {
-      if (job.uniqueKey) shard.releaseUniqueKey(location.queueName, job.uniqueKey);
-      ctx.jobIndex.delete(jobId);
-      ctx.storage?.deleteJob(jobId);
-      return true;
-    }
+    return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+      const shard = ctx.shards[location.shardIdx];
+      const job = shard.getQueue(location.queueName).remove(jobId);
+      if (job) {
+        if (job.uniqueKey) shard.releaseUniqueKey(location.queueName, job.uniqueKey);
+        ctx.jobIndex.delete(jobId);
+        ctx.storage?.deleteJob(jobId);
+        return true;
+      }
+      return false;
+    });
   }
   return false;
 }
@@ -48,23 +54,26 @@ export async function updateJobProgress(
   const location = ctx.jobIndex.get(jobId);
   if (location?.type !== 'processing') return false;
 
-  const job = ctx.processingShards[location.shardIdx].get(jobId);
-  if (!job) return false;
+  const procIdx = processingShardIndex(jobId);
+  return withWriteLock(ctx.processingLocks[procIdx], () => {
+    const job = ctx.processingShards[procIdx].get(jobId);
+    if (!job) return false;
 
-  job.progress = Math.max(0, Math.min(100, progress));
-  if (message !== undefined) job.progressMessage = message;
+    job.progress = Math.max(0, Math.min(100, progress));
+    if (message !== undefined) job.progressMessage = message;
 
-  ctx.webhookManager
-    .trigger('job.progress', String(jobId), job.queue, { progress: job.progress })
-    .catch((err: unknown) => {
-      webhookLog.error('Progress webhook failed', {
-        jobId: String(jobId),
-        queue: job.queue,
-        error: String(err),
+    ctx.webhookManager
+      .trigger('job.progress', String(jobId), job.queue, { progress: job.progress })
+      .catch((err: unknown) => {
+        webhookLog.error('Progress webhook failed', {
+          jobId: String(jobId),
+          queue: job.queue,
+          error: String(err),
+        });
       });
-    });
 
-  return true;
+    return true;
+  });
 }
 
 /** Update job data */
@@ -77,17 +86,24 @@ export async function updateJobData(
   if (!location) return false;
 
   if (location.type === 'queue') {
-    const job = ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
-    if (job) {
-      (job as { data: unknown }).data = data;
-      return true;
-    }
+    return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+      const job = ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+      if (job) {
+        (job as { data: unknown }).data = data;
+        return true;
+      }
+      return false;
+    });
   } else if (location.type === 'processing') {
-    const job = ctx.processingShards[location.shardIdx].get(jobId);
-    if (job) {
-      (job as { data: unknown }).data = data;
-      return true;
-    }
+    const procIdx = processingShardIndex(jobId);
+    return withWriteLock(ctx.processingLocks[procIdx], () => {
+      const job = ctx.processingShards[procIdx].get(jobId);
+      if (job) {
+        (job as { data: unknown }).data = data;
+        return true;
+      }
+      return false;
+    });
   }
   return false;
 }
@@ -101,8 +117,10 @@ export async function changeJobPriority(
   const location = ctx.jobIndex.get(jobId);
   if (location?.type !== 'queue') return false;
 
-  const q = ctx.shards[location.shardIdx].getQueue(location.queueName);
-  return q.updatePriority(jobId, priority);
+  return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+    const q = ctx.shards[location.shardIdx].getQueue(location.queueName);
+    return q.updatePriority(jobId, priority);
+  });
 }
 
 /** Promote delayed job to waiting */
@@ -110,12 +128,14 @@ export async function promoteJob(jobId: JobId, ctx: JobManagementContext): Promi
   const location = ctx.jobIndex.get(jobId);
   if (location?.type !== 'queue') return false;
 
-  const q = ctx.shards[location.shardIdx].getQueue(location.queueName);
-  const job = q.find(jobId);
-  if (!job || job.runAt <= Date.now()) return false;
+  return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+    const q = ctx.shards[location.shardIdx].getQueue(location.queueName);
+    const job = q.find(jobId);
+    if (!job || job.runAt <= Date.now()) return false;
 
-  job.runAt = Date.now();
-  return true;
+    job.runAt = Date.now();
+    return true;
+  });
 }
 
 /** Move active job back to delayed */
@@ -127,17 +147,28 @@ export async function moveJobToDelayed(
   const location = ctx.jobIndex.get(jobId);
   if (location?.type !== 'processing') return false;
 
-  const procShard = ctx.processingShards[location.shardIdx];
-  const job = procShard.get(jobId);
+  const procIdx = processingShardIndex(jobId);
+
+  // First remove from processing with lock
+  const job = await withWriteLock(ctx.processingLocks[procIdx], () => {
+    const job = ctx.processingShards[procIdx].get(jobId);
+    if (job) {
+      ctx.processingShards[procIdx].delete(jobId);
+    }
+    return job;
+  });
+
   if (!job) return false;
 
-  procShard.delete(jobId);
-
+  // Then add back to queue with lock
   job.runAt = Date.now() + delay;
   job.startedAt = null;
   const idx = shardIndex(job.queue);
-  ctx.shards[idx].getQueue(job.queue).push(job);
-  ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+  await withWriteLock(ctx.shardLocks[idx], () => {
+    ctx.shards[idx].getQueue(job.queue).push(job);
+    ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+  });
 
   return true;
 }
@@ -150,16 +181,25 @@ export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promi
   let job: Job | null = null;
 
   if (location.type === 'queue') {
-    job = ctx.shards[location.shardIdx].getQueue(location.queueName).remove(jobId);
+    job = await withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+      return ctx.shards[location.shardIdx].getQueue(location.queueName).remove(jobId);
+    });
   } else if (location.type === 'processing') {
-    job = ctx.processingShards[location.shardIdx].get(jobId) ?? null;
-    if (job) ctx.processingShards[location.shardIdx].delete(jobId);
+    const procIdx = processingShardIndex(jobId);
+    job = await withWriteLock(ctx.processingLocks[procIdx], () => {
+      const j = ctx.processingShards[procIdx].get(jobId) ?? null;
+      if (j) ctx.processingShards[procIdx].delete(jobId);
+      return j;
+    });
   }
 
   if (job) {
-    const idx = shardIndex(job.queue);
-    ctx.shards[idx].addToDlq(job);
-    ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
+    const validJob = job; // Local reference for closure
+    const idx = shardIndex(validJob.queue);
+    await withWriteLock(ctx.shardLocks[idx], () => {
+      ctx.shards[idx].addToDlq(validJob);
+      ctx.jobIndex.set(jobId, { type: 'dlq', queueName: validJob.queue });
+    });
     return true;
   }
   return false;

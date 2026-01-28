@@ -6,11 +6,12 @@
 import type { JobId } from '../domain/types/job';
 import { type JobLogEntry, createLogEntry } from '../domain/types/worker';
 import type { JobLocation } from '../domain/types/queue';
+import type { MapLike } from '../shared/lru';
 
 /** Context for job logs operations */
 export interface JobLogsContext {
   jobIndex: Map<JobId, JobLocation>;
-  jobLogs: Map<JobId, JobLogEntry[]>;
+  jobLogs: MapLike<JobId, JobLogEntry[]>;
   maxLogsPerJob: number;
 }
 

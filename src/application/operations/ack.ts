@@ -9,6 +9,7 @@ import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import { RWLock, withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
+import type { SetLike, MapLike } from '../../shared/lru';
 
 /** Ack operation context */
 export interface AckContext {
@@ -17,8 +18,8 @@ export interface AckContext {
   shardLocks: RWLock[];
   processingShards: Map<JobId, Job>[];
   processingLocks: RWLock[];
-  completedJobs: Set<JobId>;
-  jobResults: Map<JobId, unknown>;
+  completedJobs: SetLike<JobId>;
+  jobResults: MapLike<JobId, unknown>;
   jobIndex: Map<JobId, JobLocation>;
   totalCompleted: { value: bigint };
   totalFailed: { value: bigint };

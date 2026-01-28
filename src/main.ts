@@ -8,6 +8,7 @@ import { QueueManager } from './application/queueManager';
 import { createTcpServer } from './infrastructure/server/tcp';
 import { createHttpServer } from './infrastructure/server/http';
 import { Logger, serverLog, statsLog } from './shared/logger';
+import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 
 /** Server configuration from environment */
 interface ServerConfig {
@@ -95,6 +96,7 @@ function main(): void {
     }
 
     queueManager.shutdown();
+    stopRateLimiter();
     serverLog.info('Shutdown complete');
     process.exit(0);
   };

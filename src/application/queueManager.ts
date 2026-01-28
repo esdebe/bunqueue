@@ -14,7 +14,7 @@ import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 import { WebhookManager } from './webhookManager';
 import { WorkerManager } from './workerManager';
 import { EventsManager } from './eventsManager';
-import { RWLock } from '../shared/lock';
+import { RWLock, withWriteLock } from '../shared/lock';
 import { shardIndex, SHARD_COUNT } from '../shared/hash';
 import { pushJob, pushJobBatch, type PushContext } from './operations/push';
 import { pullJob, type PullContext } from './operations/pull';
@@ -25,21 +25,30 @@ import * as queryOps from './operations/queryOperations';
 import * as dlqOps from './dlqManager';
 import * as logsOps from './jobLogsManager';
 import { generatePrometheusMetrics } from './metricsExporter';
+import { LRUMap, LRUSet } from '../shared/lru';
 
 /** Queue Manager configuration */
 export interface QueueManagerConfig {
   dataPath?: string;
   maxCompletedJobs?: number;
   maxJobResults?: number;
+  maxJobLogs?: number;
+  maxCustomIds?: number;
+  maxWaitingDeps?: number;
   cleanupIntervalMs?: number;
   jobTimeoutCheckMs?: number;
+  dependencyCheckMs?: number;
 }
 
 const DEFAULT_CONFIG = {
   maxCompletedJobs: 50_000,
   maxJobResults: 5_000,
+  maxJobLogs: 10_000,
+  maxCustomIds: 50_000,
+  maxWaitingDeps: 10_000,
   cleanupIntervalMs: 10_000,
   jobTimeoutCheckMs: 5_000,
+  dependencyCheckMs: 1_000,
 };
 
 /**
@@ -55,11 +64,16 @@ export class QueueManager {
   private readonly processingShards: Map<JobId, Job>[] = [];
   private readonly processingLocks: RWLock[] = [];
 
-  // Global indexes
+  // Global indexes (bounded with LRU eviction)
   private readonly jobIndex = new Map<JobId, JobLocation>();
-  private readonly completedJobs = new Set<JobId>();
-  private readonly jobResults = new Map<JobId, unknown>();
-  private readonly customIdMap = new Map<string, JobId>();
+  private completedJobs!: LRUSet<JobId>;
+  private jobResults!: LRUMap<JobId, unknown>;
+  private customIdMap!: LRUMap<string, JobId>;
+  private jobLogs!: LRUMap<JobId, JobLogEntry[]>;
+
+  // Deferred dependency resolution queue (to avoid lock order violations)
+  private readonly pendingDepChecks = new Set<JobId>();
+  private depCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   // Cron scheduler
   private readonly cronScheduler: CronScheduler;
@@ -69,8 +83,7 @@ export class QueueManager {
   readonly workerManager: WorkerManager;
   private readonly eventsManager: EventsManager;
 
-  // Job logs storage
-  private readonly jobLogs = new Map<JobId, JobLogEntry[]>();
+  // Job logs config
   private readonly maxLogsPerJob = 100;
 
   // Metrics
@@ -89,6 +102,14 @@ export class QueueManager {
   constructor(config: QueueManagerConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.storage = config.dataPath ? new SqliteStorage({ path: config.dataPath }) : null;
+
+    // Initialize bounded collections with LRU eviction
+    this.completedJobs = new LRUSet<JobId>(this.config.maxCompletedJobs, (jobId) => {
+      this.jobIndex.delete(jobId);
+    });
+    this.jobResults = new LRUMap<JobId, unknown>(this.config.maxJobResults);
+    this.customIdMap = new LRUMap<string, JobId>(this.config.maxCustomIds);
+    this.jobLogs = new LRUMap<JobId, JobLogEntry[]>(this.config.maxJobLogs);
 
     // Initialize shards
     for (let i = 0; i < SHARD_COUNT; i++) {
@@ -163,7 +184,9 @@ export class QueueManager {
     return {
       storage: this.storage,
       shards: this.shards,
+      shardLocks: this.shardLocks,
       processingShards: this.processingShards,
+      processingLocks: this.processingLocks,
       jobIndex: this.jobIndex,
       webhookManager: this.webhookManager,
     };
@@ -390,15 +413,51 @@ export class QueueManager {
     return this.eventsManager.subscribe(callback);
   }
 
-  private onJobCompleted(_completedId: JobId): void {
+  /**
+   * Called when a job is completed - schedules deferred dependency check
+   * This avoids lock order violations by not iterating shards while holding locks
+   */
+  private onJobCompleted(completedId: JobId): void {
+    this.pendingDepChecks.add(completedId);
+  }
+
+  /**
+   * Process pending dependency checks in a separate task
+   * This runs periodically to check if waiting jobs can now proceed
+   */
+  private async processPendingDependencies(): Promise<void> {
+    if (this.pendingDepChecks.size === 0) return;
+
+    // Clear the pending set and process
+    this.pendingDepChecks.clear();
+
+    // Check each shard for jobs that can now proceed
     for (let i = 0; i < SHARD_COUNT; i++) {
       const shard = this.shards[i];
-      for (const [id, job] of shard.waitingDeps) {
+      const jobsToPromote: Job[] = [];
+
+      // Find jobs whose dependencies are all complete
+      // Use read-like access first (no modification)
+      for (const [_id, job] of shard.waitingDeps) {
         if (job.dependsOn.every((dep) => this.completedJobs.has(dep))) {
-          shard.waitingDeps.delete(id);
-          shard.getQueue(job.queue).push(job);
-          shard.notify();
+          jobsToPromote.push(job);
         }
+      }
+
+      // Now acquire lock and modify
+      if (jobsToPromote.length > 0) {
+        await withWriteLock(this.shardLocks[i], () => {
+          for (const job of jobsToPromote) {
+            if (shard.waitingDeps.has(job.id)) {
+              shard.waitingDeps.delete(job.id);
+              shard.getQueue(job.queue).push(job);
+              this.jobIndex.set(job.id, { type: 'queue', shardIdx: i, queueName: job.queue });
+            }
+          }
+          if (jobsToPromote.length > 0) {
+            shard.notify();
+          }
+        });
       }
     }
   }
@@ -412,6 +471,11 @@ export class QueueManager {
     this.timeoutInterval = setInterval(() => {
       this.checkJobTimeouts();
     }, this.config.jobTimeoutCheckMs);
+    this.depCheckInterval = setInterval(() => {
+      this.processPendingDependencies().catch((err: unknown) => {
+        queueLog.error('Dependency check failed', { error: String(err) });
+      });
+    }, this.config.dependencyCheckMs);
     this.cronScheduler.start();
   }
 
@@ -442,24 +506,78 @@ export class QueueManager {
   }
 
   private cleanup(): void {
-    if (this.completedJobs.size > this.config.maxCompletedJobs) {
-      const toRemove = Math.floor(this.config.maxCompletedJobs * 0.5);
-      const iter = this.completedJobs.values();
-      for (let i = 0; i < toRemove; i++) {
-        const { value, done } = iter.next();
-        if (done) break;
-        this.completedJobs.delete(value);
-        this.jobIndex.delete(value);
+    // LRU collections auto-evict, but we still need to clean up:
+    // 1. Orphaned processing shard entries (jobs stuck in processing)
+    // 2. Stale waiting dependencies
+    // 3. Orphaned unique keys and active groups
+
+    const now = Date.now();
+    const stallTimeout = 30 * 60 * 1000; // 30 minutes max for processing
+
+    // Clean orphaned processing entries
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const orphaned: JobId[] = [];
+      for (const [jobId, job] of this.processingShards[i]) {
+        if (job.startedAt && now - job.startedAt > stallTimeout) {
+          orphaned.push(jobId);
+        }
+      }
+      for (const jobId of orphaned) {
+        const job = this.processingShards[i].get(jobId);
+        if (job) {
+          this.processingShards[i].delete(jobId);
+          this.jobIndex.delete(jobId);
+          queueLog.warn('Cleaned orphaned processing job', { jobId: String(jobId) });
+        }
       }
     }
 
-    if (this.jobResults.size > this.config.maxJobResults) {
-      const toRemove = Math.floor(this.config.maxJobResults * 0.5);
-      const iter = this.jobResults.keys();
-      for (let i = 0; i < toRemove; i++) {
-        const { value, done } = iter.next();
-        if (done) break;
-        this.jobResults.delete(value);
+    // Clean stale waiting dependencies (waiting > 1 hour)
+    const depTimeout = 60 * 60 * 1000; // 1 hour
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const shard = this.shards[i];
+      const stale: JobId[] = [];
+      for (const [id, job] of shard.waitingDeps) {
+        if (now - job.createdAt > depTimeout) {
+          stale.push(id);
+        }
+      }
+      for (const id of stale) {
+        shard.waitingDeps.delete(id);
+        this.jobIndex.delete(id);
+        queueLog.warn('Cleaned stale waiting dependency', { jobId: String(id) });
+      }
+    }
+
+    // Clean orphaned unique keys (keys with no matching job)
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const shard = this.shards[i];
+      for (const [queueName, keys] of shard.uniqueKeys) {
+        if (keys.size > 1000) {
+          // If too many keys, trim oldest half
+          const toRemove = Math.floor(keys.size / 2);
+          const iter = keys.values();
+          for (let j = 0; j < toRemove; j++) {
+            const { value, done } = iter.next();
+            if (done) break;
+            keys.delete(value);
+          }
+          queueLog.info('Trimmed unique keys', { queue: queueName, removed: toRemove });
+        }
+      }
+
+      // Clean orphaned active groups
+      for (const [queueName, groups] of shard.activeGroups) {
+        if (groups.size > 1000) {
+          const toRemove = Math.floor(groups.size / 2);
+          const iter = groups.values();
+          for (let j = 0; j < toRemove; j++) {
+            const { value, done } = iter.next();
+            if (done) break;
+            groups.delete(value);
+          }
+          queueLog.info('Trimmed active groups', { queue: queueName, removed: toRemove });
+        }
       }
     }
   }
@@ -472,6 +590,7 @@ export class QueueManager {
     this.eventsManager.clear();
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
     if (this.timeoutInterval) clearInterval(this.timeoutInterval);
+    if (this.depCheckInterval) clearInterval(this.depCheckInterval);
     this.storage?.close();
 
     // Clear in-memory collections
@@ -479,8 +598,16 @@ export class QueueManager {
     this.completedJobs.clear();
     this.jobResults.clear();
     this.jobLogs.clear();
+    this.customIdMap.clear();
+    this.pendingDepChecks.clear();
     for (const shard of this.processingShards) {
       shard.clear();
+    }
+    for (const shard of this.shards) {
+      shard.waitingDeps.clear();
+      shard.waitingChildren.clear();
+      shard.uniqueKeys.clear();
+      shard.activeGroups.clear();
     }
   }
 

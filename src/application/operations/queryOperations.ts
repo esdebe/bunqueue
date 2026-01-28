@@ -8,6 +8,7 @@ import type { JobLocation } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import { type RWLock, withReadLock } from '../../shared/lock';
+import type { SetLike, MapLike } from '../../shared/lru';
 
 /** Context for query operations */
 export interface QueryContext {
@@ -17,9 +18,9 @@ export interface QueryContext {
   processingShards: Map<JobId, Job>[];
   processingLocks: RWLock[];
   jobIndex: Map<JobId, JobLocation>;
-  completedJobs: Set<JobId>;
-  jobResults: Map<JobId, unknown>;
-  customIdMap: Map<string, JobId>;
+  completedJobs: SetLike<JobId>;
+  jobResults: MapLike<JobId, unknown>;
+  customIdMap: MapLike<string, JobId>;
 }
 
 /** Get job by ID */

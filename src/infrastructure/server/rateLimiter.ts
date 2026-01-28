@@ -95,3 +95,11 @@ export function getRateLimiter(config?: Partial<RateLimiterConfig>): ProtocolRat
   globalRateLimiter ??= new ProtocolRateLimiter(config);
   return globalRateLimiter;
 }
+
+/** Stop and cleanup global rate limiter */
+export function stopRateLimiter(): void {
+  if (globalRateLimiter) {
+    globalRateLimiter.stop();
+    globalRateLimiter = null;
+  }
+}
