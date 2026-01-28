@@ -11,8 +11,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json bun.lock* ./
 
-# Install dependencies
-RUN bun install --frozen-lockfile
+# Install dependencies (ignore prepare script - no git in container)
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # Copy source code
 COPY src/ ./src/
