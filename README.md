@@ -10,11 +10,16 @@
 
 <p align="center">
   <a href="#features">Features</a> •
+  <a href="#sdk">SDK</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
   <a href="#api-reference">API</a> •
   <a href="#docker">Docker</a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/flashq"><img src="https://img.shields.io/npm/v/flashq" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/flashq"><img src="https://img.shields.io/npm/dm/flashq" alt="npm downloads"></a>
 </p>
 
 ---
@@ -36,6 +41,142 @@
 - **Prometheus Metrics** — Built-in metrics endpoint for monitoring
 - **Authentication** — Token-based auth for secure access
 - **Dual Protocol** — TCP (high performance) and HTTP/REST (compatibility)
+
+## SDK
+
+Install the official TypeScript SDK to use bunQ in your Bun applications.
+
+> **Note:** The SDK requires Bun runtime and a running bunQ server.
+
+### Install
+
+```bash
+bun add flashq
+```
+
+### Basic Usage
+
+```typescript
+import { Queue, Worker } from 'flashq';
+
+// Create a queue
+const queue = new Queue('my-queue', {
+  connection: { host: 'localhost', port: 6789 }
+});
+
+// Add a job
+await queue.add('process-data', { userId: 123, action: 'sync' });
+
+// Add with options
+await queue.add('send-email',
+  { to: 'user@example.com', subject: 'Hello' },
+  {
+    priority: 10,
+    delay: 5000,        // 5 seconds
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1000 }
+  }
+);
+
+// Create a worker
+const worker = new Worker('my-queue', async (job) => {
+  console.log('Processing:', job.name, job.data);
+
+  // Update progress
+  await job.updateProgress(50);
+
+  // Do work...
+
+  return { success: true };
+}, {
+  connection: { host: 'localhost', port: 6789 },
+  concurrency: 5
+});
+
+// Handle events
+worker.on('completed', (job, result) => {
+  console.log(`Job ${job.id} completed:`, result);
+});
+
+worker.on('failed', (job, err) => {
+  console.error(`Job ${job.id} failed:`, err.message);
+});
+```
+
+### Cron Jobs
+
+```typescript
+import { Queue } from 'flashq';
+
+const queue = new Queue('scheduled', {
+  connection: { host: 'localhost', port: 6789 }
+});
+
+// Every hour
+await queue.upsertJobScheduler('hourly-report',
+  { pattern: '0 * * * *' },
+  { name: 'generate-report', data: { type: 'hourly' } }
+);
+
+// Every 5 minutes
+await queue.upsertJobScheduler('health-check',
+  { every: 300000 },
+  { name: 'ping', data: {} }
+);
+```
+
+### Job Dependencies (Flows)
+
+```typescript
+import { FlowProducer } from 'flashq';
+
+const flow = new FlowProducer({
+  connection: { host: 'localhost', port: 6789 }
+});
+
+// Create a flow with parent-child dependencies
+await flow.add({
+  name: 'final-step',
+  queueName: 'pipeline',
+  data: { step: 'aggregate' },
+  children: [
+    {
+      name: 'step-1',
+      queueName: 'pipeline',
+      data: { step: 'fetch' }
+    },
+    {
+      name: 'step-2',
+      queueName: 'pipeline',
+      data: { step: 'transform' }
+    }
+  ]
+});
+```
+
+### Real-time Events
+
+```typescript
+import { QueueEvents } from 'flashq';
+
+const events = new QueueEvents('my-queue', {
+  connection: { host: 'localhost', port: 6789 }
+});
+
+events.on('completed', ({ jobId, returnvalue }) => {
+  console.log(`Job ${jobId} completed with:`, returnvalue);
+});
+
+events.on('failed', ({ jobId, failedReason }) => {
+  console.error(`Job ${jobId} failed:`, failedReason);
+});
+
+events.on('progress', ({ jobId, data }) => {
+  console.log(`Job ${jobId} progress:`, data);
+});
+```
+
+For more examples, see the [SDK documentation](https://www.npmjs.com/package/flashq).
 
 ## Quick Start
 
