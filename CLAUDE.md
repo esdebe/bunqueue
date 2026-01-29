@@ -1,12 +1,12 @@
 # bunqueue 🐰
 
-High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ. Zero external dependencies.
+High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ, S3 backups. Minimal dependencies.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      bunqueue server                            │
+│                      bunqueue server                        │
 ├─────────────────────────────────────────────────────────────┤
 │  HTTP API (Bun.serve)  │  TCP Protocol (Bun.listen)        │
 ├─────────────────────────────────────────────────────────────┤
@@ -15,7 +15,7 @@ High-performance job queue server for Bun. SQLite persistence, cron jobs, priori
 │  │ Queues  │ │ Workers │ │ Scheduler│ │   DLQ   │         │
 │  └─────────┘ └─────────┘ └──────────┘ └─────────┘         │
 ├─────────────────────────────────────────────────────────────┤
-│              bun:sqlite (WAL mode)                          │
+│   bun:sqlite (WAL mode)    │   S3 Backup (optional)        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,7 +46,8 @@ src/
 ├── infrastructure/  # External concerns
 │   ├── persistence/ # SQLite implementation
 │   ├── server/      # TCP, HTTP, WebSocket
-│   └── background/  # Cron, cleanup tasks
+│   ├── scheduler/   # Cron scheduling
+│   └── backup/      # S3 backup system
 └── shared/          # Utilities, constants
 ```
 
@@ -358,16 +359,28 @@ HTTP_PORT=6790
 AUTH_TOKENS=token1,token2
 
 # Persistence
-DATA_PATH=./data/flashq.db
+DATA_PATH=./data/bunq.db
 
-# S3 Backup (optional)
-S3_BACKUP_ENABLED=0
-S3_ENDPOINT=
-S3_BUCKET=
-S3_REGION=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
+# S3 Backup Configuration
+S3_BACKUP_ENABLED=0              # Enable automated backups (0/1 or false/true)
+S3_ACCESS_KEY_ID=                # S3 access key (also supports AWS_ACCESS_KEY_ID)
+S3_SECRET_ACCESS_KEY=            # S3 secret key (also supports AWS_SECRET_ACCESS_KEY)
+S3_BUCKET=                       # S3 bucket name (also supports AWS_BUCKET)
+S3_REGION=us-east-1              # S3 region (also supports AWS_REGION)
+S3_ENDPOINT=                     # Custom endpoint for non-AWS providers
+S3_BACKUP_INTERVAL=21600000      # Backup interval in ms (default: 6 hours)
+S3_BACKUP_RETENTION=7            # Number of backups to keep
+S3_BACKUP_PREFIX=backups/        # Prefix for backup files
 ```
+
+### Supported S3 Providers
+
+| Provider          | Endpoint Example                              |
+|-------------------|-----------------------------------------------|
+| AWS S3            | (leave empty, uses default)                   |
+| Cloudflare R2     | `https://<account-id>.r2.cloudflarestorage.com` |
+| MinIO             | `http://localhost:9000`                       |
+| DigitalOcean      | `https://<region>.digitaloceanspaces.com`     |
 
 ## CLI Commands
 
@@ -421,6 +434,12 @@ bunqueue webhook list|add|remove
 
 # Monitoring
 bunqueue stats|metrics|health
+
+# S3 Backup
+bunqueue backup now                    # Create backup immediately
+bunqueue backup list                   # List available backups
+bunqueue backup restore <key> [-f]     # Restore from backup
+bunqueue backup status                 # Show backup configuration
 ```
 
 ### Global Options
