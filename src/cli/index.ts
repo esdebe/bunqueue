@@ -7,6 +7,7 @@
 import { runServer } from './commands/server';
 import { executeCommand } from './client';
 import { printHelp, printVersion } from './help';
+import { isBackupCommand, executeBackupCommand } from './commands/backup';
 
 /** Version from package.json */
 const VERSION = '1.0.7';
@@ -101,6 +102,30 @@ export async function main(): Promise<void> {
     // Could add command-specific help here
     printHelp();
     process.exit(0);
+  }
+
+  // Backup command - executed locally, not via TCP
+  if (isBackupCommand(command)) {
+    try {
+      const result = await executeBackupCommand(commandArgs.slice(1));
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(result.message);
+        if (result.data) {
+          console.log(JSON.stringify(result.data, null, 2));
+        }
+      }
+      process.exit(result.success ? 0 : 1);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error(`Error: ${err.message}`);
+      } else {
+        console.error('Unknown error occurred');
+      }
+      process.exit(1);
+    }
+    return;
   }
 
   // Client mode - execute command against server

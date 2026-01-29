@@ -21,6 +21,7 @@ const clientCommands = [
   'stats',
   'metrics',
   'health',
+  'backup',
 ];
 
 const firstArg = process.argv[2];
@@ -42,6 +43,7 @@ import { createHttpServer } from './infrastructure/server/http';
 import { Logger, serverLog, statsLog } from './shared/logger';
 import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 import { VERSION } from './shared/version';
+import { S3BackupManager } from './infrastructure/backup';
 
 /** Server configuration from environment */
 interface ServerConfig {
@@ -52,6 +54,7 @@ interface ServerConfig {
   dataPath: string | undefined;
   corsOrigins: string[];
   requireAuthForMetrics: boolean;
+  s3BackupEnabled: boolean;
 }
 
 /** Load configuration from environment variables */
@@ -64,6 +67,8 @@ function loadConfig(): ServerConfig {
     dataPath: process.env.DATA_PATH ?? process.env.SQLITE_PATH,
     corsOrigins: process.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? ['*'],
     requireAuthForMetrics: process.env.METRICS_AUTH === 'true',
+    s3BackupEnabled:
+      process.env.S3_BACKUP_ENABLED === '1' || process.env.S3_BACKUP_ENABLED === 'true',
   };
 }
 
@@ -92,6 +97,7 @@ ${dim}────────────────────────�
   ${green}●${reset} HTTP   ${bold}${config.hostname}:${config.httpPort}${reset}
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
+  ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
 
 ${dim}─────────────────────────────────────────────────${reset}
 
@@ -125,6 +131,14 @@ function startServer(): void {
     requireAuthForMetrics: config.requireAuthForMetrics,
   });
 
+  // Initialize S3 backup manager
+  let backupManager: S3BackupManager | null = null;
+  if (config.dataPath) {
+    const backupConfig = S3BackupManager.fromEnv(config.dataPath);
+    backupManager = new S3BackupManager(backupConfig);
+    backupManager.start();
+  }
+
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     serverLog.info(`Received ${signal}, shutting down...`);
@@ -138,6 +152,11 @@ function startServer(): void {
       if (stats.active === 0) break;
       serverLog.info(`Waiting for ${stats.active} active jobs...`);
       await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    // Stop backup manager
+    if (backupManager) {
+      backupManager.stop();
     }
 
     queueManager.shutdown();

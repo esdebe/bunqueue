@@ -80,6 +80,12 @@ MONITORING:
   metrics                         Show Prometheus metrics
   health                          Health check
 
+BACKUP (S3):
+  backup now                      Create backup immediately
+  backup list                     List available backups
+  backup restore <key> [-f]       Restore from backup
+  backup status                   Show backup configuration
+
 GLOBAL OPTIONS:
   -H, --host <host>               Server host (default: localhost)
   -p, --port <port>               TCP port (default: 6789)

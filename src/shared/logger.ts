@@ -92,3 +92,4 @@ export const statsLog = createLogger('Stats');
 export const storageLog = createLogger('Storage');
 export const queueLog = createLogger('Queue');
 export const webhookLog = createLogger('Webhook');
+export const backupLog = createLogger('Backup');

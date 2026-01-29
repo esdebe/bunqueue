@@ -674,6 +674,41 @@ curl -X POST http://localhost:6790/cron \
 | `DATA_PATH` | - | SQLite database path (in-memory if not set) |
 | `CORS_ALLOW_ORIGIN` | * | Allowed CORS origins |
 
+### S3 Backup Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_BACKUP_ENABLED` | 0 | Enable automated S3 backups (1/true) |
+| `S3_ACCESS_KEY_ID` | - | S3 access key |
+| `S3_SECRET_ACCESS_KEY` | - | S3 secret key |
+| `S3_BUCKET` | - | S3 bucket name |
+| `S3_REGION` | us-east-1 | S3 region |
+| `S3_ENDPOINT` | - | Custom endpoint for S3-compatible services |
+| `S3_BACKUP_INTERVAL` | 21600000 | Backup interval in ms (default: 6 hours) |
+| `S3_BACKUP_RETENTION` | 7 | Number of backups to retain |
+| `S3_BACKUP_PREFIX` | backups/ | Prefix for backup files |
+
+**Supported S3 Providers:**
+- AWS S3
+- Cloudflare R2: `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`
+- MinIO: `S3_ENDPOINT=http://localhost:9000`
+- DigitalOcean Spaces: `S3_ENDPOINT=https://<region>.digitaloceanspaces.com`
+
+**CLI Commands:**
+```bash
+# Create backup immediately
+bunqueue backup now
+
+# List available backups
+bunqueue backup list
+
+# Restore from backup (requires --force)
+bunqueue backup restore backups/bunqueue-2024-01-15.db --force
+
+# Show backup status
+bunqueue backup status
+```
+
 ### Authentication
 
 Enable authentication by setting `AUTH_TOKENS`:
