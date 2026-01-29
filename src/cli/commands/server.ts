@@ -5,6 +5,7 @@
 
 import { parseArgs } from 'node:util';
 import { printServerHelp } from '../help';
+import { VERSION } from '../../shared/version';
 
 /** Server start options */
 interface ServerOptions {
@@ -96,15 +97,33 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
     auth: authTokens ? 'enabled' : 'disabled',
   });
 
+  const dim = '\x1b[2m';
+  const reset = '\x1b[0m';
+  const bold = '\x1b[1m';
+  const cyan = '\x1b[36m';
+  const green = '\x1b[32m';
+  const yellow = '\x1b[33m';
+
   console.log(`
-  bunqueue server running
+${cyan}    ____              ____                        ${reset}
+${cyan}   / __ )__  ______  / __ \\__  _____  __  _____   ${reset}
+${cyan}  / __  / / / / __ \\/ / / / / / / _ \\/ / / / _ \\  ${reset}
+${cyan} / /_/ / /_/ / / / / /_/ / /_/ /  __/ /_/ /  __/  ${reset}
+${cyan}/_____/\\__,_/_/ /_/\\___\\_\\__,_/\\___/\\__,_/\\___/   ${reset}
+${dim}                                          v${VERSION}${reset}
 
-  TCP:  ${options.host}:${options.tcpPort}
-  HTTP: ${options.host}:${options.httpPort}
-  Data: ${options.dataPath ?? 'in-memory'}
-  Auth: ${authTokens ? 'enabled' : 'disabled'}
+${bold}High-performance job queue server for Bun${reset}
 
-  Press Ctrl+C to stop
+${dim}─────────────────────────────────────────────────${reset}
+
+  ${green}●${reset} TCP    ${bold}${options.host}:${options.tcpPort}${reset}
+  ${green}●${reset} HTTP   ${bold}${options.host}:${options.httpPort}${reset}
+  ${yellow}●${reset} Data   ${options.dataPath ?? 'in-memory'}
+  ${yellow}●${reset} Auth   ${authTokens ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
+
+${dim}─────────────────────────────────────────────────${reset}
+
+  ${dim}Press ${bold}Ctrl+C${reset}${dim} to stop${reset}
 `);
 
   // Handle shutdown

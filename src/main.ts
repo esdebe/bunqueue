@@ -41,6 +41,7 @@ import { createTcpServer } from './infrastructure/server/tcp';
 import { createHttpServer } from './infrastructure/server/http';
 import { Logger, serverLog, statsLog } from './shared/logger';
 import { stopRateLimiter } from './infrastructure/server/rateLimiter';
+import { VERSION } from './shared/version';
 
 /** Server configuration from environment */
 interface ServerConfig {
@@ -68,22 +69,34 @@ function loadConfig(): ServerConfig {
 
 /** Print startup banner */
 function printBanner(config: ServerConfig): void {
+  const dim = '\x1b[2m';
+  const reset = '\x1b[0m';
+  const bold = '\x1b[1m';
+  const cyan = '\x1b[36m';
+  const green = '\x1b[32m';
+  const yellow = '\x1b[33m';
+
   console.log(`
-  ╔═══════════════════════════════════════════════════════════╗
-  ║                                                           ║
-  ║   🐰 bunqueue                                                 ║
-  ║   High-performance job queue server for Bun               ║
-  ║                                                           ║
-  ╠═══════════════════════════════════════════════════════════╣
-  ║                                                           ║
-  ║   TCP Port:  ${String(config.tcpPort).padEnd(44)}║
-  ║   HTTP Port: ${String(config.httpPort).padEnd(44)}║
-  ║   Host:      ${config.hostname.padEnd(44)}║
-  ║   Auth:      ${(config.authTokens.length > 0 ? 'Enabled' : 'Disabled').padEnd(44)}║
-  ║   Storage:   ${(config.dataPath ?? 'In-memory').padEnd(44)}║
-  ║                                                           ║
-  ╚═══════════════════════════════════════════════════════════╝
-  `);
+${cyan}    ____              ____                        ${reset}
+${cyan}   / __ )__  ______  / __ \\__  _____  __  _____   ${reset}
+${cyan}  / __  / / / / __ \\/ / / / / / / _ \\/ / / / _ \\  ${reset}
+${cyan} / /_/ / /_/ / / / / /_/ / /_/ /  __/ /_/ /  __/  ${reset}
+${cyan}/_____/\\__,_/_/ /_/\\___\\_\\__,_/\\___/\\__,_/\\___/   ${reset}
+${dim}                                          v${VERSION}${reset}
+
+${bold}High-performance job queue server for Bun${reset}
+
+${dim}─────────────────────────────────────────────────${reset}
+
+  ${green}●${reset} TCP    ${bold}${config.hostname}:${config.tcpPort}${reset}
+  ${green}●${reset} HTTP   ${bold}${config.hostname}:${config.httpPort}${reset}
+  ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
+  ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
+
+${dim}─────────────────────────────────────────────────${reset}
+
+  ${dim}Press ${bold}Ctrl+C${reset}${dim} to stop${reset}
+`);
 }
 
 /** Start the server (direct mode) */
