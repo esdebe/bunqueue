@@ -4,6 +4,28 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   site: 'https://egeominotti.github.io',
   base: '/bunqueue',
+
+  // Performance optimizations
+  compressHTML: true,
+  build: {
+    inlineStylesheets: 'auto',
+  },
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'viewport',
+  },
+  vite: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            search: ['@pagefind/default-ui'],
+          },
+        },
+      },
+    },
+  },
+
   integrations: [
     starlight({
       title: 'bunqueue',
@@ -220,7 +242,29 @@ export default defineConfig({
             href: '/bunqueue/apple-touch-icon.png',
           },
         },
+        // DNS prefetch for external resources
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'dns-prefetch',
+            href: 'https://github.com',
+          },
+        },
+        // Preconnect to GitHub
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preconnect',
+            href: 'https://github.com',
+          },
+        },
       ],
+      // Disable last updated (reduces build time)
+      lastUpdated: false,
+      // Pagination enabled for better UX
+      pagination: true,
+      // Table of contents depth
+      tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
     }),
   ],
 });
