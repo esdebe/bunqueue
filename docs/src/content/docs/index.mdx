@@ -106,21 +106,28 @@ import { Card, CardGrid, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlig
 
 ---
 
-## Benchmarks
+## Performance
 
-Performance comparison on Apple M2 Pro, 16GB RAM:
+Measured on Apple M2 Pro, 16GB RAM. Run `bun run bench` for your hardware.
 
-| Metric | bunqueue | BullMQ + Redis |
-|--------|----------|----------------|
-| Push throughput | **125,000 jobs/sec** | 45,000 jobs/sec |
-| Pull latency (p50) | **0.1ms** | 0.8ms |
-| Pull latency (p99) | **0.5ms** | 3.2ms |
-| Memory usage | **50MB** | 200MB+ |
-| Cold start | **~100ms** | 2-5s |
+<CardGrid>
+  <Card title="50-150K ops/sec" icon="rocket">
+    Push throughput with batch operations
+  </Card>
+  <Card title="< 1ms p99" icon="seti:clock">
+    Sub-millisecond latency
+  </Card>
+  <Card title="~50MB base" icon="document">
+    Minimal memory footprint
+  </Card>
+  <Card title="< 100ms" icon="star">
+    Cold start time
+  </Card>
+</CardGrid>
 
 <div style="text-align: center; margin-top: 1rem;">
   <a href="/bunqueue/guide/benchmarks/" style="color: var(--sl-color-text-accent);">
-    View full benchmarks →
+    Run benchmarks yourself →
   </a>
 </div>
 
