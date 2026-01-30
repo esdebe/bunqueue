@@ -1,6 +1,11 @@
 ---
 title: Migration from BullMQ
 description: Step-by-step guide to migrate from BullMQ to bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/api-reference.png
 ---
 
 

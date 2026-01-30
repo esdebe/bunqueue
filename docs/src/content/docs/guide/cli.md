@@ -1,6 +1,11 @@
 ---
 title: CLI Commands
 description: Complete command-line interface reference with examples
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
 ---
 
 

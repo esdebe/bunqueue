@@ -1,6 +1,11 @@
 ---
 title: Quick Start
 description: Get up and running in 5 minutes
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
 

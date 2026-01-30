@@ -1,6 +1,11 @@
 ---
 title: Examples
 description: Real-world examples and patterns for bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/api-reference.png
 ---
 
 

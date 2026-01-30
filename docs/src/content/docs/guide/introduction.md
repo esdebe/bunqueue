@@ -1,6 +1,11 @@
 ---
 title: Introduction
 description: What is bunqueue and why use it
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
 

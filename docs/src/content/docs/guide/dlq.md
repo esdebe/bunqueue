@@ -1,6 +1,11 @@
 ---
 title: Dead Letter Queue
 description: Advanced DLQ with metadata, auto-retry, and lifecycle management
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
 ---
 
 The Dead Letter Queue stores failed jobs with full metadata for debugging and recovery.

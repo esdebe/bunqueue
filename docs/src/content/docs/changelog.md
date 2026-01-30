@@ -1,6 +1,11 @@
 ---
 title: Changelog
 description: Release notes and version history
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
 

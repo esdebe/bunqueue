@@ -1,6 +1,11 @@
 ---
 title: Webhooks
 description: HTTP callbacks for job events with signature verification
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/advanced.png
 ---
 
 

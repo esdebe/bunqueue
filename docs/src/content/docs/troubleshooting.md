@@ -1,6 +1,11 @@
 ---
 title: Troubleshooting
 description: Common issues and solutions
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
 

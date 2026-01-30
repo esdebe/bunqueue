@@ -1,6 +1,11 @@
 ---
 title: Environment Variables
 description: Complete reference for bunqueue environment variables
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
 ---
 
 

@@ -1,6 +1,11 @@
 ---
 title: Stall Detection
 description: Automatic recovery of unresponsive jobs
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
 ---
 
 

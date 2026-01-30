@@ -1,6 +1,11 @@
 ---
 title: TCP Protocol
 description: Binary TCP protocol reference
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
 ---
 
 

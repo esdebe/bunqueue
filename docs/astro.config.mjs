@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
   site: 'https://egeominotti.github.io',
@@ -302,5 +303,6 @@ export default defineConfig({
       // Table of contents depth
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
     }),
+    sitemap(),
   ],
 });

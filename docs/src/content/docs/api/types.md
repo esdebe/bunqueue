@@ -1,6 +1,11 @@
 ---
 title: TypeScript Types
 description: Complete TypeScript type definitions for bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/api-reference.png
 ---
 
 

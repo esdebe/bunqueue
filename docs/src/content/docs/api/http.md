@@ -1,6 +1,11 @@
 ---
 title: HTTP API
 description: REST API reference
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
 ---
 
 

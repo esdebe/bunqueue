@@ -1,6 +1,11 @@
 ---
 title: Security
 description: Security policy and best practices
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/advanced.png
 ---
 
 

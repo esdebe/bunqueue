@@ -1,6 +1,11 @@
 ---
 title: S3 Backup
 description: Automated backups to S3-compatible storage
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/advanced.png
 ---
 
 

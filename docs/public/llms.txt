@@ -1,0 +1,111 @@
+# bunqueue - High-Performance Job Queue for Bun
+# https://egeominotti.github.io/bunqueue/
+
+> bunqueue is a high-performance job queue written in TypeScript for the Bun runtime.
+> It uses SQLite for persistence instead of Redis, providing a BullMQ-compatible API.
+
+## Overview
+
+bunqueue provides:
+- Native Bun performance with bun:sqlite
+- Zero external dependencies (no Redis required)
+- BullMQ-compatible API for easy migration
+- SQLite persistence with WAL mode
+- Sandboxed workers for crash isolation
+- Production features: DLQ, stall detection, rate limiting, webhooks, S3 backups
+
+## Documentation Structure
+
+/guide/introduction/ - What is bunqueue and why use it
+/guide/installation/ - How to install bunqueue
+/guide/quickstart/ - Get up and running quickly
+
+### Client SDK
+/guide/queue/ - Queue class API reference
+/guide/worker/ - Worker class API reference (includes SandboxedWorker)
+/guide/stall-detection/ - Automatic recovery of unresponsive jobs
+/guide/dlq/ - Dead Letter Queue for failed jobs
+/guide/flow/ - Parent-child job relationships (FlowProducer)
+
+### Server Mode
+/guide/server/ - Running bunqueue as a standalone server
+/guide/cli/ - Command-line interface reference
+/guide/env-vars/ - Environment variables configuration
+/api/http/ - REST API reference
+/api/tcp/ - Binary TCP protocol reference
+
+### Advanced Features
+/guide/cron/ - Schedule recurring jobs
+/guide/backup/ - Automated S3 backups
+/guide/rate-limiting/ - Control job processing rates
+/guide/webhooks/ - HTTP callbacks for job events
+
+### Reference
+/api/types/ - Complete TypeScript type definitions
+/examples/ - Real-world examples and patterns
+/guide/migration/ - Migration guide from BullMQ
+
+### Resources
+/faq/ - Frequently asked questions
+/troubleshooting/ - Common issues and solutions
+/changelog/ - Release notes and version history
+/security/ - Security policy and best practices
+/contributing/ - How to contribute
+
+## Key Features
+
+### Queue API
+- add(name, data, opts) - Add a single job
+- addBulk(jobs) - Add multiple jobs efficiently
+- getJob(id) - Get job by ID
+- getJobs(states) - List jobs by state
+- pause() / resume() - Control processing
+- drain() - Remove all waiting jobs
+
+### Worker API
+- new Worker(queue, processor, opts) - Create job processor
+- concurrency - Process multiple jobs in parallel
+- Events: completed, failed, progress, stalled
+- SandboxedWorker - Isolated worker processes for CPU-intensive tasks
+
+### Job Options
+- priority - Higher priority = processed first
+- delay - Delay before processing (ms)
+- attempts - Maximum retry attempts
+- backoff - Delay between retries
+- timeout - Job timeout (ms)
+- removeOnComplete / removeOnFail - Cleanup options
+
+## Code Example
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// Create a queue
+const queue = new Queue('emails');
+
+// Add a job
+await queue.add('send-welcome', {
+  to: 'user@example.com',
+  subject: 'Welcome!'
+});
+
+// Process jobs
+const worker = new Worker('emails', async (job) => {
+  await sendEmail(job.data);
+  return { sent: true };
+});
+```
+
+## Performance
+
+- 500,000+ operations per second
+- 32x faster than BullMQ for common operations
+- SQLite WAL mode for concurrent access
+- Minimal memory footprint
+
+## Links
+
+- GitHub: https://github.com/egeominotti/bunqueue
+- npm: https://www.npmjs.com/package/bunqueue
+- Documentation: https://egeominotti.github.io/bunqueue/

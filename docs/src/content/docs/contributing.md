@@ -1,6 +1,11 @@
 ---
 title: Contributing
 description: How to contribute to bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
 
