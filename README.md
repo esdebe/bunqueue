@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="https://egeominotti.github.io/bunqueue/"><strong>📚 Documentation</strong></a> •
   <a href="#features">Features</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#embedded-mode">Embedded</a> •
   <a href="#server-mode">Server</a> •
-  <a href="#api-reference">API</a> •
   <a href="#docker">Docker</a>
 </p>
 
