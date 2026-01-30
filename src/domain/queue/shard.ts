@@ -106,14 +106,18 @@ export class Shard {
   /** Concurrency limiters per queue */
   readonly concurrencyLimiters = new Map<string, ConcurrencyLimiter>();
 
-  /** Waiters for new jobs (condition variable pattern) */
-  private readonly waiters: Array<() => void> = [];
+  /** Waiter entry with cancellation flag for O(1) cleanup */
+  private readonly waiters: Array<{ resolve: () => void; cancelled: boolean }> = [];
 
-  /** Notify that jobs are available - wakes all waiters */
+  /** Notify that jobs are available - wakes first non-cancelled waiter */
   notify(): void {
-    const toNotify = this.waiters.splice(0);
-    for (const waiter of toNotify) {
-      waiter();
+    // Skip cancelled entries at head - O(k) where k = cancelled
+    while (this.waiters.length > 0) {
+      const waiter = this.waiters.shift()!;
+      if (!waiter.cancelled) {
+        waiter.resolve();
+        break;
+      }
     }
   }
 
@@ -124,22 +128,17 @@ export class Shard {
     }
 
     return new Promise<void>((resolve) => {
-      let resolved = false;
+      const waiter = { resolve, cancelled: false };
 
       const cleanup = () => {
-        if (resolved) return;
-        resolved = true;
-        const idx = this.waiters.indexOf(waiterFn);
-        if (idx !== -1) this.waiters.splice(idx, 1);
+        if (waiter.cancelled) return;
+        // O(1) cancellation - just mark, don't search/splice
+        waiter.cancelled = true;
         resolve();
       };
 
-      const waiterFn = () => {
-        cleanup();
-      };
-
       // Add to waiters
-      this.waiters.push(waiterFn);
+      this.waiters.push(waiter);
 
       // Timeout fallback
       setTimeout(cleanup, Math.min(timeoutMs, 100)); // Max 100ms wait to allow checking other conditions

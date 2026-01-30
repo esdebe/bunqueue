@@ -52,6 +52,9 @@ export class SqliteStorage {
   private readonly writeBufferSize: number;
   private writeBufferTimer: ReturnType<typeof setInterval> | null = null;
 
+  // Prepared statement cache for batch inserts - avoids recompiling SQL
+  private readonly batchInsertCache = new Map<number, ReturnType<Database['prepare']>>();
+
   constructor(config: SqliteConfig) {
     this.db = new Database(config.path, { create: true });
     this.db.run(PRAGMA_SETTINGS);
@@ -202,17 +205,30 @@ export class SqliteStorage {
     })();
   }
 
+  /** Get or create cached prepared statement for batch insert */
+  private getBatchInsertStmt(size: number): ReturnType<Database['prepare']> {
+    let stmt = this.batchInsertCache.get(size);
+    if (!stmt) {
+      const rowPlaceholder = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      const placeholders = Array(size).fill(rowPlaceholder).join(', ');
+      const sql = `INSERT INTO jobs (
+        id, queue, data, priority, created_at, run_at, attempts, max_attempts,
+        backoff, ttl, timeout, unique_key, custom_id, depends_on, parent_id,
+        tags, state, lifo, group_id, remove_on_complete, remove_on_fail, stall_timeout
+      ) VALUES ${placeholders}`;
+      stmt = this.db.prepare(sql);
+      // Cache statements for common batch sizes (1-100)
+      if (size <= 100) {
+        this.batchInsertCache.set(size, stmt);
+      }
+    }
+    return stmt;
+  }
+
   /** Insert a chunk of jobs with single multi-row INSERT */
   private insertJobsChunk(jobs: Job[], now: number): void {
-    // Build placeholders: (?, ?, ...), (?, ?, ...), ...
-    const rowPlaceholder = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-    const placeholders = jobs.map(() => rowPlaceholder).join(', ');
-
-    const sql = `INSERT INTO jobs (
-      id, queue, data, priority, created_at, run_at, attempts, max_attempts,
-      backoff, ttl, timeout, unique_key, custom_id, depends_on, parent_id,
-      tags, state, lifo, group_id, remove_on_complete, remove_on_fail, stall_timeout
-    ) VALUES ${placeholders}`;
+    // Get cached prepared statement
+    const stmt = this.getBatchInsertStmt(jobs.length);
 
     // Flatten all values
     const values: unknown[] = [];
@@ -243,7 +259,7 @@ export class SqliteStorage {
       );
     }
 
-    this.db.prepare(sql).run(...(values as (string | number | bigint | null | Uint8Array)[]));
+    stmt.run(...(values as (string | number | bigint | null | Uint8Array)[]));
   }
 
   // ============ Query Operations ============

@@ -1,11 +1,19 @@
 /**
- * Generic Min-Heap implementation
- * O(log n) push/pop, O(1) peek
+ * Generic Min-Heap implementation with 4-ary branching
+ * 4-ary heap provides better cache locality than binary heap:
+ * - Children are stored closer together in memory
+ * - Reduces cache misses during bubbleDown (most frequent operation)
+ * - 4 comparisons per level vs 2, but fewer levels to traverse
+ *
+ * O(log₄ n) push/pop, O(1) peek
  */
 
 export class MinHeap<T> {
   private heap: T[] = [];
   private readonly compare: (a: T, b: T) => number;
+
+  /** Branching factor - 4 provides optimal cache performance on modern CPUs */
+  private static readonly D = 4;
 
   /**
    * Create a min-heap with custom comparator
@@ -63,8 +71,10 @@ export class MinHeap<T> {
   /** Rebuild heap from array - O(n) */
   buildFrom(items: T[]): void {
     this.heap = [...items];
-    // Heapify from bottom up
-    for (let i = Math.floor(this.heap.length / 2) - 1; i >= 0; i--) {
+    // Heapify from bottom up - start from last non-leaf node
+    // In D-ary heap, last non-leaf is at floor((n-2)/D)
+    const D = MinHeap.D;
+    for (let i = Math.floor((this.heap.length - 2) / D); i >= 0; i--) {
       this.bubbleDown(i);
     }
   }
@@ -89,28 +99,37 @@ export class MinHeap<T> {
     return item;
   }
 
+  /** 4-ary bubbleUp: parent at floor((idx-1)/4) */
   private bubbleUp(idx: number): void {
+    const D = MinHeap.D;
     while (idx > 0) {
-      const parentIdx = Math.floor((idx - 1) / 2);
+      const parentIdx = Math.floor((idx - 1) / D);
       if (this.compare(this.heap[idx], this.heap[parentIdx]) >= 0) break;
       this.swap(idx, parentIdx);
       idx = parentIdx;
     }
   }
 
+  /** 4-ary bubbleDown: children at D*idx+1 through D*idx+D */
   private bubbleDown(idx: number): void {
+    const D = MinHeap.D;
     const length = this.heap.length;
+    const heap = this.heap;
+    const compare = this.compare;
+
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     while (true) {
-      const leftIdx = 2 * idx + 1;
-      const rightIdx = 2 * idx + 2;
-      let smallest = idx;
+      const firstChild = D * idx + 1;
+      if (firstChild >= length) break;
 
-      if (leftIdx < length && this.compare(this.heap[leftIdx], this.heap[smallest]) < 0) {
-        smallest = leftIdx;
-      }
-      if (rightIdx < length && this.compare(this.heap[rightIdx], this.heap[smallest]) < 0) {
-        smallest = rightIdx;
+      // Find minimum among up to D children (cache-friendly sequential access)
+      let smallest = idx;
+      const lastChild = Math.min(firstChild + D, length);
+
+      for (let c = firstChild; c < lastChild; c++) {
+        if (compare(heap[c], heap[smallest]) < 0) {
+          smallest = c;
+        }
       }
 
       if (smallest === idx) break;

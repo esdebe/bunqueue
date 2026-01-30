@@ -53,14 +53,18 @@ function compareEntries(a: HeapEntry, b: HeapEntry): number {
 }
 
 /**
- * Indexed Priority Queue implementation
- * O(log n) push, pop, update
+ * Indexed Priority Queue implementation with 4-ary heap
+ * 4-ary provides better cache locality than binary heap
+ * O(log₄ n) push, pop, update
  * O(1) find, has
  */
 export class IndexedPriorityQueue {
+  /** Branching factor - 4 provides optimal cache performance */
+  private static readonly D = 4;
   private heap: HeapEntry[] = [];
   private readonly index: Map<JobId, { job: Job; generation: number }> = new Map();
-  private generation = 0n;
+  // Use Number instead of BigInt - 2^53 operations is enough for 285 years at 1M ops/sec
+  private generation = 0;
 
   /** Get current size */
   get size(): number {
@@ -74,7 +78,7 @@ export class IndexedPriorityQueue {
 
   /** Push a job into the queue */
   push(job: Job): void {
-    const gen = Number(this.generation++);
+    const gen = this.generation++;
 
     // Store in index
     this.index.set(job.id, { job, generation: gen });
@@ -158,7 +162,7 @@ export class IndexedPriorityQueue {
     (job as { priority: number }).priority = newPriority;
 
     // Create new heap entry with new generation
-    const gen = Number(this.generation++);
+    const gen = this.generation++;
     indexed.generation = gen;
 
     const entry: HeapEntry = {
@@ -184,7 +188,7 @@ export class IndexedPriorityQueue {
     job.runAt = newRunAt;
 
     // Create new heap entry
-    const gen = Number(this.generation++);
+    const gen = this.generation++;
     indexed.generation = gen;
 
     const entry: HeapEntry = {
@@ -209,7 +213,7 @@ export class IndexedPriorityQueue {
   clear(): void {
     this.heap = [];
     this.index.clear();
-    this.generation = 0n;
+    this.generation = 0;
   }
 
   /**
@@ -245,8 +249,10 @@ export class IndexedPriorityQueue {
 
   /** Rebuild heap property from arbitrary array - O(n) */
   private heapify(): void {
+    const D = IndexedPriorityQueue.D;
     // Start from last non-leaf node and bubble down
-    for (let i = Math.floor(this.heap.length / 2) - 1; i >= 0; i--) {
+    // In D-ary heap, last non-leaf is at floor((n-2)/D)
+    for (let i = Math.floor((this.heap.length - 2) / D); i >= 0; i--) {
       this.bubbleDown(i);
     }
   }
@@ -267,9 +273,11 @@ export class IndexedPriorityQueue {
     this.bubbleDown(0);
   }
 
+  /** 4-ary bubbleUp: parent at floor((idx-1)/D) */
   private bubbleUp(idx: number): void {
+    const D = IndexedPriorityQueue.D;
     while (idx > 0) {
-      const parentIdx = Math.floor((idx - 1) / 2);
+      const parentIdx = Math.floor((idx - 1) / D);
       if (compareEntries(this.heap[idx], this.heap[parentIdx]) >= 0) {
         break;
       }
@@ -278,18 +286,24 @@ export class IndexedPriorityQueue {
     }
   }
 
+  /** 4-ary bubbleDown: children at D*idx+1 through D*idx+D */
   private bubbleDown(idx: number): void {
+    const D = IndexedPriorityQueue.D;
     const length = this.heap.length;
-    while (true) {
-      const leftIdx = 2 * idx + 1;
-      const rightIdx = 2 * idx + 2;
-      let smallest = idx;
+    const heap = this.heap;
 
-      if (leftIdx < length && compareEntries(this.heap[leftIdx], this.heap[smallest]) < 0) {
-        smallest = leftIdx;
-      }
-      if (rightIdx < length && compareEntries(this.heap[rightIdx], this.heap[smallest]) < 0) {
-        smallest = rightIdx;
+    while (true) {
+      const firstChild = D * idx + 1;
+      if (firstChild >= length) break;
+
+      // Find minimum among up to D children (cache-friendly sequential access)
+      let smallest = idx;
+      const lastChild = Math.min(firstChild + D, length);
+
+      for (let c = firstChild; c < lastChild; c++) {
+        if (compareEntries(heap[c], heap[smallest]) < 0) {
+          smallest = c;
+        }
       }
 
       if (smallest === idx) break;

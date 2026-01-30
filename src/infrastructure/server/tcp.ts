@@ -32,6 +32,9 @@ interface ConnectionData {
   ctx: HandlerContext;
 }
 
+/** Reusable TextDecoder - avoid allocation per message */
+const textDecoder = new TextDecoder();
+
 /**
  * Create and start TCP server
  */
@@ -73,7 +76,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
           return;
         }
 
-        const text = new TextDecoder().decode(data);
+        const text = textDecoder.decode(data);
         const lines = buffer.addData(text);
 
         for (const line of lines) {
