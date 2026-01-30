@@ -5,19 +5,22 @@
  *
  * Performance optimizations:
  * - Batch pull: fetches multiple jobs per round-trip (batchSize option)
- * - Batch ACK: acknowledges multiple jobs per round-trip (ackInterval option)
- * - Parallel processing up to concurrency limit
+ * - Batch ACK with results: acknowledges multiple jobs per round-trip
+ * - Connection pooling: optional pool for high-concurrency scenarios
+ * - Long polling: reduces round-trips when queue is empty
+ * - TCP heartbeats: keeps jobs alive for stall detection
  */
 
 import { EventEmitter } from 'events';
 import { getSharedManager } from './manager';
-import { getSharedTcpClient, type TcpClient } from './tcpClient';
+import { getSharedTcpClient } from './tcpClient';
+import { TcpConnectionPool } from './tcpPool';
 import type { WorkerOptions, Processor, ConnectionOptions } from './types';
 import { createPublicJob } from './types';
 import type { Job as InternalJob } from '../domain/types/job';
 import { jobId } from '../domain/types/job';
 
-/** Pending ACK item */
+/** Pending ACK item with result */
 interface PendingAck {
   id: string;
   result: unknown;
@@ -26,13 +29,21 @@ interface PendingAck {
 }
 
 /** Extended options with all defaults */
-interface ExtendedWorkerOptions extends Required<Omit<WorkerOptions, 'connection' | 'embedded'>> {
+interface ExtendedWorkerOptions extends Required<
+  Omit<WorkerOptions, 'connection' | 'embedded' | 'usePool'>
+> {
   connection?: ConnectionOptions;
   embedded: boolean;
+  usePool: boolean;
 }
 
 /** Check if embedded mode should be forced (for tests) */
 const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
+
+/** TCP connection interface (shared between TcpClient and TcpConnectionPool) */
+interface TcpConnection {
+  send: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>>;
+}
 
 /**
  * Worker class for processing jobs
@@ -45,11 +56,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private readonly opts: ExtendedWorkerOptions;
   private readonly processor: Processor<T, R>;
   private readonly embedded: boolean;
-  private readonly tcpClient: TcpClient | null;
+  private readonly tcp: TcpConnection | null;
+  private readonly tcpPool: TcpConnectionPool | null;
   private running = false;
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly heartbeatTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private readonly activeJobIds: Set<string> = new Set(); // Track active job IDs for heartbeat
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private consecutiveErrors = 0;
   private readonly pendingJobs: InternalJob[] = []; // Buffer for batch-pulled jobs
 
@@ -61,6 +74,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   private static readonly MAX_BACKOFF_MS = 30_000;
   private static readonly BASE_BACKOFF_MS = 100;
+  private static readonly MAX_POLL_TIMEOUT = 30_000;
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
@@ -72,7 +86,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       autorun: opts.autorun ?? true,
       heartbeatInterval: opts.heartbeatInterval ?? 10000,
       batchSize: Math.min(opts.batchSize ?? 10, 1000), // Default 10, max 1000
+      pollTimeout: Math.min(opts.pollTimeout ?? 0, Worker.MAX_POLL_TIMEOUT), // Default 0, max 30s
       embedded: this.embedded,
+      usePool: opts.usePool ?? false,
     };
 
     // Batch ACK settings
@@ -80,14 +96,30 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.ackInterval = 50; // Or after 50ms, whichever comes first
 
     if (this.embedded) {
-      this.tcpClient = null;
+      this.tcp = null;
+      this.tcpPool = null;
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
-      this.tcpClient = getSharedTcpClient({
-        host: connOpts.host ?? 'localhost',
-        port: connOpts.port ?? 6789,
-        token: connOpts.token,
-      });
+      const poolSize = this.opts.usePool ? (connOpts.poolSize ?? this.opts.concurrency) : 0;
+
+      if (poolSize > 1) {
+        // Use connection pool for high concurrency
+        this.tcpPool = new TcpConnectionPool({
+          host: connOpts.host ?? 'localhost',
+          port: connOpts.port ?? 6789,
+          token: connOpts.token,
+          poolSize,
+        });
+        this.tcp = this.tcpPool;
+      } else {
+        // Use single shared connection
+        this.tcpPool = null;
+        this.tcp = getSharedTcpClient({
+          host: connOpts.host ?? 'localhost',
+          port: connOpts.port ?? 6789,
+          token: connOpts.token,
+        });
+      }
     }
 
     if (this.opts.autorun) {
@@ -100,6 +132,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (this.running) return;
     this.running = true;
     this.emit('ready');
+
+    // Start global heartbeat timer for TCP mode
+    if (!this.embedded && this.opts.heartbeatInterval > 0) {
+      this.startGlobalHeartbeat();
+    }
+
     this.poll();
   }
 
@@ -125,6 +163,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.pollTimer = null;
     }
 
+    // Stop global heartbeat timer
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
     // Flush pending ACKs
     await this.flushAcks();
 
@@ -134,19 +178,43 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.ackTimer = null;
     }
 
-    // Stop all heartbeat timers
-    for (const timer of this.heartbeatTimers.values()) {
-      clearInterval(timer);
-    }
-    this.heartbeatTimers.clear();
-
     if (!force) {
       while (this.activeJobs > 0) {
         await new Promise((r) => setTimeout(r, 50));
       }
     }
 
+    // Close pool if using pooled connections (not shared)
+    if (this.tcpPool) {
+      this.tcpPool.close();
+    }
+
     this.emit('closed');
+  }
+
+  /** Start global heartbeat timer for all active jobs (TCP mode) */
+  private startGlobalHeartbeat(): void {
+    this.heartbeatTimer = setInterval(() => {
+      void this.sendBatchHeartbeat();
+    }, this.opts.heartbeatInterval);
+  }
+
+  /** Send batch heartbeat for all active jobs */
+  private async sendBatchHeartbeat(): Promise<void> {
+    if (this.activeJobIds.size === 0 || !this.tcp) return;
+
+    try {
+      const ids = Array.from(this.activeJobIds);
+      if (ids.length === 1) {
+        await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0] });
+      } else {
+        await this.tcp.send({ cmd: 'JobHeartbeatB', ids });
+      }
+    } catch (err) {
+      // Heartbeat errors are non-fatal, just emit for logging
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.emit('error', Object.assign(error, { context: 'heartbeat' }));
+    }
   }
 
   private poll(): void {
@@ -192,8 +260,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         // Reset error count only when we successfully got a job
         this.consecutiveErrors = 0;
         this.activeJobs++;
+        const jobIdStr = String(job.id);
+        this.activeJobIds.add(jobIdStr);
+
         void this.processJob(job).finally(() => {
           this.activeJobs--;
+          this.activeJobIds.delete(jobIdStr);
           if (this.running) this.poll();
         });
 
@@ -210,9 +282,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         }
       } else {
         // No jobs available, wait before polling again
+        // Use longer wait if long polling is enabled and server didn't block
+        const waitTime = this.opts.pollTimeout > 0 ? 10 : 50;
         this.pollTimer = setTimeout(() => {
           this.poll();
-        }, 50);
+        }, waitTime);
       }
     } catch (err) {
       this.consecutiveErrors++;
@@ -248,13 +322,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     return manager.pullBatch(this.name, count, 0);
   }
 
-  /** Pull batch of jobs via TCP */
+  /** Pull batch of jobs via TCP with optional long polling */
   private async pullBatchTcp(count: number): Promise<InternalJob[]> {
-    if (!this.tcpClient) return [];
-    const response = await this.tcpClient.send({
+    if (!this.tcp) return [];
+    const response = await this.tcp.send({
       cmd: count === 1 ? 'PULL' : 'PULLB',
       queue: this.name,
-      timeout: 0,
+      timeout: this.opts.pollTimeout, // Long polling support
       count, // For PULLB
     });
 
@@ -322,8 +396,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     } as InternalJob;
   }
 
-  /** Queue ACK for batch processing - fire and forget */
-  private queueAckFireAndForget(id: string, result: unknown): void {
+  /** Queue ACK for batch processing with result */
+  private queueAck(id: string, result: unknown): void {
     this.pendingAcks.push({
       id,
       result,
@@ -343,7 +417,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     }
   }
 
-  /** Flush pending ACKs in batch */
+  /** Flush pending ACKs in batch with results */
   private async flushAcks(): Promise<void> {
     if (this.pendingAcks.length === 0) return;
 
@@ -360,12 +434,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         const manager = getSharedManager();
         const items = batch.map((a) => ({ id: jobId(a.id), result: a.result }));
         await manager.ackBatchWithResults(items);
-      } else if (this.tcpClient) {
-        // TCP: use ACKB command
-        const response = await this.tcpClient.send({
+      } else if (this.tcp) {
+        // TCP: use ACKB command with results
+        const response = await this.tcp.send({
           cmd: 'ACKB',
           ids: batch.map((a) => a.id),
-          // Note: ACKB doesn't support individual results, just IDs
+          results: batch.map((a) => a.result), // Include results
         });
 
         if (!response.ok) {
@@ -392,9 +466,6 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     const name = jobData?.name ?? 'default';
     const jobIdStr = String(internalJob.id);
 
-    // Start heartbeat timer for this job
-    this.startHeartbeat(jobIdStr, internalJob);
-
     // Create job with progress and log methods
     const job = createPublicJob<T>(
       internalJob,
@@ -403,8 +474,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           await manager.updateProgress(jobId(id), progress, message);
-        } else if (this.tcpClient) {
-          await this.tcpClient.send({
+        } else if (this.tcp) {
+          await this.tcp.send({
             cmd: 'Progress',
             id,
             progress,
@@ -417,8 +488,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           manager.addLog(jobId(id), message);
-        } else if (this.tcpClient) {
-          await this.tcpClient.send({
+        } else if (this.tcp) {
+          await this.tcp.send({
             cmd: 'AddLog',
             id,
             message,
@@ -431,21 +502,19 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     try {
       const result = await this.processor(job);
-      this.stopHeartbeat(jobIdStr);
 
-      // Use batch ACK for TCP, direct ACK for embedded
+      // Use batch ACK for both modes
       if (this.embedded) {
         const manager = getSharedManager();
         await manager.ack(internalJob.id, result);
       } else {
-        // Queue for batch ACK - fire and forget (don't await)
-        this.queueAckFireAndForget(jobIdStr, result);
+        // Queue for batch ACK with result
+        this.queueAck(jobIdStr, result);
       }
 
       (job as { returnvalue?: unknown }).returnvalue = result;
       this.emit('completed', job, result);
     } catch (error) {
-      this.stopHeartbeat(jobIdStr);
       const err = error instanceof Error ? error : new Error(String(error));
 
       // Try to fail the job (not batched - failures are less common)
@@ -453,8 +522,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           await manager.fail(internalJob.id, err.message);
-        } else if (this.tcpClient) {
-          await this.tcpClient.send({
+        } else if (this.tcp) {
+          await this.tcp.send({
             cmd: 'FAIL',
             id: internalJob.id,
             error: err.message,
@@ -467,27 +536,6 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
       (job as { failedReason?: string }).failedReason = err.message;
       this.emit('failed', job, err);
-    }
-  }
-
-  /** Start heartbeat timer for a job */
-  private startHeartbeat(jobIdStr: string, internalJob: InternalJob): void {
-    if (this.opts.heartbeatInterval <= 0) return;
-
-    const timer = setInterval(() => {
-      // Update lastHeartbeat on the internal job
-      internalJob.lastHeartbeat = Date.now();
-    }, this.opts.heartbeatInterval);
-
-    this.heartbeatTimers.set(jobIdStr, timer);
-  }
-
-  /** Stop heartbeat timer for a job */
-  private stopHeartbeat(jobIdStr: string): void {
-    const timer = this.heartbeatTimers.get(jobIdStr);
-    if (timer) {
-      clearInterval(timer);
-      this.heartbeatTimers.delete(jobIdStr);
     }
   }
 }

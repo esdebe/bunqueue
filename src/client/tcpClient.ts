@@ -22,6 +22,8 @@ export interface ConnectionOptions {
   commandTimeout?: number;
   /** Enable auto-reconnect (default: true) */
   autoReconnect?: boolean;
+  /** Health check ping interval in ms (default: 30000, 0 to disable) */
+  pingInterval?: number;
 }
 
 /** Default connection */
@@ -35,6 +37,7 @@ export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
   connectTimeout: 5000,
   commandTimeout: 30000,
   autoReconnect: true,
+  pingInterval: 30000, // 30s health check
 };
 
 /** Pending command */
@@ -63,6 +66,7 @@ export class TcpClient extends EventEmitter {
   private closed = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
   private readonly options: Required<ConnectionOptions>;
   private pendingCommands: PendingCommand[] = [];
   private currentCommand: PendingCommand | null = null;
@@ -98,6 +102,8 @@ export class TcpClient extends EventEmitter {
       await this.doConnect();
       this.reconnectAttempts = 0;
       this.emit('connected');
+      // Start health check ping
+      this.startPing();
       // Process any pending commands
       this.processNextCommand();
     } catch (err) {
@@ -193,6 +199,7 @@ export class TcpClient extends EventEmitter {
             this.connected = false;
             this.connecting = false;
             this.socket = null;
+            this.stopPing();
 
             // Reject current command
             if (this.currentCommand) {
@@ -244,6 +251,34 @@ export class TcpClient extends EventEmitter {
         }
       }, this.options.connectTimeout);
     });
+  }
+
+  /** Start periodic health check ping */
+  private startPing(): void {
+    if (this.options.pingInterval <= 0) return;
+    this.stopPing();
+    this.pingTimer = setInterval(() => {
+      void this.ping();
+    }, this.options.pingInterval);
+  }
+
+  /** Stop health check ping */
+  private stopPing(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
+  /** Send ping to check connection health */
+  async ping(): Promise<boolean> {
+    if (!this.connected) return false;
+    try {
+      const response = await this.send({ cmd: 'Ping' });
+      return response.pong === true;
+    } catch {
+      return false;
+    }
   }
 
   /** Schedule reconnection with exponential backoff */
@@ -353,6 +388,7 @@ export class TcpClient extends EventEmitter {
   /** Close connection */
   close(): void {
     this.closed = true;
+    this.stopPing();
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

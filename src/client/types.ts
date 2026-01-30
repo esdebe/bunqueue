@@ -69,7 +69,7 @@ export interface QueueOptions {
 export interface WorkerOptions {
   concurrency?: number;
   autorun?: boolean;
-  /** Heartbeat interval in ms (default: 10000) */
+  /** Heartbeat interval in ms (default: 10000). Set to 0 to disable. */
   heartbeatInterval?: number;
   /** Connection options - if omitted, connects to localhost:6789 */
   connection?: ConnectionOptions;
@@ -77,6 +77,10 @@ export interface WorkerOptions {
   embedded?: boolean;
   /** Batch size for pulling jobs (default: 10, max: 1000). Higher = fewer round-trips */
   batchSize?: number;
+  /** Long poll timeout in ms when queue is empty (default: 0 = no wait, max: 30000) */
+  pollTimeout?: number;
+  /** Use connection pool for TCP mode (default: false). Improves throughput for high concurrency */
+  usePool?: boolean;
 }
 
 /** Stall configuration for a queue */

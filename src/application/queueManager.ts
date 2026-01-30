@@ -306,6 +306,30 @@ export class QueueManager {
     return failJob(jobId, error, this.getAckContext());
   }
 
+  /** Update job heartbeat for stall detection (single job) */
+  jobHeartbeat(jobId: JobId): boolean {
+    const loc = this.jobIndex.get(jobId);
+    if (loc?.type !== 'processing') return false;
+
+    const processing = this.processingShards[loc.shardIdx];
+    const job = processing.get(jobId);
+
+    if (job) {
+      job.lastHeartbeat = Date.now();
+      return true;
+    }
+    return false;
+  }
+
+  /** Update job heartbeat for multiple jobs (batch) */
+  jobHeartbeatBatch(jobIds: JobId[]): number {
+    let count = 0;
+    for (const id of jobIds) {
+      if (this.jobHeartbeat(id)) count++;
+    }
+    return count;
+  }
+
   // ============ Query Operations (delegated) ============
 
   async getJob(jobId: JobId): Promise<Job | null> {

@@ -8,6 +8,9 @@ import type {
   AddLogCommand,
   GetLogsCommand,
   HeartbeatCommand,
+  JobHeartbeatCommand,
+  JobHeartbeatBatchCommand,
+  PingCommand,
   RegisterWorkerCommand,
   UnregisterWorkerCommand,
   ListWorkersCommand,
@@ -52,6 +55,37 @@ export function handleHeartbeat(
     return resp.data({ ok: true }, reqId);
   }
   return resp.error('Worker not found', reqId);
+}
+
+// ============ Job Heartbeat (for stall detection) ============
+
+export function handleJobHeartbeat(
+  cmd: JobHeartbeatCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const jid = jobId(cmd.id);
+  const success = ctx.queueManager.jobHeartbeat(jid);
+  if (success) {
+    return resp.data({ ok: true }, reqId);
+  }
+  return resp.error('Job not found or not active', reqId);
+}
+
+export function handleJobHeartbeatBatch(
+  cmd: JobHeartbeatBatchCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const ids = cmd.ids.map((id) => jobId(id));
+  const count = ctx.queueManager.jobHeartbeatBatch(ids);
+  return resp.data({ ok: true, count }, reqId);
+}
+
+// ============ Ping (health check) ============
+
+export function handlePing(_cmd: PingCommand, _ctx: HandlerContext, reqId?: string): Response {
+  return resp.data({ pong: true, time: Date.now() }, reqId);
 }
 
 // ============ Worker Management ============

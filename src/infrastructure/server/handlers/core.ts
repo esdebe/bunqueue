@@ -130,14 +130,23 @@ export async function handleAck(
   return resp.ok(undefined, reqId);
 }
 
-/** Handle ACKB (batch ack) command - uses Promise.all for parallel execution */
+/** Handle ACKB (batch ack) command - supports optional results */
 export async function handleAckBatch(
   cmd: Extract<Command, { cmd: 'ACKB' }>,
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  // Use optimized batch ack with Promise.all for parallel execution
-  await ctx.queueManager.ackBatch(cmd.ids.map((id) => jobId(id)));
+  const ids = cmd.ids.map((id) => jobId(id));
+
+  // If results provided, use ackBatchWithResults
+  if (cmd.results?.length === cmd.ids.length) {
+    const results = cmd.results;
+    const items = ids.map((id, i) => ({ id, result: results[i] }));
+    await ctx.queueManager.ackBatchWithResults(items);
+  } else {
+    // Use optimized batch ack without results
+    await ctx.queueManager.ackBatch(ids);
+  }
   return resp.ok(undefined, reqId);
 }
 

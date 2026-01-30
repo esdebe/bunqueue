@@ -32,6 +32,7 @@ export class TcpConnectionPool {
       connectTimeout: options.connectTimeout ?? 5000,
       commandTimeout: options.commandTimeout ?? 30000,
       autoReconnect: options.autoReconnect ?? true,
+      pingInterval: options.pingInterval ?? 30000,
     };
 
     // Create pool of connections
@@ -46,6 +47,7 @@ export class TcpConnectionPool {
         connectTimeout: this.options.connectTimeout,
         commandTimeout: this.options.commandTimeout,
         autoReconnect: this.options.autoReconnect,
+        pingInterval: this.options.pingInterval,
       });
       this.clients.push(client);
     }

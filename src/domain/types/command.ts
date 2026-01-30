@@ -61,6 +61,7 @@ export interface AckCommand extends BaseCommand {
 export interface AckBatchCommand extends BaseCommand {
   readonly cmd: 'ACKB';
   readonly ids: string[];
+  readonly results?: unknown[]; // Optional results for each job (same order as ids)
 }
 
 export interface FailCommand extends BaseCommand {
@@ -284,7 +285,24 @@ export interface GetLogsCommand extends BaseCommand {
 
 export interface HeartbeatCommand extends BaseCommand {
   readonly cmd: 'Heartbeat';
-  readonly id: string;
+  readonly id: string; // Worker ID
+}
+
+/** Job-level heartbeat for stall detection */
+export interface JobHeartbeatCommand extends BaseCommand {
+  readonly cmd: 'JobHeartbeat';
+  readonly id: string; // Job ID
+}
+
+/** Batch job heartbeat for multiple jobs */
+export interface JobHeartbeatBatchCommand extends BaseCommand {
+  readonly cmd: 'JobHeartbeatB';
+  readonly ids: string[]; // Job IDs
+}
+
+/** Ping for connection health check */
+export interface PingCommand extends BaseCommand {
+  readonly cmd: 'Ping';
 }
 
 export interface RegisterWorkerCommand extends BaseCommand {
@@ -387,6 +405,9 @@ export type Command =
   | AddLogCommand
   | GetLogsCommand
   | HeartbeatCommand
+  | JobHeartbeatCommand
+  | JobHeartbeatBatchCommand
+  | PingCommand
   | RegisterWorkerCommand
   | UnregisterWorkerCommand
   | ListWorkersCommand

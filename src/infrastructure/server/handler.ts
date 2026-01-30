@@ -66,6 +66,9 @@ import {
   handleAddLog,
   handleGetLogs,
   handleHeartbeat,
+  handleJobHeartbeat,
+  handleJobHeartbeatBatch,
+  handlePing,
   handleRegisterWorker,
   handleUnregisterWorker,
   handleListWorkers,
@@ -274,6 +277,12 @@ function routeMonitoringCommand(
       return handleGetLogs(cmd, ctx, reqId);
     case 'Heartbeat':
       return handleHeartbeat(cmd, ctx, reqId);
+    case 'JobHeartbeat':
+      return handleJobHeartbeat(cmd, ctx, reqId);
+    case 'JobHeartbeatB':
+      return handleJobHeartbeatBatch(cmd, ctx, reqId);
+    case 'Ping':
+      return handlePing(cmd, ctx, reqId);
     case 'RegisterWorker':
       return handleRegisterWorker(cmd, ctx, reqId);
     case 'UnregisterWorker':
