@@ -144,6 +144,20 @@ export default defineConfig({
         {
           tag: 'meta',
           attrs: {
+            property: 'og:title',
+            content: 'bunqueue - High-Performance Job Queue for Bun',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:description',
+            content: 'SQLite persistence, cron jobs, priorities, DLQ, S3 backups. BullMQ-compatible API with zero Redis dependency.',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
             property: 'og:type',
             content: 'website',
           },
@@ -194,8 +208,29 @@ export default defineConfig({
         {
           tag: 'meta',
           attrs: {
+            name: 'twitter:title',
+            content: 'bunqueue - High-Performance Job Queue for Bun',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:description',
+            content: 'SQLite persistence, cron jobs, priorities, DLQ, S3 backups. BullMQ-compatible API.',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
             name: 'twitter:image',
             content: 'https://egeominotti.github.io/bunqueue/og-image.png',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:creator',
+            content: '@egeominotti',
           },
         },
         // JSON-LD Structured Data
