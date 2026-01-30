@@ -1,6 +1,10 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   site: 'https://egeominotti.github.io',
@@ -16,6 +20,12 @@ export default defineConfig({
     defaultStrategy: 'viewport',
   },
   vite: {
+    resolve: {
+      alias: {
+        '@components': path.resolve(__dirname, 'src/components'),
+        '@root': path.resolve(__dirname, '..'),
+      },
+    },
     build: {
       rollupOptions: {
         output: {

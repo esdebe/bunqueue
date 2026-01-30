@@ -1,0 +1,12 @@
+---
+import { Badge } from '@astrojs/starlight/components';
+import pkg from '@root/package.json';
+---
+
+<div class="badges-container">
+  <Badge text={`v${pkg.version}`} variant="success" size="large" />
+  <span class="badge-separator">•</span>
+  <Badge text="MIT License" variant="note" size="large" />
+  <span class="badge-separator">•</span>
+  <Badge text="TypeScript" variant="tip" size="large" />
+</div>
