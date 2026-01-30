@@ -11,6 +11,7 @@ import { constantTimeEqual, uuid } from '../../shared/hash';
 import type { JobEvent } from '../../domain/types/queue';
 import { httpLog, wsLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
+import { VERSION } from '../../shared/version';
 
 /** Singleton TextEncoder for SSE messages - avoids allocation per message */
 const textEncoder = new TextEncoder();
@@ -116,7 +117,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
           ok: true,
           status: 'healthy',
           uptime: Math.floor(uptime),
-          version: '1.0.4',
+          version: VERSION,
           queues: {
             waiting: stats.waiting,
             active: stats.active,

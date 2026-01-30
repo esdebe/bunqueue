@@ -21,6 +21,7 @@
 
 import { getSharedManager, shutdownManager } from '../client/manager';
 import { jobId } from '../domain/types/job';
+import { VERSION } from '../shared/version';
 
 interface McpRequest {
   jsonrpc: '2.0';
@@ -568,7 +569,7 @@ async function handleRequest(request: McpRequest): Promise<McpResponse> {
         return createResponse(id, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'bunqueue-mcp', version: '1.0.0' },
+          serverInfo: { name: 'bunqueue-mcp', version: VERSION },
         });
 
       case 'tools/list':

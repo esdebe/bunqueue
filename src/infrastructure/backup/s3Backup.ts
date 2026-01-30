@@ -7,6 +7,7 @@
 
 import { S3Client } from 'bun';
 import { backupLog } from '../../shared/logger';
+import { VERSION } from '../../shared/version';
 
 /** S3 Backup configuration */
 export interface S3BackupConfig {
@@ -228,7 +229,7 @@ export class S3BackupManager {
       // Upload metadata
       const metadata: BackupMetadata = {
         timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version ?? '1.0.0',
+        version: VERSION,
         size,
         checksum,
       };

@@ -8,10 +8,7 @@ import { runServer } from './commands/server';
 import { executeCommand } from './client';
 import { printHelp, printVersion } from './help';
 import { isBackupCommand, executeBackupCommand } from './commands/backup';
-import pkg from '../../package.json';
-
-/** Version from package.json */
-const VERSION = pkg.version;
+import { VERSION } from '../shared/version';
 
 /** Global CLI options */
 interface GlobalOptions {
