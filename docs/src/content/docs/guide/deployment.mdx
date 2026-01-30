@@ -265,15 +265,23 @@ sudo journalctl -u bunqueue -f
 
 For cross-platform process management with PM2:
 
-### ecosystem.config.js
+### Compiled Binary (Recommended)
+
+First, build the standalone executable:
+
+```bash
+bun build --compile --minify src/main.ts --outfile bunqueue
+```
+
+Then configure PM2:
 
 ```javascript
+// ecosystem.config.js
 module.exports = {
   apps: [{
     name: 'bunqueue',
-    script: 'bun',
-    args: 'run start',
-    cwd: '/opt/bunqueue',
+    script: '/opt/bunqueue/bunqueue',  // Compiled binary
+    args: 'start',
     instances: 1,  // Single instance only - no cluster mode
     exec_mode: 'fork',
     autorestart: true,
@@ -285,7 +293,6 @@ module.exports = {
       TCP_PORT: 6789,
       HTTP_PORT: 6790,
     },
-    env_file: '/etc/bunqueue/.env',
     error_file: '/var/log/bunqueue/error.log',
     out_file: '/var/log/bunqueue/out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
@@ -294,38 +301,29 @@ module.exports = {
 };
 ```
 
-### Separate API and Worker
+### Development Mode (with Bun)
+
+For development or when using the source directly:
 
 ```javascript
+// ecosystem.config.js
 module.exports = {
-  apps: [
-    {
-      name: 'bunqueue-api',
-      script: 'bun',
-      args: 'run src/api.ts',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      max_memory_restart: '256M',
-      env: {
-        NODE_ENV: 'production',
-        DATA_PATH: '/var/lib/bunqueue/bunq.db',
-      }
+  apps: [{
+    name: 'bunqueue',
+    script: 'bun',
+    args: 'run start',
+    cwd: '/opt/bunqueue',
+    instances: 1,
+    exec_mode: 'fork',
+    autorestart: true,
+    max_memory_restart: '512M',
+    env: {
+      NODE_ENV: 'production',
+      DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      TCP_PORT: 6789,
+      HTTP_PORT: 6790,
     },
-    {
-      name: 'bunqueue-worker',
-      script: 'bun',
-      args: 'run src/worker.ts',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      max_memory_restart: '512M',
-      env: {
-        NODE_ENV: 'production',
-        DATA_PATH: '/var/lib/bunqueue/bunq.db',
-      }
-    }
-  ]
+  }]
 };
 ```
 
