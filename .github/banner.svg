@@ -4,13 +4,13 @@
       <stop offset="0%" style="stop-color:#1f2937;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#111827;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+    <linearGradient id="pinkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9a8d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="lightOrange" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#fdba74;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#fb923c;stop-opacity:1" />
+    <linearGradient id="lightPink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fce7f3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fbcfe8;stop-opacity:1" />
     </linearGradient>
   </defs>
 
@@ -19,34 +19,36 @@
 
   <!-- Bunny icon -->
   <g transform="translate(60, 100)">
-    <!-- Body circle -->
-    <circle cx="0" cy="10" r="45" fill="url(#orangeGrad)"/>
+    <!-- Pink box background -->
+    <rect x="-50" y="-45" width="100" height="100" rx="20" fill="url(#pinkGrad)"/>
 
     <!-- Left ear -->
-    <ellipse cx="-25" cy="-45" rx="12" ry="30" fill="url(#orangeGrad)"/>
-    <ellipse cx="-25" cy="-45" rx="6" ry="20" fill="url(#lightOrange)"/>
+    <ellipse cx="-16" cy="-32" rx="8" ry="20" fill="white" opacity="0.9"/>
+    <ellipse cx="-16" cy="-32" rx="4" ry="14" fill="url(#lightPink)"/>
 
     <!-- Right ear -->
-    <ellipse cx="25" cy="-45" rx="12" ry="30" fill="url(#orangeGrad)"/>
-    <ellipse cx="25" cy="-45" rx="6" ry="20" fill="url(#lightOrange)"/>
+    <ellipse cx="16" cy="-32" rx="8" ry="20" fill="white" opacity="0.9"/>
+    <ellipse cx="16" cy="-32" rx="4" ry="14" fill="url(#lightPink)"/>
+
+    <!-- Head -->
+    <circle cx="0" cy="0" r="28" fill="white" opacity="0.95"/>
 
     <!-- Eyes -->
-    <circle cx="-15" cy="0" r="6" fill="#1f2937"/>
-    <circle cx="15" cy="0" r="6" fill="#1f2937"/>
-    <circle cx="-13" cy="-2" r="2.5" fill="white"/>
-    <circle cx="17" cy="-2" r="2.5" fill="white"/>
+    <ellipse cx="-10" cy="-4" rx="5" ry="6" fill="#18181b"/>
+    <ellipse cx="10" cy="-4" rx="5" ry="6" fill="#18181b"/>
+    <circle cx="-8" cy="-6" r="2" fill="white"/>
+    <circle cx="12" cy="-6" r="2" fill="white"/>
 
     <!-- Nose -->
-    <ellipse cx="0" cy="18" rx="5" ry="4" fill="#1f2937"/>
+    <ellipse cx="0" cy="8" rx="4" ry="3" fill="#be185d"/>
 
-    <!-- Q tail -->
-    <path d="M 35 30 L 55 55" stroke="url(#orangeGrad)" stroke-width="8" stroke-linecap="round"/>
-    <circle cx="55" cy="55" r="5" fill="#f97316"/>
+    <!-- Mouth -->
+    <path d="M -6 14 Q 0 20 6 14" stroke="#be185d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
   </g>
 
   <!-- Text: bunqueue -->
   <text x="150" y="125" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="bold" fill="white">
-    bun<tspan fill="url(#orangeGrad)">queue</tspan>
+    bun<tspan fill="url(#pinkGrad)">queue</tspan>
   </text>
 
   <!-- Tagline -->
@@ -60,12 +62,12 @@
     <rect x="0" y="0" width="40" height="30" rx="4" fill="#374151"/>
     <rect x="50" y="0" width="40" height="30" rx="4" fill="#374151"/>
     <rect x="100" y="0" width="40" height="30" rx="4" fill="#374151"/>
-    <rect x="150" y="0" width="40" height="30" rx="4" fill="url(#orangeGrad)"/>
+    <rect x="150" y="0" width="40" height="30" rx="4" fill="url(#pinkGrad)"/>
 
     <!-- Arrows -->
     <path d="M 45 15 L 48 15" stroke="#6b7280" stroke-width="2"/>
     <path d="M 95 15 L 98 15" stroke="#6b7280" stroke-width="2"/>
-    <path d="M 145 15 L 148 15" stroke="#f97316" stroke-width="2"/>
+    <path d="M 145 15 L 148 15" stroke="#ec4899" stroke-width="2"/>
 
     <!-- Job icons inside boxes -->
     <circle cx="20" cy="15" r="6" fill="#6b7280"/>
@@ -74,10 +76,10 @@
     <circle cx="170" cy="15" r="6" fill="white"/>
 
     <!-- Processing indicator -->
-    <path d="M 200 15 L 220 15" stroke="#f97316" stroke-width="2" stroke-dasharray="4,2">
+    <path d="M 200 15 L 220 15" stroke="#ec4899" stroke-width="2" stroke-dasharray="4,2">
       <animate attributeName="stroke-dashoffset" from="0" to="12" dur="1s" repeatCount="indefinite"/>
     </path>
-    <polygon points="225,15 218,10 218,20" fill="#f97316"/>
+    <polygon points="225,15 218,10 218,20" fill="#ec4899"/>
   </g>
 
   <!-- Stats badges -->
@@ -85,8 +87,8 @@
     <rect x="0" y="0" width="70" height="24" rx="12" fill="#065f46"/>
     <text x="35" y="16" font-family="system-ui, sans-serif" font-size="11" fill="#6ee7b7" text-anchor="middle">SQLite</text>
 
-    <rect x="80" y="0" width="70" height="24" rx="12" fill="#7c2d12"/>
-    <text x="115" y="16" font-family="system-ui, sans-serif" font-size="11" fill="#fdba74" text-anchor="middle">Cron</text>
+    <rect x="80" y="0" width="70" height="24" rx="12" fill="#831843"/>
+    <text x="115" y="16" font-family="system-ui, sans-serif" font-size="11" fill="#f9a8d4" text-anchor="middle">Cron</text>
 
     <rect x="160" y="0" width="70" height="24" rx="12" fill="#1e3a5f"/>
     <text x="195" y="16" font-family="system-ui, sans-serif" font-size="11" fill="#7dd3fc" text-anchor="middle">DLQ</text>
