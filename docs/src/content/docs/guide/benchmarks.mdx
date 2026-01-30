@@ -60,12 +60,20 @@ bun run bench:internal
 
 Measures jobs pushed and processed per second.
 
-| Operation | Ops/sec | Relative |
-|-----------|---------|----------|
-| Single Push | **~55,000** | ████████░░░░░░░░ |
-| Bulk (10) | **~95,000** | █████████████░░░ |
-| Bulk (100) | **~120,000** | ██████████████░░ |
-| Bulk (1000) | **~145,000** | ████████████████ |
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Single','Bulk(10)','Bulk(100)','Bulk(1k)'],datasets:[{label:'ops/sec',data:[55000,95000,120000,145000],backgroundColor:['rgba(236,72,153,0.8)','rgba(168,85,247,0.8)','rgba(59,130,246,0.8)','rgba(34,197,94,0.8)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Throughput Performance',font:{size:16,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
+    alt="Throughput benchmark chart"
+    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Operation | Ops/sec | vs Single |
+|-----------|---------|-----------|
+| Single Push | **~55,000** | 1x |
+| Bulk (10) | **~95,000** | 1.7x |
+| Bulk (100) | **~120,000** | 2.2x |
+| Bulk (1000) | **~145,000** | 2.6x |
 
 <Aside>
 Batch operations significantly improve throughput. Batch size of 100-1000 provides best performance.
@@ -76,6 +84,14 @@ Batch operations significantly improve throughput. Batch size of 100-1000 provid
 ## Latency Benchmark
 
 Measures time to complete operations in milliseconds.
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'line',data:{labels:['p50','p95','p99','p99.9'],datasets:[{label:'Push',data:[0.05,0.12,0.25,0.60],borderColor:'rgb(236,72,153)',backgroundColor:'rgba(236,72,153,0.1)',fill:true,tension:0.3},{label:'Process',data:[0.02,0.08,0.15,0.35],borderColor:'rgb(59,130,246)',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.3}]},options:{plugins:{title:{display:true,text:'Latency Distribution (ms)',font:{size:16,weight:'bold'}}},scales:{y:{beginAtZero:true,title:{display:true,text:'Milliseconds'},grid:{color:'rgba(0,0,0,0.1)'}},x:{title:{display:true,text:'Percentile'},grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
+    alt="Latency benchmark chart"
+    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
 
 | Percentile | Push | Process | Round-trip |
 |------------|------|---------|------------|
@@ -93,6 +109,14 @@ Sub-millisecond latency even at p99.9 percentile.
 ## Memory Usage
 
 Memory footprint under different workloads.
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Idle','10K jobs','100K jobs','1M jobs'],datasets:[{label:'RSS Memory (MB)',data:[50,65,150,400],backgroundColor:'rgba(139,92,246,0.8)',borderRadius:6}]},options:{plugins:{title:{display:true,text:'Memory Footprint',font:{size:16,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Memory (MB)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
+    alt="Memory usage chart"
+    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
 
 | Queue Depth | RSS Memory | Heap Used | Per Job |
 |-------------|------------|-----------|---------|
