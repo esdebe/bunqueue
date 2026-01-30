@@ -57,10 +57,11 @@ app.get('/api/jobs/:queue/:id', async (c) => {
 
   return c.json({
     id: job.id,
-    state: job.state,
+    name: job.name,
     progress: job.progress,
     data: job.data,
     result: job.returnvalue,
+    error: job.failedReason,
   });
 });
 
@@ -172,11 +173,10 @@ app.get('/api/jobs/:queue/:id/poll', async (c) => {
 
   return c.json({
     id: job.id,
-    state: job.state,
+    name: job.name,
     progress: job.progress,
-    message: job.progressMessage,
-    result: job.isCompleted() ? job.returnvalue : null,
-    error: job.isFailed() ? job.failedReason : null,
+    result: job.returnvalue ?? null,
+    error: job.failedReason ?? null,
   });
 });
 
@@ -266,10 +266,11 @@ const app = new Elysia()
 
     return {
       id: job.id,
-      state: job.state,
+      name: job.name,
       progress: job.progress,
       data: job.data,
       result: job.returnvalue,
+      error: job.failedReason,
     };
   }, {
     params: t.Object({
@@ -289,24 +290,24 @@ const app = new Elysia()
   .ws('/ws/jobs/:jobId', {
     open(ws) {
       const { jobId } = ws.data.params;
-      const events = new QueueEvents('*');
+      const events = new QueueEvents('emails'); // Subscribe to specific queue
 
-      events.on('progress', ({ jobId: id, progress }) => {
+      events.on('progress', ({ jobId: id, data }) => {
         if (id === jobId) {
-          ws.send(JSON.stringify({ type: 'progress', progress }));
+          ws.send(JSON.stringify({ type: 'progress', progress: data }));
         }
       });
 
-      events.on('completed', ({ jobId: id, result }) => {
+      events.on('completed', ({ jobId: id, returnvalue }) => {
         if (id === jobId) {
-          ws.send(JSON.stringify({ type: 'completed', result }));
+          ws.send(JSON.stringify({ type: 'completed', result: returnvalue }));
           ws.close();
         }
       });
 
-      events.on('failed', ({ jobId: id, error }) => {
+      events.on('failed', ({ jobId: id, failedReason }) => {
         if (id === jobId) {
-          ws.send(JSON.stringify({ type: 'failed', error }));
+          ws.send(JSON.stringify({ type: 'failed', error: failedReason }));
           ws.close();
         }
       });
@@ -441,13 +442,11 @@ const app = new Elysia()
 
     return {
       id: job.id,
+      name: job.name,
       queue: job.queueName,
-      state: job.state,
       progress: job.progress,
-      message: job.progressMessage,
+      attemptsMade: job.attemptsMade,
       createdAt: job.timestamp,
-      processedAt: job.processedOn,
-      completedAt: job.finishedOn,
       result: job.returnvalue,
       error: job.failedReason,
     };
