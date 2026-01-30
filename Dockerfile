@@ -22,7 +22,7 @@ COPY tsconfig.json ./
 RUN bun run typecheck
 
 # Build single executable
-RUN bun build --compile --minify src/main.ts --outfile bunq
+RUN bun build --compile --minify src/main.ts --outfile bunqueue
 
 # ============================================
 # Stage 2: Production
@@ -31,22 +31,22 @@ FROM oven/bun:1-alpine AS production
 WORKDIR /app
 
 # Create non-root user for security
-RUN addgroup -g 1001 bunq && \
-    adduser -D -u 1001 -G bunq bunq
+RUN addgroup -g 1001 bunqueue && \
+    adduser -D -u 1001 -G bunqueue bunqueue
 
 # Create data directory
-RUN mkdir -p /app/data && chown -R bunq:bunq /app
+RUN mkdir -p /app/data && chown -R bunqueue:bunqueue /app
 
 # Copy built executable from builder
-COPY --from=builder --chown=bunq:bunq /app/bunq ./bunq
+COPY --from=builder --chown=bunqueue:bunqueue /app/bunqueue ./bunqueue
 
 # Switch to non-root user
-USER bunq
+USER bunqueue
 
 # Environment variables
 ENV TCP_PORT=6789
 ENV HTTP_PORT=6790
-ENV DATA_PATH=/app/data/bunq.db
+ENV DATA_PATH=/app/data/bunqueue.db
 ENV NODE_ENV=production
 
 # Expose ports
@@ -60,4 +60,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 VOLUME ["/app/data"]
 
 # Run the server
-ENTRYPOINT ["./bunq"]
+ENTRYPOINT ["./bunqueue"]
