@@ -171,17 +171,19 @@ export async function pullJobBatch(
         shardJobs.push(job);
       }
 
-      // Add to processing shards in parallel
+      // Add to processing shards in parallel - avoid Array.from allocation
       const now = Date.now();
-      await Promise.all(
-        Array.from(byProcShard.entries()).map(async ([procIdx, shardJobs]) => {
-          await withWriteLock(ctx.processingLocks[procIdx], () => {
+      const lockPromises: Promise<void>[] = [];
+      for (const [procIdx, shardJobs] of byProcShard) {
+        lockPromises.push(
+          withWriteLock(ctx.processingLocks[procIdx], () => {
             for (const job of shardJobs) {
               ctx.processingShards[procIdx].set(job.id, job);
             }
-          });
-        })
-      );
+          })
+        );
+      }
+      await Promise.all(lockPromises);
 
       // Update indexes and metrics
       for (const job of jobs) {

@@ -12,30 +12,38 @@ import { webhookLog } from '../shared/logger';
 /** Event subscriber callback */
 export type EventSubscriber = (event: JobEvent) => void;
 
+/** Waiter entry with cancellation flag for O(1) cleanup */
+interface CompletionWaiter {
+  resolve: () => void;
+  cancelled: boolean;
+}
+
 /** Events manager class */
 export class EventsManager {
-  private readonly subscribers: EventSubscriber[] = [];
+  /** Use Set for O(1) subscribe/unsubscribe instead of indexOf+splice */
+  private readonly subscribers = new Set<EventSubscriber>();
   /** Waiters for specific job completions - for efficient WaitJob implementation */
-  private readonly completionWaiters = new Map<string, Array<() => void>>();
+  private readonly completionWaiters = new Map<string, CompletionWaiter[]>();
 
   constructor(private readonly webhookManager: WebhookManager) {}
 
-  /** Subscribe to job events */
+  /** Subscribe to job events - O(1) add and remove */
   subscribe(callback: EventSubscriber): () => void {
-    this.subscribers.push(callback);
+    this.subscribers.add(callback);
     return () => {
-      const idx = this.subscribers.indexOf(callback);
-      if (idx !== -1) this.subscribers.splice(idx, 1);
+      this.subscribers.delete(callback); // O(1) instead of O(n)
     };
   }
 
   /** Clear all subscribers (for shutdown) */
   clear(): void {
-    this.subscribers.length = 0;
+    this.subscribers.clear();
     // Clear all waiters
     for (const waiters of this.completionWaiters.values()) {
-      for (const resolve of waiters) {
-        resolve();
+      for (const waiter of waiters) {
+        if (!waiter.cancelled) {
+          waiter.resolve();
+        }
       }
     }
     this.completionWaiters.clear();
@@ -49,21 +57,19 @@ export class EventsManager {
     const jobKey = String(jobId);
 
     return new Promise((resolve) => {
+      const waiter: CompletionWaiter = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve(true);
+        },
+        cancelled: false,
+      };
+
       const timer = setTimeout(() => {
-        // Timeout - remove from waiters
-        const waiters = this.completionWaiters.get(jobKey);
-        if (waiters) {
-          const idx = waiters.indexOf(resolveWaiter);
-          if (idx !== -1) waiters.splice(idx, 1);
-          if (waiters.length === 0) this.completionWaiters.delete(jobKey);
-        }
+        // Timeout - mark as cancelled instead of O(n) splice
+        waiter.cancelled = true;
         resolve(false);
       }, timeoutMs);
-
-      const resolveWaiter = () => {
-        clearTimeout(timer);
-        resolve(true);
-      };
 
       // Add to waiters
       let waiters = this.completionWaiters.get(jobKey);
@@ -71,14 +77,14 @@ export class EventsManager {
         waiters = [];
         this.completionWaiters.set(jobKey, waiters);
       }
-      waiters.push(resolveWaiter);
+      waiters.push(waiter);
     });
   }
 
   /** Check if broadcast has any listeners - for batch optimizations */
   needsBroadcast(): boolean {
     return (
-      this.subscribers.length > 0 ||
+      this.subscribers.size > 0 ||
       this.webhookManager.hasEnabledWebhooks() ||
       this.completionWaiters.size > 0
     );
@@ -94,7 +100,7 @@ export class EventsManager {
       error?: string;
     }
   ): void {
-    const hasSubscribers = this.subscribers.length > 0;
+    const hasSubscribers = this.subscribers.size > 0;
     const hasWebhooks = this.webhookManager.hasEnabledWebhooks();
     const isCompletion = event.eventType === EventType.Completed;
     const hasWaiters = isCompletion && this.completionWaiters.size > 0;
@@ -121,8 +127,11 @@ export class EventsManager {
       const waiters = this.completionWaiters.get(jobKey);
       if (waiters) {
         this.completionWaiters.delete(jobKey);
-        for (const resolve of waiters) {
-          resolve();
+        // Only notify non-cancelled waiters
+        for (const waiter of waiters) {
+          if (!waiter.cancelled) {
+            waiter.resolve();
+          }
         }
       }
     }

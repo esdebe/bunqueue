@@ -5,15 +5,9 @@
 
 import type { Socket } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
+import type { Response } from '../../domain/types/response';
 import { handleCommand, type HandlerContext } from './handler';
-import {
-  LineBuffer,
-  parseCommand,
-  serializeResponse,
-  errorResponse,
-  createConnectionState,
-  type ConnectionState,
-} from './protocol';
+import { LineBuffer, parseCommand, createConnectionState, type ConnectionState } from './protocol';
 import { uuid } from '../../shared/hash';
 import { tcpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
@@ -34,6 +28,19 @@ interface ConnectionData {
 
 /** Reusable TextDecoder - avoid allocation per message */
 const textDecoder = new TextDecoder();
+
+/** Pre-allocated newline buffer for efficient writes */
+const NEWLINE = '\n';
+
+/** Serialize response with newline - avoids string concat per message */
+function serializeResponseLine(response: Response): string {
+  return JSON.stringify(response) + NEWLINE;
+}
+
+/** Error response with newline */
+function errorResponseLine(message: string, reqId?: string): string {
+  return JSON.stringify({ ok: false, error: message, reqId }) + NEWLINE;
+}
 
 /**
  * Create and start TCP server
@@ -72,7 +79,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
 
         // Check rate limit
         if (!rateLimiter.isAllowed(state.clientId)) {
-          socket.write(errorResponse('Rate limit exceeded') + '\n');
+          socket.write(errorResponseLine('Rate limit exceeded'));
           return;
         }
 
@@ -82,15 +89,15 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         for (const line of lines) {
           const cmd = parseCommand(line);
           if (!cmd) {
-            socket.write(errorResponse('Invalid command') + '\n');
+            socket.write(errorResponseLine('Invalid command'));
             continue;
           }
           try {
             const response = await handleCommand(cmd, ctx);
-            socket.write(serializeResponse(response) + '\n');
+            socket.write(serializeResponseLine(response));
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Unknown error';
-            socket.write(errorResponse(message, cmd.reqId) + '\n');
+            socket.write(errorResponseLine(message, cmd.reqId));
           }
         }
       },
@@ -125,8 +132,9 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
 
     /** Broadcast to all connections */
     broadcast(message: string): void {
+      const messageWithNewline = message + NEWLINE;
       for (const socket of connections.values()) {
-        socket.write(message + '\n');
+        socket.write(messageWithNewline);
       }
     },
 
