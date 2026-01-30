@@ -169,7 +169,7 @@ interface SandboxedWorkerOptions {
   /** Job timeout in ms (default: 30000) */
   timeout?: number;
 
-  /** Max memory per worker in MB (default: 512) */
+  /** Max memory per worker in MB (default: 256, uses smol mode if <= 64) */
   maxMemory?: number;
 
   /** Max restarts before giving up (default: 10) */

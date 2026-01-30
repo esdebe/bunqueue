@@ -366,7 +366,7 @@ const app = new Elysia()
         const job = await emailQueue.add('send', body, {
           attempts: 3,
           backoff: 5000,
-          removeOnComplete: 100,
+          removeOnComplete: true,
         });
         return { jobId: job.id };
       }, {
@@ -519,7 +519,7 @@ export const queues = {
     defaultJobOptions: {
       attempts: 3,
       backoff: 5000,
-      removeOnComplete: 100,
+      removeOnComplete: true,
     },
   }),
   reports: new Queue('reports', {

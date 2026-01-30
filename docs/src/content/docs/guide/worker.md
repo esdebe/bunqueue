@@ -146,7 +146,7 @@ const worker = new SandboxedWorker('cpu-intensive', {
   processor: './processor.ts',  // Path to processor file
   concurrency: 4,               // 4 parallel worker processes
   timeout: 60000,               // 60s timeout per job (default: 30000)
-  maxMemory: 256,               // MB per worker (default: 512)
+  maxMemory: 256,               // MB per worker (default: 256)
   maxRestarts: 10,              // Auto-restart limit (default: 10)
   autoRestart: true,            // Auto-restart crashed workers (default: true)
   pollInterval: 10,             // Job poll interval in ms (default: 10)
