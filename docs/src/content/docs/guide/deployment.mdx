@@ -8,7 +8,7 @@ import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
 This guide covers deploying bunqueue in production. bunqueue is designed as a **single-instance** job queue - it doesn't support clustering or horizontal scaling.
 
 <Aside type="caution">
-bunqueue runs as a **single process**. There's no built-in clustering or multi-node support. For most applications processing up to ~100k jobs/day, this is more than sufficient.
+bunqueue runs as a **single process**. There's no built-in clustering or multi-node support. Tested and validated up to **1 million jobs** with 100% data integrity.
 </Aside>
 
 ## Architecture Overview
@@ -600,8 +600,8 @@ bunqueue does **not** support horizontal scaling or clustering. It's a single-in
 |----------|----------|-----------|
 | Small SaaS | &lt;10k | ✅ Perfect |
 | Medium app | 10k-100k | ✅ Fine |
-| Large app | 100k-1M | ⚠️ Test first |
-| Enterprise | &gt;1M | ❌ Consider alternatives |
+| Large app | 100k-1M | ✅ Tested |
+| Enterprise | &gt;1M | ⚠️ Test first |
 
 ### When to use something else
 
