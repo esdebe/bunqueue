@@ -495,9 +495,15 @@ function handleDeleteCron(args: ToolArgs) {
   return { success: deleted, name: args.name };
 }
 
-function handleGetStats() {
+function handleGetStats(): Record<string, number> {
   const manager = getSharedManager();
-  return manager.getStats();
+  const stats = manager.getStats();
+  // Convert BigInt to number for JSON serialization
+  return JSON.parse(
+    JSON.stringify(stats, (_key, value: unknown) =>
+      typeof value === 'bigint' ? Number(value) : value
+    )
+  ) as Record<string, number>;
 }
 
 function handleGetJobLogs(args: ToolArgs) {
