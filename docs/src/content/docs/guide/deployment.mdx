@@ -261,6 +261,101 @@ sudo systemctl status bunqueue
 sudo journalctl -u bunqueue -f
 ```
 
+## PM2 Process Manager
+
+For cross-platform process management with PM2:
+
+### ecosystem.config.js
+
+```javascript
+module.exports = {
+  apps: [{
+    name: 'bunqueue',
+    script: 'bun',
+    args: 'run start',
+    cwd: '/opt/bunqueue',
+    instances: 1,  // Single instance only - no cluster mode
+    exec_mode: 'fork',
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '512M',
+    env: {
+      NODE_ENV: 'production',
+      DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      TCP_PORT: 6789,
+      HTTP_PORT: 6790,
+    },
+    env_file: '/etc/bunqueue/.env',
+    error_file: '/var/log/bunqueue/error.log',
+    out_file: '/var/log/bunqueue/out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true,
+  }]
+};
+```
+
+### Separate API and Worker
+
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: 'bunqueue-api',
+      script: 'bun',
+      args: 'run src/api.ts',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '256M',
+      env: {
+        NODE_ENV: 'production',
+        DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      }
+    },
+    {
+      name: 'bunqueue-worker',
+      script: 'bun',
+      args: 'run src/worker.ts',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production',
+        DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      }
+    }
+  ]
+};
+```
+
+### PM2 Commands
+
+```bash
+# Start
+pm2 start ecosystem.config.js
+
+# Restart
+pm2 restart bunqueue
+
+# Stop
+pm2 stop bunqueue
+
+# View logs
+pm2 logs bunqueue
+
+# Monitor
+pm2 monit
+
+# Save process list for startup
+pm2 save
+pm2 startup
+```
+
+<Aside type="caution">
+Do not use PM2 cluster mode (`instances > 1`). bunqueue is a single-instance queue and multiple instances will cause data corruption.
+</Aside>
+
 ## Environment Variables
 
 | Variable | Description | Default |
