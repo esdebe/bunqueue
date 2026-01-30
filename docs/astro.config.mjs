@@ -108,6 +108,13 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Performance',
+          items: [
+            { label: 'Benchmarks', link: '/guide/benchmarks/' },
+            { label: 'bunqueue vs BullMQ', link: '/guide/comparison/' },
+          ],
+        },
+        {
           label: 'Production',
           items: [
             { label: 'Deployment Guide', link: '/guide/deployment/' },
