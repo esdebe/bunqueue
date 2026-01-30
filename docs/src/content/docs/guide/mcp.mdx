@@ -104,7 +104,7 @@ Or manually edit `~/.claude.json`:
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `bunqueue_add_job` | Add a job to a queue | `queue`*, `name`*, `data`*, `priority`, `delay`, `attempts` |
-| `bunqueue_add_jobs_bulk` | Add multiple jobs | `queue`*, `jobs`* (array of {name, data, priority, delay}) |
+| `bunqueue_add_jobs_bulk` | Add multiple jobs | `queue`*, `jobs`* (array of `{name, data, priority, delay}`) |
 | `bunqueue_get_job` | Get job by ID | `jobId`* |
 | `bunqueue_cancel_job` | Cancel a job | `jobId`* |
 | `bunqueue_update_progress` | Update progress | `jobId`*, `progress`* (0-100), `message` |
