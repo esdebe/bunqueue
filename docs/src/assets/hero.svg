@@ -19,17 +19,79 @@
     </filter>
   </defs>
 
+  <style>
+    @keyframes pulse1 {
+      0%, 100% { opacity: 0.1; transform: scale(1); }
+      50% { opacity: 0.18; transform: scale(1.05); }
+    }
+    @keyframes pulse2 {
+      0%, 100% { opacity: 0.15; transform: scale(1); }
+      50% { opacity: 0.25; transform: scale(1.08); }
+    }
+    @keyframes pulse3 {
+      0%, 100% { opacity: 0.2; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(1.1); }
+    }
+    @keyframes float1 {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(5px, -8px) rotate(5deg); }
+      50% { transform: translate(0, -12px) rotate(0deg); }
+      75% { transform: translate(-5px, -8px) rotate(-5deg); }
+    }
+    @keyframes float2 {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(-6px, -6px) rotate(-5deg); }
+      50% { transform: translate(0, -10px) rotate(0deg); }
+      75% { transform: translate(6px, -6px) rotate(5deg); }
+    }
+    @keyframes float3 {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(8px, -5px) rotate(8deg); }
+      50% { transform: translate(0, -8px) rotate(0deg); }
+      75% { transform: translate(-8px, -5px) rotate(-8deg); }
+    }
+    @keyframes float4 {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(-4px, -10px) rotate(-8deg); }
+      50% { transform: translate(0, -15px) rotate(0deg); }
+      75% { transform: translate(4px, -10px) rotate(8deg); }
+    }
+    @keyframes bunnyBounce {
+      0%, 100% { transform: translate(200px, 150px) scale(1); }
+      50% { transform: translate(200px, 147px) scale(1.02); }
+    }
+    @keyframes linePulse {
+      0%, 100% { opacity: 0.3; stroke-width: 2; }
+      50% { opacity: 0.6; stroke-width: 2.5; }
+    }
+    @keyframes speedLine {
+      0% { stroke-dashoffset: 60; opacity: 0.2; }
+      50% { opacity: 0.6; }
+      100% { stroke-dashoffset: -60; opacity: 0.2; }
+    }
+    .circle1 { animation: pulse1 3s ease-in-out infinite; transform-origin: 200px 150px; }
+    .circle2 { animation: pulse2 3s ease-in-out infinite 0.3s; transform-origin: 200px 150px; }
+    .circle3 { animation: pulse3 3s ease-in-out infinite 0.6s; transform-origin: 200px 150px; }
+    .job1 { animation: float1 4s ease-in-out infinite; }
+    .job2 { animation: float2 3.5s ease-in-out infinite 0.5s; }
+    .job3 { animation: float3 4.5s ease-in-out infinite 1s; }
+    .job4 { animation: float4 3.8s ease-in-out infinite 0.8s; }
+    .bunny { animation: bunnyBounce 2s ease-in-out infinite; transform-origin: 0 0; }
+    .conn-line { animation: linePulse 2s ease-in-out infinite; }
+    .speed-line { stroke-dasharray: 30 30; animation: speedLine 1.5s linear infinite; }
+  </style>
+
   <!-- Background circles -->
-  <circle cx="200" cy="150" r="120" fill="url(#heroGrad)" opacity="0.1"/>
-  <circle cx="200" cy="150" r="90" fill="url(#heroGrad)" opacity="0.15"/>
-  <circle cx="200" cy="150" r="60" fill="url(#heroGrad)" opacity="0.2"/>
+  <circle class="circle1" cx="200" cy="150" r="120" fill="url(#heroGrad)" opacity="0.1"/>
+  <circle class="circle2" cx="200" cy="150" r="90" fill="url(#heroGrad)" opacity="0.15"/>
+  <circle class="circle3" cx="200" cy="150" r="60" fill="url(#heroGrad)" opacity="0.2"/>
 
   <!-- Main logo box with bunny -->
   <g filter="url(#glow)">
     <rect x="150" y="100" width="100" height="100" rx="20" fill="url(#accentGrad)"/>
 
     <!-- Bunny inside the box - centered at 200, 150 -->
-    <g transform="translate(200, 150)">
+    <g class="bunny" transform="translate(200, 150)">
       <!-- Left ear -->
       <ellipse cx="-16" cy="-32" rx="8" ry="20" fill="white" opacity="0.9"/>
       <ellipse cx="-16" cy="-32" rx="4" ry="14" fill="url(#bunnyInner)"/>
@@ -52,14 +114,14 @@
 
   <!-- Floating elements representing jobs -->
   <g opacity="0.8">
-    <rect x="60" y="80" width="40" height="40" rx="8" fill="#a78bfa"/>
-    <rect x="300" y="60" width="35" height="35" rx="6" fill="#67e8f9"/>
-    <rect x="320" y="180" width="45" height="45" rx="10" fill="#86efac"/>
-    <rect x="40" y="180" width="30" height="30" rx="6" fill="#fde047"/>
+    <rect class="job1" x="60" y="80" width="40" height="40" rx="8" fill="#a78bfa"/>
+    <rect class="job2" x="300" y="60" width="35" height="35" rx="6" fill="#67e8f9"/>
+    <rect class="job3" x="320" y="180" width="45" height="45" rx="10" fill="#86efac"/>
+    <rect class="job4" x="40" y="180" width="30" height="30" rx="6" fill="#fde047"/>
   </g>
 
   <!-- Connection lines -->
-  <g stroke="#ec4899" stroke-width="2" opacity="0.3">
+  <g stroke="#ec4899" stroke-width="2" class="conn-line">
     <line x1="100" y1="100" x2="150" y2="130"/>
     <line x1="317" y1="77" x2="250" y2="120"/>
     <line x1="342" y1="202" x2="250" y2="170"/>
@@ -67,9 +129,9 @@
   </g>
 
   <!-- Speed lines -->
-  <g stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" opacity="0.4">
-    <line x1="100" y1="250" x2="140" y2="250"/>
-    <line x1="120" y1="260" x2="180" y2="260"/>
-    <line x1="90" y1="270" x2="160" y2="270"/>
+  <g stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round">
+    <line class="speed-line" x1="100" y1="250" x2="140" y2="250"/>
+    <line class="speed-line" x1="120" y1="260" x2="180" y2="260" style="animation-delay: 0.2s"/>
+    <line class="speed-line" x1="90" y1="270" x2="160" y2="270" style="animation-delay: 0.4s"/>
   </g>
 </svg>
