@@ -42,17 +42,46 @@ export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
 
 /** Pending command */
 interface PendingCommand {
+  id: number;
   command: Record<string, unknown>;
   resolve: (value: Record<string, unknown>) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
 }
 
+/** Line buffer for efficient parsing */
+class LineBuffer {
+  private partial = '';
+
+  /** Add data and return complete lines */
+  addData(data: string): string[] {
+    const combined = this.partial + data;
+    const lines: string[] = [];
+    let start = 0;
+    let idx: number;
+
+    while ((idx = combined.indexOf('\n', start)) !== -1) {
+      const line = combined.slice(start, idx);
+      if (line.length > 0) {
+        lines.push(line);
+      }
+      start = idx + 1;
+    }
+
+    this.partial = start < combined.length ? combined.slice(start) : '';
+    return lines;
+  }
+
+  clear(): void {
+    this.partial = '';
+  }
+}
+
 /** Socket wrapper */
 interface SocketWrapper {
   write: (data: string) => void;
   end: () => void;
-  buffer: string;
+  lineBuffer: LineBuffer;
 }
 
 /**
@@ -68,8 +97,10 @@ export class TcpClient extends EventEmitter {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private readonly options: Required<ConnectionOptions>;
-  private pendingCommands: PendingCommand[] = [];
+  private readonly pendingCommands: Map<number, PendingCommand> = new Map();
+  private pendingQueue: number[] = []; // FIFO queue of command IDs
   private currentCommand: PendingCommand | null = null;
+  private commandIdCounter = 0;
 
   constructor(options: Partial<ConnectionOptions> = {}) {
     super();
@@ -121,7 +152,7 @@ export class TcpClient extends EventEmitter {
       const socketData: SocketWrapper = {
         write: () => {},
         end: () => {},
-        buffer: '',
+        lineBuffer: new LineBuffer(),
       };
 
       let connectionResolved = false;
@@ -139,14 +170,10 @@ export class TcpClient extends EventEmitter {
         port: this.options.port,
         socket: {
           data: (_sock, data) => {
-            socketData.buffer += data.toString();
+            const lines = socketData.lineBuffer.addData(data.toString());
 
-            let newlineIdx: number;
-            while ((newlineIdx = socketData.buffer.indexOf('\n')) !== -1) {
-              const line = socketData.buffer.slice(0, newlineIdx);
-              socketData.buffer = socketData.buffer.slice(newlineIdx + 1);
-
-              if (line.trim() && this.currentCommand) {
+            for (const line of lines) {
+              if (this.currentCommand) {
                 try {
                   const response = JSON.parse(line) as Record<string, unknown>;
                   clearTimeout(this.currentCommand.timeout);
@@ -290,11 +317,12 @@ export class TcpClient extends EventEmitter {
     if (this.reconnectAttempts > this.options.maxReconnectAttempts) {
       this.emit('maxReconnectAttemptsReached');
       // Reject all pending commands
-      for (const cmd of this.pendingCommands) {
+      for (const cmd of this.pendingCommands.values()) {
         clearTimeout(cmd.timeout);
         cmd.reject(new Error('Max reconnection attempts reached'));
       }
-      this.pendingCommands = [];
+      this.pendingCommands.clear();
+      this.pendingQueue = [];
       return;
     }
 
@@ -336,7 +364,7 @@ export class TcpClient extends EventEmitter {
         }
       }, this.options.commandTimeout);
 
-      this.currentCommand = { command, resolve, reject, timeout };
+      this.currentCommand = { id: 0, command, resolve, reject, timeout };
       if (this.socket) {
         this.socket.write(JSON.stringify(command) + '\n');
       }
@@ -345,12 +373,18 @@ export class TcpClient extends EventEmitter {
 
   /** Process next pending command */
   private processNextCommand(): void {
-    if (this.currentCommand || !this.connected || this.pendingCommands.length === 0) {
+    if (this.currentCommand || !this.connected || this.pendingQueue.length === 0) {
       return;
     }
 
-    const next = this.pendingCommands.shift();
-    if (!next || !this.socket) return;
+    const nextId = this.pendingQueue.shift();
+    if (nextId === undefined) return;
+    const next = this.pendingCommands.get(nextId);
+    if (!next || !this.socket) {
+      this.pendingCommands.delete(nextId);
+      return;
+    }
+    this.pendingCommands.delete(nextId);
     this.currentCommand = next;
     this.socket.write(JSON.stringify(next.command) + '\n');
   }
@@ -358,21 +392,29 @@ export class TcpClient extends EventEmitter {
   /** Send command and wait for response */
   async send(command: Record<string, unknown>): Promise<Record<string, unknown>> {
     // If connected and no pending commands, send immediately
-    if (this.connected && this.pendingCommands.length === 0 && !this.currentCommand) {
+    if (this.connected && this.pendingCommands.size === 0 && !this.currentCommand) {
       return this.sendInternal(command);
     }
 
     // Otherwise queue the command
     return new Promise((resolve, reject) => {
+      const id = ++this.commandIdCounter;
+
       const timeout = setTimeout(() => {
-        const idx = this.pendingCommands.findIndex((c) => c.command === command);
-        if (idx !== -1) {
-          this.pendingCommands.splice(idx, 1);
+        // O(1) lookup and delete with Map
+        if (this.pendingCommands.has(id)) {
+          this.pendingCommands.delete(id);
+          // Remove from queue (still O(n) but timeout is rare)
+          const queueIdx = this.pendingQueue.indexOf(id);
+          if (queueIdx !== -1) {
+            this.pendingQueue.splice(queueIdx, 1);
+          }
           reject(new Error('Command timeout'));
         }
       }, this.options.commandTimeout);
 
-      this.pendingCommands.push({ command, resolve, reject, timeout });
+      this.pendingCommands.set(id, { id, command, resolve, reject, timeout });
+      this.pendingQueue.push(id);
 
       // Try to connect if not connected
       if (!this.connected && !this.connecting) {
@@ -396,11 +438,12 @@ export class TcpClient extends EventEmitter {
     }
 
     // Reject all pending commands
-    for (const cmd of this.pendingCommands) {
+    for (const cmd of this.pendingCommands.values()) {
       clearTimeout(cmd.timeout);
       cmd.reject(new Error('Client closed'));
     }
-    this.pendingCommands = [];
+    this.pendingCommands.clear();
+    this.pendingQueue = [];
 
     if (this.currentCommand) {
       clearTimeout(this.currentCommand.timeout);

@@ -59,9 +59,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly activeJobIds: Set<string> = new Set(); // Track active job IDs for heartbeat
+  private cachedActiveJobIds: string[] = []; // Cached array for heartbeat (avoid Array.from on each heartbeat)
+  private activeJobIdsDirty = false; // Flag to rebuild cache
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private consecutiveErrors = 0;
-  private readonly pendingJobs: InternalJob[] = []; // Buffer for batch-pulled jobs
+  // O(1) queue for batch-pulled jobs (avoid shift() which is O(n))
+  private pendingJobs: InternalJob[] = [];
+  private pendingJobsHead = 0; // Index of next job to process
 
   // Batch ACK state
   private readonly pendingAcks: PendingAck[] = [];
@@ -192,10 +196,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (this.activeJobIds.size === 0 || !this.tcp) return;
 
     try {
-      const ids = Array.from(this.activeJobIds);
+      // Rebuild cache only when dirty (avoids Array.from on every heartbeat)
+      if (this.activeJobIdsDirty) {
+        this.cachedActiveJobIds = Array.from(this.activeJobIds);
+        this.activeJobIdsDirty = false;
+      }
+
+      const ids = this.cachedActiveJobIds;
       if (ids.length === 1) {
         await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0] });
-      } else {
+      } else if (ids.length > 1) {
         await this.tcp.send({ cmd: 'JobHeartbeatB', ids });
       }
     } catch (err) {
@@ -222,8 +232,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (!this.running) return;
 
     try {
-      // Get job from pending buffer or fetch new batch
-      let job: InternalJob | null = this.pendingJobs.shift() ?? null;
+      // Get job from pending buffer (O(1) with index) or fetch new batch
+      let job: InternalJob | null = null;
+      if (this.pendingJobsHead < this.pendingJobs.length) {
+        job = this.pendingJobs[this.pendingJobsHead++];
+        // Compact array when we've consumed half to prevent memory growth
+        if (this.pendingJobsHead > 500 && this.pendingJobsHead >= this.pendingJobs.length / 2) {
+          this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead);
+          this.pendingJobsHead = 0;
+        }
+      }
 
       if (!job) {
         // Fetch new batch - calculate how many we can process
@@ -235,11 +253,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
             ? await this.pullBatchEmbedded(batchSize)
             : await this.pullBatchTcp(batchSize);
 
-          // Take first job, buffer the rest
-          const firstJob = jobs.shift();
-          if (firstJob) {
-            job = firstJob;
-            this.pendingJobs.push(...jobs);
+          // Take first job, buffer the rest (reset queue)
+          if (jobs.length > 0) {
+            job = jobs[0];
+            this.pendingJobs = jobs;
+            this.pendingJobsHead = 1;
           }
         }
       }
@@ -250,20 +268,17 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         this.activeJobs++;
         const jobIdStr = String(job.id);
         this.activeJobIds.add(jobIdStr);
+        this.activeJobIdsDirty = true;
 
         void this.processJob(job).finally(() => {
           this.activeJobs--;
           this.activeJobIds.delete(jobIdStr);
+          this.activeJobIdsDirty = true;
           if (this.running) this.poll();
         });
 
-        // Process more jobs from buffer if available
-        if (this.activeJobs < this.opts.concurrency && this.pendingJobs.length > 0) {
-          setImmediate(() => {
-            void this.tryProcess();
-          });
-        } else if (this.activeJobs < this.opts.concurrency) {
-          // No buffered jobs, schedule another fetch
+        // Process more jobs if we have capacity
+        if (this.activeJobs < this.opts.concurrency) {
           setImmediate(() => {
             void this.tryProcess();
           });

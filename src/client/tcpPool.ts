@@ -12,13 +12,14 @@ export interface PoolOptions extends Partial<ConnectionOptions> {
 
 /**
  * Connection pool for parallel TCP operations
- * Round-robin distribution of commands across connections
+ * Load-aware distribution - prefers connected clients with capacity
  */
 export class TcpConnectionPool {
   private readonly clients: TcpClient[] = [];
   private readonly options: Required<PoolOptions>;
   private currentIndex = 0;
   private closed = false;
+  private refCount = 0; // Reference counting for shared pools
 
   constructor(options: PoolOptions = {}) {
     this.options = {
@@ -58,10 +59,23 @@ export class TcpConnectionPool {
     await Promise.all(this.clients.map((c) => c.connect()));
   }
 
-  /** Get next client (round-robin) */
+  /** Get next client with load-aware selection */
   private getNextClient(): TcpClient {
+    const len = this.clients.length;
+
+    // First pass: try to find a connected client starting from current index
+    for (let i = 0; i < len; i++) {
+      const idx = (this.currentIndex + i) % len;
+      const client = this.clients[idx];
+      if (client.isConnected()) {
+        this.currentIndex = (idx + 1) % len;
+        return client;
+      }
+    }
+
+    // All disconnected: fall back to round-robin (they'll reconnect)
     const client = this.clients[this.currentIndex];
-    this.currentIndex = (this.currentIndex + 1) % this.clients.length;
+    this.currentIndex = (this.currentIndex + 1) % len;
     return client;
   }
 
@@ -105,29 +119,66 @@ export class TcpConnectionPool {
     return this.clients.length;
   }
 
+  /** Increment reference count (for shared pools) */
+  addRef(): void {
+    this.refCount++;
+  }
+
+  /** Decrement reference count and close if zero */
+  release(): void {
+    this.refCount--;
+    if (this.refCount <= 0) {
+      this.close();
+    }
+  }
+
   /** Close all connections */
   close(): void {
+    if (this.closed) return;
     this.closed = true;
     for (const client of this.clients) {
       client.close();
     }
     this.clients.length = 0;
   }
+
+  /** Check if pool is closed */
+  isClosed(): boolean {
+    return this.closed;
+  }
 }
 
-/** Shared pool instance */
-let sharedPool: TcpConnectionPool | null = null;
+/** Shared pools by host:port key */
+const sharedPools = new Map<string, TcpConnectionPool>();
+
+/** Get pool key from options */
+function getPoolKey(options?: PoolOptions): string {
+  const host = options?.host ?? 'localhost';
+  const port = options?.port ?? 6789;
+  return `${host}:${port}`;
+}
 
 /** Get or create shared connection pool */
 export function getSharedPool(options?: PoolOptions): TcpConnectionPool {
-  sharedPool ??= new TcpConnectionPool(options);
-  return sharedPool;
+  const key = getPoolKey(options);
+  let pool = sharedPools.get(key);
+  if (!pool) {
+    pool = new TcpConnectionPool(options);
+    sharedPools.set(key, pool);
+  }
+  pool.addRef();
+  return pool;
 }
 
-/** Close shared pool */
-export function closeSharedPool(): void {
-  if (sharedPool) {
-    sharedPool.close();
-    sharedPool = null;
+/** Release shared pool reference */
+export function releaseSharedPool(pool: TcpConnectionPool): void {
+  pool.release();
+}
+
+/** Close all shared pools */
+export function closeAllSharedPools(): void {
+  for (const pool of sharedPools.values()) {
+    pool.close();
   }
+  sharedPools.clear();
 }

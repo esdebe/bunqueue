@@ -27,7 +27,7 @@ export { QueueGroup } from './queueGroup';
 export { FlowProducer } from './flow';
 export { shutdownManager } from './manager';
 export { closeSharedTcpClient } from './tcpClient';
-export { TcpConnectionPool, getSharedPool, closeSharedPool } from './tcpPool';
+export { TcpConnectionPool, getSharedPool, closeAllSharedPools } from './tcpPool';
 export type {
   Job,
   JobOptions,

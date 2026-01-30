@@ -5,7 +5,7 @@
  */
 
 import { getSharedManager } from './manager';
-import { TcpConnectionPool } from './tcpPool';
+import { TcpConnectionPool, getSharedPool, releaseSharedPool } from './tcpPool';
 import type {
   Job,
   JobOptions,
@@ -62,6 +62,7 @@ export class Queue<T = unknown> {
   private readonly opts: QueueOptions;
   private readonly embedded: boolean;
   private readonly tcpPool: TcpConnectionPool | null;
+  private readonly useSharedPool: boolean;
 
   constructor(name: string, opts: QueueOptions = {}) {
     this.name = name;
@@ -70,18 +71,30 @@ export class Queue<T = unknown> {
 
     if (this.embedded) {
       this.tcpPool = null;
+      this.useSharedPool = false;
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
-      // Always use pool - default poolSize = 4, user can override
       const poolSize = connOpts.poolSize ?? 4;
 
-      // Use connection pool (always enabled for TCP mode)
-      this.tcpPool = new TcpConnectionPool({
-        host: connOpts.host ?? 'localhost',
-        port: connOpts.port ?? 6789,
-        token: connOpts.token,
-        poolSize,
-      });
+      // Use shared pool by default (saves connections across Queue instances)
+      // Only create dedicated pool if poolSize differs from default
+      if (poolSize === 4 && !connOpts.token) {
+        this.tcpPool = getSharedPool({
+          host: connOpts.host,
+          port: connOpts.port,
+          poolSize,
+        });
+        this.useSharedPool = true;
+      } else {
+        // Create dedicated pool for custom settings
+        this.tcpPool = new TcpConnectionPool({
+          host: connOpts.host ?? 'localhost',
+          port: connOpts.port ?? 6789,
+          token: connOpts.token,
+          poolSize,
+        });
+        this.useSharedPool = false;
+      }
     }
   }
 
@@ -500,10 +513,14 @@ export class Queue<T = unknown> {
 
   /** Close the queue */
   close(): void {
-    // Close pool if using pooled connections (not shared)
     if (this.tcpPool) {
-      this.tcpPool.close();
+      if (this.useSharedPool) {
+        // Release reference to shared pool
+        releaseSharedPool(this.tcpPool);
+      } else {
+        // Close dedicated pool
+        this.tcpPool.close();
+      }
     }
-    // Shared client is managed globally, don't close
   }
 }
