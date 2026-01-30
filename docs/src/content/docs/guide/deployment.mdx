@@ -415,7 +415,7 @@ bunqueue is I/O bound, not CPU bound. A single core handles most workloads.
 
 4. **Set up monitoring**
 
-   Scrape `/metrics` with Prometheus or similar.
+   Scrape `/prometheus` with Prometheus or similar.
 
 5. **Configure log aggregation**
 
@@ -619,7 +619,7 @@ new Worker('production-tasks', async (job) => {
     await job.log(`Completed: ${JSON.stringify(result)}`);
     return result;
   } catch (error) {
-    await job.log(`Error: ${error.message}`, 'error');
+    await job.log(`Error: ${error.message}`);
     throw error;
   }
 }, {
