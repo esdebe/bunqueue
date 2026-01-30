@@ -100,19 +100,14 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';
   const bold = '\x1b[1m';
-  const cyan = '\x1b[36m';
+  const magenta = '\x1b[35m';
   const green = '\x1b[32m';
   const yellow = '\x1b[33m';
 
   console.log(`
-${cyan}    ____              ____                        ${reset}
-${cyan}   / __ )__  ______  / __ \\__  _____  __  _____   ${reset}
-${cyan}  / __  / / / / __ \\/ / / / / / / _ \\/ / / / _ \\  ${reset}
-${cyan} / /_/ / /_/ / / / / /_/ / /_/ /  __/ /_/ /  __/  ${reset}
-${cyan}/_____/\\__,_/_/ /_/\\___\\_\\__,_/\\___/\\__,_/\\___/   ${reset}
-${dim}                                          v${VERSION}${reset}
-
-${bold}High-performance job queue server for Bun${reset}
+${magenta}        (\\(\\        ${reset}
+${magenta}        ( -.-)      ${bold}bunqueue${reset} ${dim}v${VERSION}${reset}
+${magenta}        o_(")(")    ${reset}${dim}High-performance job queue for Bun${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
 
