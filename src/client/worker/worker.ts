@@ -34,13 +34,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   // Heartbeat tracking
   private readonly activeJobIds: Set<string> = new Set();
-  private cachedActiveJobIds: string[] = [];
-  private activeJobIdsDirty = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   // Job buffer for batch pulls
   private pendingJobs: InternalJob[] = [];
   private pendingJobsHead = 0;
+  private processingScheduled = false; // Prevent multiple setImmediate calls
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
@@ -144,15 +143,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (this.activeJobIds.size === 0 || !this.tcp) return;
 
     try {
-      if (this.activeJobIdsDirty) {
-        this.cachedActiveJobIds = Array.from(this.activeJobIds);
-        this.activeJobIdsDirty = false;
-      }
+      // Always take a fresh snapshot - avoids race with job start/complete
+      const ids = Array.from(this.activeJobIds);
+      if (ids.length === 0) return;
 
-      const ids = this.cachedActiveJobIds;
       if (ids.length === 1) {
         await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0] });
-      } else if (ids.length > 1) {
+      } else {
         await this.tcp.send({ cmd: 'JobHeartbeatB', ids });
       }
     } catch (err) {
@@ -260,7 +257,6 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.activeJobs++;
     const jobIdStr = String(job.id);
     this.activeJobIds.add(jobIdStr);
-    this.activeJobIdsDirty = true;
 
     void processJob(job, {
       name: this.name,
@@ -272,12 +268,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     }).finally(() => {
       this.activeJobs--;
       this.activeJobIds.delete(jobIdStr);
-      this.activeJobIdsDirty = true;
       if (this.running && !this.closing) this.poll();
     });
 
-    if (this.activeJobs < this.opts.concurrency && !this.closing) {
-      setImmediate(() => void this.tryProcess());
+    // Prevent multiple setImmediate calls (event loop starvation)
+    if (this.activeJobs < this.opts.concurrency && !this.closing && !this.processingScheduled) {
+      this.processingScheduled = true;
+      setImmediate(() => {
+        this.processingScheduled = false;
+        void this.tryProcess();
+      });
     }
   }
 

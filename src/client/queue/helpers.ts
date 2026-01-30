@@ -13,16 +13,26 @@ import type * as dlqOps from '../../application/dlqManager';
 /** Check if embedded mode should be forced (for tests) */
 export const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
 
+/** Internal type for accessing manager internals (shards is private) */
+interface ManagerInternals {
+  shards: Shard[];
+}
+
+/** Extract shards from manager (embedded mode only, accesses private property) */
+function getShards(manager: ReturnType<typeof getSharedManager>): Shard[] {
+  return (manager as unknown as ManagerInternals).shards;
+}
+
 /** Get shard from manager (embedded mode only) */
 export function getShard(manager: ReturnType<typeof getSharedManager>, queue: string): Shard {
   const idx = shardIndex(queue);
-  return (manager as unknown as { shards: Shard[] }).shards[idx];
+  return getShards(manager)[idx];
 }
 
 /** Create DLQ context (embedded mode only) */
 export function getDlqContext(manager: ReturnType<typeof getSharedManager>): dlqOps.DlqContext {
   return {
-    shards: (manager as unknown as { shards: Shard[] }).shards,
+    shards: getShards(manager),
     jobIndex: manager.getJobIndex(),
   };
 }

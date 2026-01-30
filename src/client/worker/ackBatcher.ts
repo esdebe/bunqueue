@@ -90,11 +90,18 @@ export class AckBatcher {
     }
   }
 
-  /** Stop and cleanup */
+  /** Stop and cleanup - clears pending acks without processing */
   stop(): void {
     if (this.ackTimer) {
       clearTimeout(this.ackTimer);
       this.ackTimer = null;
     }
+    // Clear any pending acks (they should have been flushed before stop)
+    this.pendingAcks.length = 0;
+  }
+
+  /** Check if there are pending acks */
+  hasPending(): boolean {
+    return this.pendingAcks.length > 0;
   }
 }

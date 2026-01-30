@@ -20,13 +20,15 @@ export class TcpConnectionPool {
   private currentIndex = 0;
   private closed = false;
   private refCount = 0; // Reference counting for shared pools
+  private poolKey: string | null = null; // Track key for cleanup from sharedPools
 
   constructor(options: PoolOptions = {}) {
+    const poolSize = Math.max(1, options.poolSize ?? 4); // Validate: at least 1
     this.options = {
       host: options.host ?? 'localhost',
       port: options.port ?? 6789,
       token: options.token ?? '',
-      poolSize: options.poolSize ?? 4,
+      poolSize,
       maxReconnectAttempts: options.maxReconnectAttempts ?? Infinity,
       reconnectDelay: options.reconnectDelay ?? 100,
       maxReconnectDelay: options.maxReconnectDelay ?? 30000,
@@ -134,10 +136,20 @@ export class TcpConnectionPool {
     }
   }
 
+  /** Set pool key for shared pool cleanup */
+  setPoolKey(key: string): void {
+    this.poolKey = key;
+  }
+
   /** Close all connections */
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    // Remove from shared pools map if this was a shared pool
+    if (this.poolKey) {
+      sharedPools.delete(this.poolKey);
+      this.poolKey = null;
+    }
     for (const client of this.clients) {
       client.close();
     }
@@ -197,8 +209,10 @@ function getPoolKey(options?: PoolOptions): string {
 export function getSharedPool(options?: PoolOptions): TcpConnectionPool {
   const key = getPoolKey(options);
   let pool = sharedPools.get(key);
-  if (!pool) {
+  // Also check if existing pool is closed (defensive check)
+  if (!pool || pool.isClosed()) {
     pool = new TcpConnectionPool(options);
+    pool.setPoolKey(key); // Track key for cleanup on close
     sharedPools.set(key, pool);
   }
   pool.addRef();
