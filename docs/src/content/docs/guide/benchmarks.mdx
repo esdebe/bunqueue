@@ -59,36 +59,79 @@ bun run bench:internal
 Measures jobs pushed and processed per second.
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
-<svg viewBox="0 0 500 240" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '500px', width: '100%', height: 'auto' }}>
+<svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '600px', width: '100%', height: 'auto' }}>
   <defs>
-    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stopColor="#f9a8d4"/>
-      <stop offset="100%" stopColor="#ec4899"/>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ffffff"/>
+      <stop offset="100%" stopColor="#fafafa"/>
     </linearGradient>
+    <linearGradient id="bar1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#f472b6"/>
+      <stop offset="100%" stopColor="#db2777"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#c084fc"/>
+      <stop offset="100%" stopColor="#9333ea"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#60a5fa"/>
+      <stop offset="100%" stopColor="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="bar4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#34d399"/>
+      <stop offset="100%" stopColor="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.1"/>
+    </filter>
   </defs>
-  <rect x="0" y="0" width="500" height="240" fill="#fafafa" rx="8"/>
-  <text x="250" y="24" textAnchor="middle" fontSize="13" fontWeight="600" fill="#18181b">Throughput (ops/sec)</text>
-  <line x1="60" y1="45" x2="60" y2="190" stroke="#e4e4e7" strokeWidth="1"/>
-  <line x1="60" y1="190" x2="470" y2="190" stroke="#e4e4e7" strokeWidth="1"/>
-  <text x="52" y="58" textAnchor="end" fontSize="9" fill="#71717a">150k</text>
-  <text x="52" y="94" textAnchor="end" fontSize="9" fill="#71717a">100k</text>
-  <text x="52" y="130" textAnchor="end" fontSize="9" fill="#71717a">50k</text>
-  <line x1="60" y1="55" x2="470" y2="55" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="60" y1="91" x2="470" y2="91" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="60" y1="127" x2="470" y2="127" stroke="#f4f4f5" strokeWidth="1"/>
-  <rect x="80" y="95" width="70" height="95" fill="url(#barGrad)" rx="4"/>
-  <text x="115" y="208" textAnchor="middle" fontSize="10" fill="#52525b">Single</text>
-  <text x="115" y="88" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~55k</text>
-  <rect x="175" y="68" width="70" height="122" fill="url(#barGrad)" rx="4"/>
-  <text x="210" y="208" textAnchor="middle" fontSize="10" fill="#52525b">Bulk(10)</text>
-  <text x="210" y="61" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~95k</text>
-  <rect x="270" y="55" width="70" height="135" fill="url(#barGrad)" rx="4"/>
-  <text x="305" y="208" textAnchor="middle" fontSize="10" fill="#52525b">Bulk(100)</text>
-  <text x="305" y="48" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~120k</text>
-  <rect x="365" y="45" width="70" height="145" fill="url(#barGrad)" rx="4"/>
-  <text x="400" y="208" textAnchor="middle" fontSize="10" fill="#52525b">Bulk(1k)</text>
-  <text x="400" y="38" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~145k</text>
-  <text x="250" y="232" textAnchor="middle" fontSize="8" fill="#a1a1aa">Run bun run bench:throughput for your numbers</text>
+
+  <rect x="0" y="0" width="600" height="320" fill="url(#bgGrad)" rx="12"/>
+  <rect x="1" y="1" width="598" height="318" fill="none" stroke="#e5e7eb" strokeWidth="1" rx="12"/>
+
+  <text x="300" y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="#111827" fontFamily="system-ui, -apple-system, sans-serif">Throughput Performance</text>
+  <text x="300" y="52" textAnchor="middle" fontSize="11" fill="#6b7280" fontFamily="system-ui, -apple-system, sans-serif">Operations per second (higher is better)</text>
+
+  <line x1="80" y1="80" x2="80" y2="250" stroke="#e5e7eb" strokeWidth="1"/>
+  <line x1="80" y1="250" x2="550" y2="250" stroke="#e5e7eb" strokeWidth="1"/>
+
+  <g fill="#9ca3af" fontSize="10" fontFamily="system-ui, -apple-system, sans-serif">
+    <text x="70" y="84" textAnchor="end">150k</text>
+    <text x="70" y="127" textAnchor="end">100k</text>
+    <text x="70" y="170" textAnchor="end">50k</text>
+    <text x="70" y="213" textAnchor="end">25k</text>
+    <text x="70" y="254" textAnchor="end">0</text>
+  </g>
+
+  <g stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4,4">
+    <line x1="80" y1="80" x2="550" y2="80"/>
+    <line x1="80" y1="123" x2="550" y2="123"/>
+    <line x1="80" y1="166" x2="550" y2="166"/>
+    <line x1="80" y1="209" x2="550" y2="209"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="110" y="140" width="80" height="110" fill="url(#bar1)" rx="6"/>
+    <rect x="220" y="97" width="80" height="153" fill="url(#bar2)" rx="6"/>
+    <rect x="330" y="72" width="80" height="178" fill="url(#bar3)" rx="6"/>
+    <rect x="440" y="58" width="80" height="192" fill="url(#bar4)" rx="6"/>
+  </g>
+
+  <g fill="#111827" fontSize="13" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="150" y="132">55k</text>
+    <text x="260" y="89">95k</text>
+    <text x="370" y="64">120k</text>
+    <text x="480" y="50">145k</text>
+  </g>
+
+  <g fill="#374151" fontSize="11" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="150" y="272">Single</text>
+    <text x="260" y="272">Bulk (10)</text>
+    <text x="370" y="272">Bulk (100)</text>
+    <text x="480" y="272">Bulk (1k)</text>
+  </g>
+
+  <text x="300" y="302" textAnchor="middle" fontSize="10" fill="#9ca3af" fontFamily="system-ui, -apple-system, sans-serif">Mac Studio M1 Max · bun run bench:throughput</text>
 </svg>
 </div>
 
@@ -104,38 +147,99 @@ Measures jobs pushed and processed per second.
 Measures time to complete operations in milliseconds.
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
-<svg viewBox="0 0 500 240" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '500px', width: '100%', height: 'auto' }}>
-  <rect x="0" y="0" width="500" height="240" fill="#fafafa" rx="8"/>
-  <text x="250" y="24" textAnchor="middle" fontSize="13" fontWeight="600" fill="#18181b">Latency (ms) - Lower is Better</text>
-  <rect x="340" y="14" width="10" height="10" fill="#ec4899" rx="2"/>
-  <text x="355" y="23" fontSize="9" fill="#52525b">Push</text>
-  <rect x="400" y="14" width="10" height="10" fill="#3b82f6" rx="2"/>
-  <text x="415" y="23" fontSize="9" fill="#52525b">Process</text>
-  <line x1="80" y1="45" x2="80" y2="190" stroke="#e4e4e7" strokeWidth="1"/>
-  <line x1="80" y1="190" x2="450" y2="190" stroke="#e4e4e7" strokeWidth="1"/>
-  <text x="72" y="58" textAnchor="end" fontSize="9" fill="#71717a">1.0</text>
-  <text x="72" y="94" textAnchor="end" fontSize="9" fill="#71717a">0.75</text>
-  <text x="72" y="130" textAnchor="end" fontSize="9" fill="#71717a">0.50</text>
-  <text x="72" y="166" textAnchor="end" fontSize="9" fill="#71717a">0.25</text>
-  <line x1="80" y1="55" x2="450" y2="55" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="80" y1="91" x2="450" y2="91" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="80" y1="127" x2="450" y2="127" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="80" y1="163" x2="450" y2="163" stroke="#f4f4f5" strokeWidth="1"/>
-  <polyline points="130,176 220,168 310,145 400,100" fill="none" stroke="#ec4899" strokeWidth="2"/>
-  <circle cx="130" cy="176" r="5" fill="#ec4899"/>
-  <circle cx="220" cy="168" r="5" fill="#ec4899"/>
-  <circle cx="310" cy="145" r="5" fill="#ec4899"/>
-  <circle cx="400" cy="100" r="5" fill="#ec4899"/>
-  <polyline points="130,182 220,176 310,163 400,127" fill="none" stroke="#3b82f6" strokeWidth="2"/>
-  <circle cx="130" cy="182" r="5" fill="#3b82f6"/>
-  <circle cx="220" cy="176" r="5" fill="#3b82f6"/>
-  <circle cx="310" cy="163" r="5" fill="#3b82f6"/>
-  <circle cx="400" cy="127" r="5" fill="#3b82f6"/>
-  <text x="130" y="205" textAnchor="middle" fontSize="10" fill="#52525b">p50</text>
-  <text x="220" y="205" textAnchor="middle" fontSize="10" fill="#52525b">p95</text>
-  <text x="310" y="205" textAnchor="middle" fontSize="10" fill="#52525b">p99</text>
-  <text x="400" y="205" textAnchor="middle" fontSize="10" fill="#52525b">p99.9</text>
-  <text x="250" y="232" textAnchor="middle" fontSize="8" fill="#a1a1aa">Run bun run bench:latency for your numbers</text>
+<svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '600px', width: '100%', height: 'auto' }}>
+  <defs>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ffffff"/>
+      <stop offset="100%" stopColor="#fafafa"/>
+    </linearGradient>
+    <linearGradient id="lineGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#ec4899"/>
+      <stop offset="100%" stopColor="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="lineGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#3b82f6"/>
+      <stop offset="100%" stopColor="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="areaGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ec4899" stopOpacity="0.2"/>
+      <stop offset="100%" stopColor="#ec4899" stopOpacity="0"/>
+    </linearGradient>
+    <linearGradient id="areaGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15"/>
+      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0"/>
+    </linearGradient>
+    <filter id="glow1" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="600" height="320" fill="url(#bgGrad2)" rx="12"/>
+  <rect x="1" y="1" width="598" height="318" fill="none" stroke="#e5e7eb" strokeWidth="1" rx="12"/>
+
+  <text x="300" y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="#111827" fontFamily="system-ui, -apple-system, sans-serif">Latency Distribution</text>
+  <text x="300" y="52" textAnchor="middle" fontSize="11" fill="#6b7280" fontFamily="system-ui, -apple-system, sans-serif">Milliseconds per operation (lower is better)</text>
+
+  <g transform="translate(420, 70)">
+    <rect x="0" y="0" width="100" height="50" fill="white" stroke="#e5e7eb" rx="6"/>
+    <circle cx="16" cy="16" r="5" fill="#ec4899"/>
+    <text x="28" y="20" fontSize="11" fill="#374151" fontFamily="system-ui, -apple-system, sans-serif">Push</text>
+    <circle cx="16" cy="36" r="5" fill="#3b82f6"/>
+    <text x="28" y="40" fontSize="11" fill="#374151" fontFamily="system-ui, -apple-system, sans-serif">Process</text>
+  </g>
+
+  <line x1="80" y1="90" x2="80" y2="250" stroke="#e5e7eb" strokeWidth="1"/>
+  <line x1="80" y1="250" x2="400" y2="250" stroke="#e5e7eb" strokeWidth="1"/>
+
+  <g fill="#9ca3af" fontSize="10" fontFamily="system-ui, -apple-system, sans-serif">
+    <text x="70" y="94" textAnchor="end">1.0ms</text>
+    <text x="70" y="134" textAnchor="end">0.75ms</text>
+    <text x="70" y="174" textAnchor="end">0.50ms</text>
+    <text x="70" y="214" textAnchor="end">0.25ms</text>
+    <text x="70" y="254" textAnchor="end">0ms</text>
+  </g>
+
+  <g stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4,4">
+    <line x1="80" y1="90" x2="400" y2="90"/>
+    <line x1="80" y1="130" x2="400" y2="130"/>
+    <line x1="80" y1="170" x2="400" y2="170"/>
+    <line x1="80" y1="210" x2="400" y2="210"/>
+  </g>
+
+  <path d="M 120 242 L 200 231 L 280 210 L 360 154 L 360 250 L 120 250 Z" fill="url(#areaGrad1)"/>
+  <path d="M 120 247 L 200 242 L 280 226 L 360 186 L 360 250 L 120 250 Z" fill="url(#areaGrad2)"/>
+
+  <polyline points="120,242 200,231 280,210 360,154" fill="none" stroke="url(#lineGrad1)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow1)"/>
+  <polyline points="120,247 200,242 280,226 360,186" fill="none" stroke="url(#lineGrad2)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow1)"/>
+
+  <g>
+    <circle cx="120" cy="242" r="6" fill="white" stroke="#ec4899" strokeWidth="2"/>
+    <circle cx="200" cy="231" r="6" fill="white" stroke="#ec4899" strokeWidth="2"/>
+    <circle cx="280" cy="210" r="6" fill="white" stroke="#ec4899" strokeWidth="2"/>
+    <circle cx="360" cy="154" r="6" fill="white" stroke="#ec4899" strokeWidth="2"/>
+
+    <circle cx="120" cy="247" r="6" fill="white" stroke="#3b82f6" strokeWidth="2"/>
+    <circle cx="200" cy="242" r="6" fill="white" stroke="#3b82f6" strokeWidth="2"/>
+    <circle cx="280" cy="226" r="6" fill="white" stroke="#3b82f6" strokeWidth="2"/>
+    <circle cx="360" cy="186" r="6" fill="white" stroke="#3b82f6" strokeWidth="2"/>
+  </g>
+
+  <g fill="#374151" fontSize="11" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="120" y="272">p50</text>
+    <text x="200" y="272">p95</text>
+    <text x="280" y="272">p99</text>
+    <text x="360" y="272">p99.9</text>
+  </g>
+
+  <g fill="#6b7280" fontSize="9" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="120" y="285">0.05ms</text>
+    <text x="200" y="285">0.12ms</text>
+    <text x="280" y="285">0.25ms</text>
+    <text x="360" y="285">0.60ms</text>
+  </g>
+
+  <text x="300" y="308" textAnchor="middle" fontSize="10" fill="#9ca3af" fontFamily="system-ui, -apple-system, sans-serif">Mac Studio M1 Max · bun run bench:latency</text>
 </svg>
 </div>
 
@@ -153,38 +257,67 @@ Measures time to complete operations in milliseconds.
 Memory footprint under different workloads.
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
-<svg viewBox="0 0 500 220" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '500px', width: '100%', height: 'auto' }}>
+<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg" style={{ maxWidth: '600px', width: '100%', height: 'auto' }}>
   <defs>
-    <linearGradient id="barGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stopColor="#f9a8d4"/>
-      <stop offset="100%" stopColor="#ec4899"/>
+    <linearGradient id="bgGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ffffff"/>
+      <stop offset="100%" stopColor="#fafafa"/>
     </linearGradient>
+    <linearGradient id="memBar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#8b5cf6"/>
+      <stop offset="100%" stopColor="#a78bfa"/>
+    </linearGradient>
+    <filter id="barShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15"/>
+    </filter>
   </defs>
-  <rect x="0" y="0" width="500" height="220" fill="#fafafa" rx="8"/>
-  <text x="250" y="24" textAnchor="middle" fontSize="13" fontWeight="600" fill="#18181b">Memory Usage (MB)</text>
-  <line x1="60" y1="45" x2="60" y2="175" stroke="#e4e4e7" strokeWidth="1"/>
-  <line x1="60" y1="175" x2="470" y2="175" stroke="#e4e4e7" strokeWidth="1"/>
-  <text x="52" y="55" textAnchor="end" fontSize="9" fill="#71717a">400</text>
-  <text x="52" y="88" textAnchor="end" fontSize="9" fill="#71717a">300</text>
-  <text x="52" y="121" textAnchor="end" fontSize="9" fill="#71717a">200</text>
-  <text x="52" y="154" textAnchor="end" fontSize="9" fill="#71717a">100</text>
-  <line x1="60" y1="52" x2="470" y2="52" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="60" y1="85" x2="470" y2="85" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="60" y1="118" x2="470" y2="118" stroke="#f4f4f5" strokeWidth="1"/>
-  <line x1="60" y1="151" x2="470" y2="151" stroke="#f4f4f5" strokeWidth="1"/>
-  <rect x="80" y="159" width="80" height="16" fill="url(#barGrad2)" rx="3"/>
-  <text x="120" y="192" textAnchor="middle" fontSize="10" fill="#52525b">Idle</text>
-  <text x="120" y="154" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~50MB</text>
-  <rect x="180" y="151" width="80" height="24" fill="url(#barGrad2)" rx="3"/>
-  <text x="220" y="192" textAnchor="middle" fontSize="10" fill="#52525b">10K</text>
-  <text x="220" y="146" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~65MB</text>
-  <rect x="280" y="126" width="80" height="49" fill="url(#barGrad2)" rx="3"/>
-  <text x="320" y="192" textAnchor="middle" fontSize="10" fill="#52525b">100K</text>
-  <text x="320" y="121" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~150MB</text>
-  <rect x="380" y="52" width="80" height="123" fill="url(#barGrad2)" rx="3"/>
-  <text x="420" y="192" textAnchor="middle" fontSize="10" fill="#52525b">1M</text>
-  <text x="420" y="47" textAnchor="middle" fontSize="9" fontWeight="600" fill="#ec4899">~400MB</text>
-  <text x="250" y="212" textAnchor="middle" fontSize="8" fill="#a1a1aa">~100 bytes per queued job</text>
+
+  <rect x="0" y="0" width="600" height="300" fill="url(#bgGrad3)" rx="12"/>
+  <rect x="1" y="1" width="598" height="298" fill="none" stroke="#e5e7eb" strokeWidth="1" rx="12"/>
+
+  <text x="300" y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="#111827" fontFamily="system-ui, -apple-system, sans-serif">Memory Footprint</text>
+  <text x="300" y="52" textAnchor="middle" fontSize="11" fill="#6b7280" fontFamily="system-ui, -apple-system, sans-serif">RSS memory by queue depth (~100 bytes per job)</text>
+
+  <line x1="100" y1="80" x2="100" y2="230" stroke="#e5e7eb" strokeWidth="1"/>
+  <line x1="100" y1="230" x2="550" y2="230" stroke="#e5e7eb" strokeWidth="1"/>
+
+  <g fill="#9ca3af" fontSize="10" fontFamily="system-ui, -apple-system, sans-serif">
+    <text x="90" y="84" textAnchor="end">400MB</text>
+    <text x="90" y="121" textAnchor="end">300MB</text>
+    <text x="90" y="158" textAnchor="end">200MB</text>
+    <text x="90" y="195" textAnchor="end">100MB</text>
+    <text x="90" y="234" textAnchor="end">0</text>
+  </g>
+
+  <g stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4,4">
+    <line x1="100" y1="80" x2="550" y2="80"/>
+    <line x1="100" y1="117" x2="550" y2="117"/>
+    <line x1="100" y1="154" x2="550" y2="154"/>
+    <line x1="100" y1="191" x2="550" y2="191"/>
+  </g>
+
+  <g filter="url(#barShadow)">
+    <rect x="130" y="211" width="70" height="19" fill="url(#memBar)" rx="4"/>
+    <rect x="240" y="206" width="70" height="24" fill="url(#memBar)" rx="4"/>
+    <rect x="350" y="173" width="70" height="57" fill="url(#memBar)" rx="4"/>
+    <rect x="460" y="80" width="70" height="150" fill="url(#memBar)" rx="4"/>
+  </g>
+
+  <g fill="#111827" fontSize="11" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="165" y="205">50MB</text>
+    <text x="275" y="200">65MB</text>
+    <text x="385" y="167">150MB</text>
+    <text x="495" y="74">400MB</text>
+  </g>
+
+  <g fill="#374151" fontSize="11" fontFamily="system-ui, -apple-system, sans-serif" textAnchor="middle">
+    <text x="165" y="250">Idle</text>
+    <text x="275" y="250">10K jobs</text>
+    <text x="385" y="250">100K jobs</text>
+    <text x="495" y="250">1M jobs</text>
+  </g>
+
+  <text x="300" y="280" textAnchor="middle" fontSize="10" fill="#9ca3af" fontFamily="system-ui, -apple-system, sans-serif">Linear scaling · Efficient memory utilization</text>
 </svg>
 </div>
 
