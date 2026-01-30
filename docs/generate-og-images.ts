@@ -9,7 +9,7 @@ const sections = [
   { name: 'api-reference', title: 'API Reference', subtitle: 'Types, Examples and Migration', color: '#ec4899' },
   { name: 'worker', title: 'Worker API', subtitle: 'Job Processing and Sandboxed Workers', color: '#06b6d4' },
   { name: 'queue', title: 'Queue API', subtitle: 'Job Management and Dead Letter Queue', color: '#84cc16' },
-  { name: 'benchmarks', title: 'Performance', subtitle: '32x Faster than BullMQ', color: '#ef4444' },
+  { name: 'integrations', title: 'Integrations', subtitle: 'Hono and Elysia Framework Guides', color: '#6366f1' },
 ];
 
 mkdirSync('./public/og', { recursive: true });

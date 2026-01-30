@@ -95,8 +95,12 @@ export default defineConfig({
             { label: 'S3 Backup', link: '/guide/backup/' },
             { label: 'Rate Limiting', link: '/guide/rate-limiting/' },
             { label: 'Webhooks', link: '/guide/webhooks/' },
-            { label: 'Benchmarks', link: '/guide/benchmarks/' },
-            { label: 'bunqueue vs BullMQ', link: '/guide/comparison/' },
+          ],
+        },
+        {
+          label: 'Integrations',
+          items: [
+            { label: 'Hono & Elysia', link: '/guide/integrations/' },
           ],
         },
         {
