@@ -54,6 +54,15 @@ export default defineConfig({
             { label: 'S3 Backup', link: '/guide/backup/' },
             { label: 'Rate Limiting', link: '/guide/rate-limiting/' },
             { label: 'Webhooks', link: '/guide/webhooks/' },
+            { label: 'Benchmarks', link: '/guide/benchmarks/' },
+          ],
+        },
+        {
+          label: 'Resources',
+          items: [
+            { label: 'Changelog', link: '/changelog/' },
+            { label: 'Security', link: '/security/' },
+            { label: 'Contributing', link: '/contributing/' },
           ],
         },
       ],
