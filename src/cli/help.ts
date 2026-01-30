@@ -9,8 +9,15 @@ export function printVersion(version: string): void {
 
 /** Print main help */
 export function printHelp(): void {
+  const magenta = '\x1b[35m';
+  const reset = '\x1b[0m';
+  const dim = '\x1b[2m';
+  const bold = '\x1b[1m';
+
   console.log(`
-bunqueue - High-performance job queue server for Bun
+${magenta}   (\\(\\        ${reset}
+${magenta}   ( -.-)      ${bold}bunqueue${reset} ${dim}- High-performance job queue for Bun${reset}
+${magenta}   o_(")(")    ${reset}
 
 USAGE:
   bunqueue [command] [options]
