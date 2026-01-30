@@ -157,6 +157,7 @@ while (true) {
 - **Dual Mode** — Embedded (in-process) or Server (TCP/HTTP)
 - **BullMQ-Compatible API** — Easy migration with `Queue`, `Worker`, `QueueEvents`
 - **Persistent Storage** — SQLite with WAL mode
+- **Sandboxed Workers** — Isolated processes for crash protection
 - **Priority Queues** — FIFO, LIFO, and priority-based ordering
 - **Delayed Jobs** — Schedule jobs for later
 - **Repeatable Jobs** — Recurring jobs with interval and limit
@@ -270,6 +271,75 @@ worker.resume();
 await worker.close();       // Graceful shutdown
 await worker.close(true);   // Force close
 ```
+
+### SandboxedWorker
+
+Run job processors in **isolated Bun Worker processes**. Perfect for:
+- CPU-intensive tasks that would block the event loop
+- Processing untrusted code/data
+- Jobs that might crash or have memory leaks
+- Workloads requiring process-level isolation
+
+```typescript
+import { Queue, SandboxedWorker } from 'bunqueue/client';
+
+const queue = new Queue('image-processing');
+
+// Create sandboxed worker pool
+const worker = new SandboxedWorker('image-processing', {
+  processor: './imageProcessor.ts',  // Runs in separate process
+  concurrency: 4,                    // 4 parallel worker processes
+  timeout: 60000,                    // 60s timeout per job
+  maxMemory: 256,                    // MB per worker (uses smol mode if ≤64)
+  maxRestarts: 10,                   // Auto-restart crashed workers
+});
+
+worker.start();
+
+// Add jobs normally
+await queue.add('resize', {
+  image: 'photo.jpg',
+  width: 800
+});
+
+// Check worker stats
+const stats = worker.getStats();
+// { total: 4, busy: 2, idle: 2, restarts: 0 }
+
+// Graceful shutdown
+await worker.stop();
+```
+
+**Processor file** (`imageProcessor.ts`):
+```typescript
+// This runs in an isolated Bun Worker process
+export default async (job: {
+  id: string;
+  data: any;
+  queue: string;
+  attempts: number;
+  progress: (value: number) => void;
+}) => {
+  job.progress(10);
+
+  // CPU-intensive work - won't block main process
+  const result = await processImage(job.data.image, job.data.width);
+
+  job.progress(100);
+  return { processed: true, path: result };
+};
+```
+
+**Comparison:**
+
+| Feature | Worker | SandboxedWorker |
+|---------|--------|-----------------|
+| Execution | In-process | Separate process |
+| Latency | ~0.002ms | ~2-5ms (IPC overhead) |
+| Crash isolation | ❌ | ✅ |
+| Memory leak protection | ❌ | ✅ |
+| CPU-bound safety | ❌ Blocks event loop | ✅ Isolated |
+| Use case | Fast I/O tasks | Heavy computation |
 
 ### QueueEvents
 

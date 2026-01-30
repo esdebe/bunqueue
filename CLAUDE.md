@@ -40,6 +40,7 @@ src/
 ├── client/          # Embedded client SDK (BullMQ-compatible API)
 │   ├── queue.ts     # Queue class (add, addBulk, DLQ, stall config)
 │   ├── worker.ts    # Worker class (processing, heartbeats)
+│   ├── sandboxedWorker.ts # Isolated worker processes (crash protection)
 │   ├── events.ts    # QueueEvents for subscriptions
 │   ├── flow.ts      # FlowProducer for parent-child jobs
 │   ├── queueGroup.ts # QueueGroup for bulk operations
