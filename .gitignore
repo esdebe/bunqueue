@@ -39,3 +39,4 @@ coverage/
 # Bun
 bun.lockb
 bun.lock
+package-lock.json
