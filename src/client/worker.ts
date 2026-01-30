@@ -13,7 +13,7 @@
 
 import { EventEmitter } from 'events';
 import { getSharedManager } from './manager';
-import { getSharedTcpClient } from './tcpClient';
+// TCP connection pool is always used in TCP mode
 import { TcpConnectionPool } from './tcpPool';
 import type { WorkerOptions, Processor, ConnectionOptions } from './types';
 import { createPublicJob } from './types';
@@ -29,12 +29,9 @@ interface PendingAck {
 }
 
 /** Extended options with all defaults */
-interface ExtendedWorkerOptions extends Required<
-  Omit<WorkerOptions, 'connection' | 'embedded' | 'usePool'>
-> {
+interface ExtendedWorkerOptions extends Required<Omit<WorkerOptions, 'connection' | 'embedded'>> {
   connection?: ConnectionOptions;
   embedded: boolean;
-  usePool: boolean;
 }
 
 /** Check if embedded mode should be forced (for tests) */
@@ -81,14 +78,14 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.name = name;
     this.processor = processor;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
+    const concurrency = opts.concurrency ?? 1;
     this.opts = {
-      concurrency: opts.concurrency ?? 1,
+      concurrency,
       autorun: opts.autorun ?? true,
       heartbeatInterval: opts.heartbeatInterval ?? 10000,
       batchSize: Math.min(opts.batchSize ?? 10, 1000), // Default 10, max 1000
       pollTimeout: Math.min(opts.pollTimeout ?? 0, Worker.MAX_POLL_TIMEOUT), // Default 0, max 30s
       embedded: this.embedded,
-      usePool: opts.usePool ?? false,
     };
 
     // Batch ACK settings
@@ -100,26 +97,17 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.tcpPool = null;
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
-      const poolSize = this.opts.usePool ? (connOpts.poolSize ?? this.opts.concurrency) : 0;
+      // Always use pool - default poolSize = min(concurrency, 8), user can override
+      const poolSize = connOpts.poolSize ?? Math.min(concurrency, 8);
 
-      if (poolSize > 1) {
-        // Use connection pool for high concurrency
-        this.tcpPool = new TcpConnectionPool({
-          host: connOpts.host ?? 'localhost',
-          port: connOpts.port ?? 6789,
-          token: connOpts.token,
-          poolSize,
-        });
-        this.tcp = this.tcpPool;
-      } else {
-        // Use single shared connection
-        this.tcpPool = null;
-        this.tcp = getSharedTcpClient({
-          host: connOpts.host ?? 'localhost',
-          port: connOpts.port ?? 6789,
-          token: connOpts.token,
-        });
-      }
+      // Use connection pool (always enabled for TCP mode)
+      this.tcpPool = new TcpConnectionPool({
+        host: connOpts.host ?? 'localhost',
+        port: connOpts.port ?? 6789,
+        token: connOpts.token,
+        poolSize,
+      });
+      this.tcp = this.tcpPool;
     }
 
     if (this.opts.autorun) {

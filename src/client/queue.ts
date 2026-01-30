@@ -5,7 +5,6 @@
  */
 
 import { getSharedManager } from './manager';
-import { getSharedTcpClient, type TcpClient } from './tcpClient';
 import { TcpConnectionPool } from './tcpPool';
 import type {
   Job,
@@ -62,7 +61,6 @@ export class Queue<T = unknown> {
   readonly name: string;
   private readonly opts: QueueOptions;
   private readonly embedded: boolean;
-  private readonly tcpClient: TcpClient | null;
   private readonly tcpPool: TcpConnectionPool | null;
 
   constructor(name: string, opts: QueueOptions = {}) {
@@ -71,40 +69,28 @@ export class Queue<T = unknown> {
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
 
     if (this.embedded) {
-      this.tcpClient = null;
       this.tcpPool = null;
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
-      const poolSize = connOpts.poolSize ?? 1;
+      // Always use pool - default poolSize = 4, user can override
+      const poolSize = connOpts.poolSize ?? 4;
 
-      if (poolSize > 1) {
-        // Use connection pool for parallel operations
-        this.tcpPool = new TcpConnectionPool({
-          host: connOpts.host ?? 'localhost',
-          port: connOpts.port ?? 6789,
-          token: connOpts.token,
-          poolSize,
-        });
-        this.tcpClient = null;
-      } else {
-        // Use single shared connection
-        this.tcpClient = getSharedTcpClient({
-          host: connOpts.host ?? 'localhost',
-          port: connOpts.port ?? 6789,
-          token: connOpts.token,
-        });
-        this.tcpPool = null;
-      }
+      // Use connection pool (always enabled for TCP mode)
+      this.tcpPool = new TcpConnectionPool({
+        host: connOpts.host ?? 'localhost',
+        port: connOpts.port ?? 6789,
+        token: connOpts.token,
+        poolSize,
+      });
     }
   }
 
-  /** Get TCP client (pool or single) */
-  private get tcp(): { send: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>> } {
-    const client = this.tcpPool ?? this.tcpClient;
-    if (!client) {
-      throw new Error('No TCP client available');
+  /** Get TCP connection pool */
+  private get tcp(): TcpConnectionPool {
+    if (!this.tcpPool) {
+      throw new Error('No TCP connection available');
     }
-    return client;
+    return this.tcpPool;
   }
 
   /** Add a job to the queue */
