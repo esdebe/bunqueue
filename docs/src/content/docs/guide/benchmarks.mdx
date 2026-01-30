@@ -10,7 +10,7 @@ bunqueue includes a comprehensive benchmark suite for performance testing, stres
 ## Quick Results
 
 <CardGrid>
-  <Card title="Push Throughput" icon="star">
+  <Card title="Push Throughput" icon="up-caret">
     **1.2M+ ops/sec**
 
     With batch operations (1000+ jobs)
@@ -20,12 +20,12 @@ bunqueue includes a comprehensive benchmark suite for performance testing, stres
 
     Full cycle with 16 workers
   </Card>
-  <Card title="Scale Tested" icon="list-format">
+  <Card title="Scale Tested" icon="open-book">
     **1 Million Jobs**
 
     Verified data integrity at scale
   </Card>
-  <Card title="Memory Efficient" icon="laptop">
+  <Card title="Memory Efficient" icon="setting">
     **~100 bytes/job**
 
     At scale with `removeOnComplete: true`
@@ -371,7 +371,7 @@ bunqueue uses 16 shards by default:
 ### Memory Optimization
 
 <CardGrid>
-  <Card title="removeOnComplete: true" icon="approve-check">
+  <Card title="removeOnComplete: true" icon="approve-check-circle">
     Maximum throughput (~495K/s)
 
     - Jobs removed after completion
@@ -395,13 +395,13 @@ bunqueue uses 16 shards by default:
   <Card title="Native SQLite" icon="seti:db">
     Direct FFI bindings via `bun:sqlite`. WAL mode for concurrent reads/writes. Memory-mapped I/O.
   </Card>
-  <Card title="16 Shards" icon="list-format">
+  <Card title="16 Shards" icon="puzzle">
     Minimizes lock contention. Each shard handles ~6% of queues. Parallel processing by design.
   </Card>
   <Card title="Batch Optimization" icon="rocket">
     Single transaction for bulk operations. Prepared statements reused. `ackBatchWithResults` for throughput.
   </Card>
-  <Card title="Efficient Structures" icon="approve-check">
+  <Card title="Efficient Structures" icon="seti:config">
     Skip lists for O(log n) priority. MinHeap for delayed jobs. Bounded collections prevent leaks.
   </Card>
 </CardGrid>
