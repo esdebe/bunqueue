@@ -15,12 +15,12 @@ head:
 ```typescript
 import { QueueGroup } from 'bunqueue/client';
 
-// Create a group with namespace (embedded mode)
-const billing = new QueueGroup('billing', { embedded: true });
+// Create a group with namespace
+const billing = new QueueGroup('billing');
 
-// Get queues (automatically prefixed)
-const invoices = billing.getQueue('invoices');   // → "billing:invoices"
-const payments = billing.getQueue('payments');   // → "billing:payments"
+// Get queues (automatically prefixed, pass embedded: true for each)
+const invoices = billing.getQueue('invoices', { embedded: true });   // → "billing:invoices"
+const payments = billing.getQueue('payments', { embedded: true });   // → "billing:payments"
 
 // Add jobs
 await invoices.add('create', { amount: 100 });
@@ -66,21 +66,18 @@ billing.drainAll();
 
 // Obliterate all queues (remove all data)
 billing.obliterateAll();
-
-// Get aggregated stats for all queues
-const stats = billing.getStats();
-// { waiting: 10, active: 2, completed: 150, failed: 3 }
 ```
 
 ## Options
 
-Pass options when creating the group, queues or workers:
+Pass options when creating queues or workers:
 
 ```typescript
-const billing = new QueueGroup('billing', { embedded: true });
+const billing = new QueueGroup('billing');
 
-// Queue with options (inherits embedded from group)
+// Queue with options (embedded: true required for in-process mode)
 const invoices = billing.getQueue<InvoiceData>('invoices', {
+  embedded: true,
   defaultJobOptions: {
     attempts: 5,
     backoff: 2000,
@@ -99,13 +96,13 @@ const worker = billing.getWorker('invoices', processor, {
 ### Multi-Tenant Applications
 
 ```typescript
-// Create a group per tenant (embedded mode)
-const tenantA = new QueueGroup('tenant-a', { embedded: true });
-const tenantB = new QueueGroup('tenant-b', { embedded: true });
+// Create a group per tenant
+const tenantA = new QueueGroup('tenant-a');
+const tenantB = new QueueGroup('tenant-b');
 
-// Each tenant has isolated queues
-const tasksA = tenantA.getQueue('tasks');
-const tasksB = tenantB.getQueue('tasks');
+// Each tenant has isolated queues (pass embedded: true to each queue)
+const tasksA = tenantA.getQueue('tasks', { embedded: true });
+const tasksB = tenantB.getQueue('tasks', { embedded: true });
 
 // Jobs are isolated
 await tasksA.add('process', { tenantId: 'a' });
@@ -115,15 +112,15 @@ await tasksB.add('process', { tenantId: 'b' });
 ### Microservice Domains
 
 ```typescript
-// Group queues by domain (embedded mode)
-const orders = new QueueGroup('orders', { embedded: true });
-const notifications = new QueueGroup('notifications', { embedded: true });
-const analytics = new QueueGroup('analytics', { embedded: true });
+// Group queues by domain
+const orders = new QueueGroup('orders');
+const notifications = new QueueGroup('notifications');
+const analytics = new QueueGroup('analytics');
 
-// Each domain has its own queues
-const orderQueue = orders.getQueue('process');
-const emailQueue = notifications.getQueue('email');
-const eventQueue = analytics.getQueue('events');
+// Each domain has its own queues (pass embedded: true to each)
+const orderQueue = orders.getQueue('process', { embedded: true });
+const emailQueue = notifications.getQueue('email', { embedded: true });
+const eventQueue = analytics.getQueue('events', { embedded: true });
 ```
 
 ### Environment Separation

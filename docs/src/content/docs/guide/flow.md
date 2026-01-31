@@ -99,7 +99,7 @@ These allow child jobs to access parent results.
 ```typescript
 import { FlowProducer, Worker } from 'bunqueue/client';
 
-const flow = new FlowProducer({ embedded: true });
+const flow = new FlowProducer();
 
 const worker = new Worker('pipeline', async (job) => {
   // Check if this job has a parent (chain scenario)

@@ -37,6 +37,50 @@ HTTP server port for REST API and metrics.
 HTTP_PORT=6790 bunqueue start
 ```
 
+### `HOST`
+
+Hostname to bind servers to.
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | `0.0.0.0` | `127.0.0.1` |
+
+```bash
+# Bind to localhost only
+HOST=127.0.0.1 bunqueue start
+
+# Bind to all interfaces (default)
+HOST=0.0.0.0 bunqueue start
+```
+
+### `TCP_SOCKET_PATH`
+
+Unix socket path for TCP server (alternative to TCP_PORT).
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | (none) | `/var/run/bunqueue.sock` |
+
+```bash
+TCP_SOCKET_PATH=/var/run/bunqueue.sock bunqueue start
+```
+
+:::note[Unix Socket vs TCP Port]
+When `TCP_SOCKET_PATH` is set, the TCP server binds to the Unix socket instead of a TCP port. Unix sockets offer lower latency for local connections.
+:::
+
+### `HTTP_SOCKET_PATH`
+
+Unix socket path for HTTP server (alternative to HTTP_PORT).
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | (none) | `/var/run/bunqueue-http.sock` |
+
+```bash
+HTTP_SOCKET_PATH=/var/run/bunqueue-http.sock bunqueue start
+```
+
 ### `DATA_PATH`
 
 Path to SQLite database file.

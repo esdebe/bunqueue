@@ -76,7 +76,7 @@ const resizeQueue = new Queue('resize', { embedded: true });
 const thumbnailQueue = new Queue('thumbnails', { embedded: true });
 
 // Flow producer for dependencies
-const flow = new FlowProducer({ embedded: true });
+const flow = new FlowProducer();
 
 // Add image processing flow
 await flow.add({

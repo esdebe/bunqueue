@@ -107,7 +107,6 @@ Both methods reset the stall detection timer:
 
 For long-running jobs without natural progress points, rely on `heartbeatInterval`.
 :::
-```
 
 ## Monitoring
 
