@@ -263,3 +263,50 @@ export function getDlqConfig(queue: string, ctx: DlqContext): DlqConfig {
   const idx = shardIndex(queue);
   return ctx.shards[idx].getDlqConfig(queue);
 }
+
+/** Extended context for retryCompleted */
+export interface RetryCompletedContext extends DlqContext {
+  completedJobs: { has(id: JobId): boolean; delete(id: JobId): boolean } & Iterable<JobId>;
+  jobResults: { delete(id: JobId): boolean };
+}
+
+/** Retry completed jobs */
+export function retryCompletedJobs(
+  queue: string,
+  ctx: RetryCompletedContext,
+  jobId?: JobId
+): number {
+  if (jobId) {
+    if (!ctx.completedJobs.has(jobId)) return 0;
+    const job = ctx.storage?.getJob(jobId);
+    if (job?.queue !== queue) return 0;
+    return requeueCompletedJob(job, ctx);
+  }
+
+  let count = 0;
+  for (const id of ctx.completedJobs) {
+    const job = ctx.storage?.getJob(id);
+    if (job?.queue === queue) count += requeueCompletedJob(job, ctx);
+  }
+  return count;
+}
+
+/** Requeue a single completed job */
+function requeueCompletedJob(job: Job, ctx: RetryCompletedContext): number {
+  job.attempts = 0;
+  job.startedAt = null;
+  job.completedAt = null;
+  job.runAt = Date.now();
+  job.progress = 0;
+
+  const idx = shardIndex(job.queue);
+  const shard = ctx.shards[idx];
+  shard.getQueue(job.queue).push(job);
+  shard.incrementQueued(job.id, false, job.createdAt, job.queue, job.runAt);
+  ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+  ctx.completedJobs.delete(job.id);
+  ctx.jobResults.delete(job.id);
+  ctx.storage?.updateForRetry(job);
+  shard.notify();
+  return 1;
+}

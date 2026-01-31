@@ -1,25 +1,27 @@
 /**
  * Shard - Container for queues within a shard
  * Each shard manages multiple queues and their state
+ *
+ * Refactored to compose smaller modules:
+ * - UniqueKeyManager: deduplication with TTL
+ * - DlqShard: Dead Letter Queue operations
+ * - LimiterManager: rate limiting + concurrency
+ * - DependencyTracker: job dependency tracking
+ * - TemporalManager: temporal index + delayed job tracking
  */
 
 import type { Job, JobId } from '../types/job';
-import { type QueueState, createQueueState, RateLimiter, ConcurrencyLimiter } from '../types/queue';
+import type { QueueState } from '../types/queue';
 import type { DlqEntry, DlqConfig, DlqFilter } from '../types/dlq';
-import {
-  DEFAULT_DLQ_CONFIG,
-  FailureReason,
-  createDlqEntry,
-  isDlqEntryExpired,
-  canAutoRetry,
-} from '../types/dlq';
+import { FailureReason } from '../types/dlq';
 import type { StallConfig } from '../types/stall';
-import { DEFAULT_STALL_CONFIG } from '../types/stall';
 import type { UniqueKeyEntry } from '../types/deduplication';
-import { isUniqueKeyExpired, calculateExpiration } from '../types/deduplication';
 import { IndexedPriorityQueue } from './priorityQueue';
-import { SkipList } from '../../shared/skipList';
-import { MinHeap } from '../../shared/minHeap';
+import { UniqueKeyManager } from './uniqueKeyManager';
+import { DlqShard } from './dlqShard';
+import { LimiterManager } from './limiterManager';
+import { DependencyTracker } from './dependencyTracker';
+import { TemporalManager } from './temporalManager';
 
 /** Shard statistics counters for O(1) stats retrieval */
 export interface ShardStats {
@@ -43,14 +45,20 @@ export class Shard {
   /** Priority queues by queue name */
   readonly queues = new Map<string, IndexedPriorityQueue>();
 
-  /** Dead letter queue by queue name - now with full metadata */
-  readonly dlq = new Map<string, DlqEntry[]>();
+  /** Unique key manager for deduplication */
+  private readonly uniqueKeyManager = new UniqueKeyManager();
 
-  /** DLQ configuration per queue */
-  readonly dlqConfig = new Map<string, DlqConfig>();
+  /** DLQ manager */
+  private readonly dlqManager: DlqShard;
 
-  /** Stall configuration per queue */
-  readonly stallConfig = new Map<string, StallConfig>();
+  /** Limiter manager for rate/concurrency control */
+  private readonly limiterManager = new LimiterManager();
+
+  /** Dependency tracker */
+  private readonly dependencyTracker = new DependencyTracker();
+
+  /** Temporal manager for index and delayed jobs */
+  private readonly temporalManager = new TemporalManager();
 
   /** Running counters for O(1) stats - updated on every operation */
   private readonly stats: ShardStats = {
@@ -59,61 +67,25 @@ export class Shard {
     dlqJobs: 0,
   };
 
-  /** Set of delayed job IDs for tracking when they become ready */
-  private readonly delayedJobIds = new Set<JobId>();
-
-  /**
-   * Min-heap of delayed jobs ordered by runAt for O(k) refresh
-   * Instead of O(n × queues) iteration
-   */
-  private readonly delayedHeap = new MinHeap<{ jobId: JobId; runAt: number }>(
-    (a, b) => a.runAt - b.runAt
-  );
-
-  /** Map from jobId to current runAt for stale detection in delayedHeap */
-  private readonly delayedRunAt = new Map<JobId, number>();
-
-  /**
-   * Temporal index: Skip List for O(log n) insert/delete instead of O(n) splice
-   * Ordered by createdAt for efficient cleanQueue range queries
-   */
-  private readonly temporalIndex = new SkipList<{ createdAt: number; jobId: JobId; queue: string }>(
-    (a, b) => a.createdAt - b.createdAt
-  );
-
-  /** Unique keys per queue for deduplication (with TTL support) */
-  readonly uniqueKeys = new Map<string, Map<string, UniqueKeyEntry>>();
-
-  /** Jobs waiting for dependencies */
-  readonly waitingDeps = new Map<JobId, Job>();
-
-  /**
-   * Reverse index: depId -> Set of jobIds waiting for that dependency
-   * Enables O(1) lookup when a dependency completes instead of O(n) scan
-   */
-  readonly dependencyIndex = new Map<JobId, Set<JobId>>();
-
-  /** Parent jobs waiting for children to complete */
-  readonly waitingChildren = new Map<JobId, Job>();
-
-  /** Queue state (pause, rate limit, concurrency) */
-  readonly queueState = new Map<string, QueueState>();
-
   /** Active FIFO groups per queue */
   readonly activeGroups = new Map<string, Set<string>>();
-
-  /** Rate limiters per queue */
-  readonly rateLimiters = new Map<string, RateLimiter>();
-
-  /** Concurrency limiters per queue */
-  readonly concurrencyLimiters = new Map<string, ConcurrencyLimiter>();
 
   /** Waiter entry with cancellation flag for O(1) cleanup */
   private readonly waiters: Array<{ resolve: () => void; cancelled: boolean }> = [];
 
+  constructor() {
+    this.dlqManager = new DlqShard({
+      incrementDlq: () => {
+        this.incrementDlq();
+      },
+      decrementDlq: (count) => {
+        this.decrementDlq(count);
+      },
+    });
+  }
+
   /** Notify that jobs are available - wakes first non-cancelled waiter */
   notify(): void {
-    // Skip cancelled entries at head - O(k) where k = cancelled
     while (this.waiters.length > 0) {
       const waiter = this.waiters.shift()!;
       if (!waiter.cancelled) {
@@ -125,31 +97,22 @@ export class Shard {
 
   /** Wait for a job to become available (with timeout) */
   waitForJob(timeoutMs: number): Promise<void> {
-    if (timeoutMs <= 0) {
-      return Promise.resolve();
-    }
+    if (timeoutMs <= 0) return Promise.resolve();
 
     return new Promise<void>((resolve) => {
       const waiter = { resolve, cancelled: false };
-
       const cleanup = () => {
         if (waiter.cancelled) return;
-        // O(1) cancellation - just mark, don't search/splice
         waiter.cancelled = true;
         resolve();
       };
-
-      // Add to waiters
       this.waiters.push(waiter);
-
-      // Timeout fallback
-      setTimeout(cleanup, Math.min(timeoutMs, 100)); // Max 100ms wait to allow checking other conditions
+      setTimeout(cleanup, Math.min(timeoutMs, 100));
     });
   }
 
   // ============ Queue Operations ============
 
-  /** Get or create queue */
   getQueue(name: string): IndexedPriorityQueue {
     let queue = this.queues.get(name);
     if (!queue) {
@@ -159,119 +122,68 @@ export class Shard {
     return queue;
   }
 
-  /** Get queue state */
   getState(name: string): QueueState {
-    let state = this.queueState.get(name);
-    if (!state) {
-      state = createQueueState(name);
-      this.queueState.set(name, state);
-    }
-    return state;
+    return this.limiterManager.getState(name);
   }
 
-  /** Check if queue is paused */
   isPaused(name: string): boolean {
-    return this.queueState.get(name)?.paused ?? false;
+    return this.limiterManager.isPaused(name);
   }
 
-  /** Pause queue */
   pause(name: string): void {
-    this.getState(name).paused = true;
+    this.limiterManager.pause(name);
   }
 
-  /** Resume queue */
   resume(name: string): void {
-    this.getState(name).paused = false;
+    this.limiterManager.resume(name);
     this.notify();
   }
 
-  // ============ Unique Key Management ============
+  // ============ Unique Key Management (delegated) ============
 
-  /** Check if unique key is available (not registered or expired) */
   isUniqueAvailable(queue: string, key: string): boolean {
-    const entry = this.uniqueKeys.get(queue)?.get(key);
-    if (!entry) return true;
-    // Check if expired
-    if (isUniqueKeyExpired(entry)) {
-      // Clean up expired entry
-      this.uniqueKeys.get(queue)?.delete(key);
-      return true;
-    }
-    return false;
+    return this.uniqueKeyManager.isAvailable(queue, key);
   }
 
-  /** Get unique key entry (returns null if not found or expired) */
   getUniqueKeyEntry(queue: string, key: string): UniqueKeyEntry | null {
-    const entry = this.uniqueKeys.get(queue)?.get(key);
-    if (!entry) return null;
-    if (isUniqueKeyExpired(entry)) {
-      this.uniqueKeys.get(queue)?.delete(key);
-      return null;
-    }
-    return entry;
+    return this.uniqueKeyManager.getEntry(queue, key);
   }
 
-  /** Register unique key (legacy method without TTL) */
   registerUniqueKey(queue: string, key: string): void {
-    this.registerUniqueKeyWithTtl(queue, key, undefined, undefined);
+    this.uniqueKeyManager.register(queue, key);
   }
 
-  /** Register unique key with TTL support */
   registerUniqueKeyWithTtl(
     queue: string,
     key: string,
     jobId: JobId | undefined,
     ttl?: number
   ): void {
-    let keys = this.uniqueKeys.get(queue);
-    if (!keys) {
-      keys = new Map();
-      this.uniqueKeys.set(queue, keys);
-    }
-    const now = Date.now();
-    keys.set(key, {
-      jobId: jobId ?? ('' as JobId),
-      expiresAt: calculateExpiration(ttl, now),
-      registeredAt: now,
-    });
+    this.uniqueKeyManager.registerWithTtl(queue, key, jobId, ttl);
   }
 
-  /** Extend TTL for an existing unique key */
   extendUniqueKeyTtl(queue: string, key: string, ttl: number): boolean {
-    const entry = this.uniqueKeys.get(queue)?.get(key);
-    if (!entry) return false;
-    entry.expiresAt = calculateExpiration(ttl);
-    return true;
+    return this.uniqueKeyManager.extendTtl(queue, key, ttl);
   }
 
-  /** Release unique key */
   releaseUniqueKey(queue: string, key: string): void {
-    this.uniqueKeys.get(queue)?.delete(key);
+    this.uniqueKeyManager.release(queue, key);
   }
 
-  /** Clean expired unique keys (call periodically) */
   cleanExpiredUniqueKeys(): number {
-    let cleaned = 0;
-    const now = Date.now();
-    for (const [_queue, keys] of this.uniqueKeys) {
-      for (const [key, entry] of keys) {
-        if (isUniqueKeyExpired(entry, now)) {
-          keys.delete(key);
-          cleaned++;
-        }
-      }
-    }
-    return cleaned;
+    return this.uniqueKeyManager.cleanExpired();
+  }
+
+  get uniqueKeys(): Map<string, Map<string, UniqueKeyEntry>> {
+    return this.uniqueKeyManager.getMap();
   }
 
   // ============ FIFO Group Management ============
 
-  /** Check if FIFO group is active */
   isGroupActive(queue: string, groupId: string): boolean {
     return this.activeGroups.get(queue)?.has(groupId) ?? false;
   }
 
-  /** Mark FIFO group as active */
   activateGroup(queue: string, groupId: string): void {
     let groups = this.activeGroups.get(queue);
     if (!groups) {
@@ -281,282 +193,190 @@ export class Shard {
     groups.add(groupId);
   }
 
-  /** Release FIFO group */
   releaseGroup(queue: string, groupId: string): void {
     this.activeGroups.get(queue)?.delete(groupId);
   }
 
-  // ============ Rate & Concurrency Limiting ============
+  // ============ Rate & Concurrency Limiting (delegated) ============
 
-  /** Set rate limit for queue */
   setRateLimit(queue: string, limit: number): void {
-    this.rateLimiters.set(queue, new RateLimiter(limit));
-    this.getState(queue).rateLimit = limit;
+    this.limiterManager.setRateLimit(queue, limit);
   }
 
-  /** Clear rate limit */
   clearRateLimit(queue: string): void {
-    this.rateLimiters.delete(queue);
-    const state = this.queueState.get(queue);
-    if (state) state.rateLimit = null;
+    this.limiterManager.clearRateLimit(queue);
   }
 
-  /** Try to acquire rate limit token */
   tryAcquireRateLimit(queue: string): boolean {
-    const limiter = this.rateLimiters.get(queue);
-    return !limiter || limiter.tryAcquire();
+    return this.limiterManager.tryAcquireRateLimit(queue);
   }
 
-  /** Set concurrency limit for queue */
   setConcurrency(queue: string, limit: number): void {
-    let limiter = this.concurrencyLimiters.get(queue);
-    if (limiter) {
-      limiter.setLimit(limit);
-    } else {
-      limiter = new ConcurrencyLimiter(limit);
-      this.concurrencyLimiters.set(queue, limiter);
-    }
-    this.getState(queue).concurrencyLimit = limit;
+    this.limiterManager.setConcurrency(queue, limit);
   }
 
-  /** Clear concurrency limit */
   clearConcurrency(queue: string): void {
-    this.concurrencyLimiters.delete(queue);
-    const state = this.queueState.get(queue);
-    if (state) state.concurrencyLimit = null;
+    this.limiterManager.clearConcurrency(queue);
   }
 
-  /** Try to acquire concurrency slot */
   tryAcquireConcurrency(queue: string): boolean {
-    const limiter = this.concurrencyLimiters.get(queue);
-    return !limiter || limiter.tryAcquire();
+    return this.limiterManager.tryAcquireConcurrency(queue);
   }
 
-  /** Release concurrency slot */
   releaseConcurrency(queue: string): void {
-    this.concurrencyLimiters.get(queue)?.release();
+    this.limiterManager.releaseConcurrency(queue);
+  }
+
+  get queueState(): Map<string, QueueState> {
+    return this.limiterManager.getStateMap();
+  }
+
+  /** Clear limiter data for a queue (rate limits, concurrency) */
+  clearQueueLimiters(queue: string): void {
+    this.limiterManager.deleteQueue(queue);
   }
 
   // ============ Resource Release ============
 
-  /** Release all resources for a job */
   releaseJobResources(queue: string, uniqueKey: string | null, groupId: string | null): void {
-    if (uniqueKey) {
-      this.releaseUniqueKey(queue, uniqueKey);
-    }
-    if (groupId) {
-      this.releaseGroup(queue, groupId);
-    }
+    if (uniqueKey) this.releaseUniqueKey(queue, uniqueKey);
+    if (groupId) this.releaseGroup(queue, groupId);
     this.releaseConcurrency(queue);
   }
 
-  // ============ Dependency Index Operations ============
+  // ============ Dependency Tracking (delegated) ============
 
-  /**
-   * Register a job's dependencies in the reverse index
-   * Call when adding a job to waitingDeps
-   */
+  get waitingDeps(): Map<JobId, Job> {
+    return this.dependencyTracker.waitingDeps;
+  }
+
+  get dependencyIndex(): Map<JobId, Set<JobId>> {
+    return this.dependencyTracker.dependencyIndex;
+  }
+
+  get waitingChildren(): Map<JobId, Job> {
+    return this.dependencyTracker.waitingChildren;
+  }
+
   registerDependencies(jobId: JobId, dependsOn: JobId[]): void {
-    for (const depId of dependsOn) {
-      let waiters = this.dependencyIndex.get(depId);
-      if (!waiters) {
-        waiters = new Set();
-        this.dependencyIndex.set(depId, waiters);
-      }
-      waiters.add(jobId);
-    }
+    this.dependencyTracker.registerDependencies(jobId, dependsOn);
   }
 
-  /**
-   * Unregister a job's dependencies from the reverse index
-   * Call when removing a job from waitingDeps
-   */
   unregisterDependencies(jobId: JobId, dependsOn: JobId[]): void {
-    for (const depId of dependsOn) {
-      const waiters = this.dependencyIndex.get(depId);
-      if (waiters) {
-        waiters.delete(jobId);
-        if (waiters.size === 0) {
-          this.dependencyIndex.delete(depId);
-        }
-      }
-    }
+    this.dependencyTracker.unregisterDependencies(jobId, dependsOn);
   }
 
-  /**
-   * Get jobs waiting for a specific dependency - O(1)
-   */
   getJobsWaitingFor(depId: JobId): Set<JobId> | undefined {
-    return this.dependencyIndex.get(depId);
+    return this.dependencyTracker.getJobsWaitingFor(depId);
   }
 
-  // ============ DLQ Operations ============
+  // ============ DLQ Operations (delegated) ============
 
-  /** Get DLQ config for queue */
+  get dlq(): Map<string, DlqEntry[]> {
+    const map = new Map<string, DlqEntry[]>();
+    for (const queue of this.dlqManager.getQueueNames()) {
+      map.set(queue, this.dlqManager.getEntries(queue));
+    }
+    for (const queue of this.queues.keys()) {
+      if (!map.has(queue)) map.set(queue, []);
+    }
+    return map;
+  }
+
+  get dlqConfig(): Map<string, DlqConfig> {
+    const map = new Map<string, DlqConfig>();
+    for (const queue of this.getQueueNames()) {
+      map.set(queue, this.dlqManager.getConfig(queue));
+    }
+    return map;
+  }
+
+  get stallConfig(): Map<string, StallConfig> {
+    const map = new Map<string, StallConfig>();
+    for (const queue of this.getQueueNames()) {
+      map.set(queue, this.dlqManager.getStallConfig(queue));
+    }
+    return map;
+  }
+
   getDlqConfig(queue: string): DlqConfig {
-    return this.dlqConfig.get(queue) ?? DEFAULT_DLQ_CONFIG;
+    return this.dlqManager.getConfig(queue);
   }
 
-  /** Set DLQ config for queue */
   setDlqConfig(queue: string, config: Partial<DlqConfig>): void {
-    const current = this.getDlqConfig(queue);
-    this.dlqConfig.set(queue, { ...current, ...config });
+    this.dlqManager.setConfig(queue, config);
   }
 
-  /** Get stall config for queue */
   getStallConfig(queue: string): StallConfig {
-    return this.stallConfig.get(queue) ?? DEFAULT_STALL_CONFIG;
+    return this.dlqManager.getStallConfig(queue);
   }
 
-  /** Set stall config for queue */
   setStallConfig(queue: string, config: Partial<StallConfig>): void {
-    const current = this.getStallConfig(queue);
-    this.stallConfig.set(queue, { ...current, ...config });
+    this.dlqManager.setStallConfig(queue, config);
   }
 
-  /** Add job to DLQ with full metadata */
   addToDlq(
     job: Job,
     reason: FailureReason = FailureReason.Unknown,
     error: string | null = null
   ): DlqEntry {
-    let dlq = this.dlq.get(job.queue);
-    if (!dlq) {
-      dlq = [];
-      this.dlq.set(job.queue, dlq);
-    }
-
-    const config = this.getDlqConfig(job.queue);
-    const entry = createDlqEntry(job, reason, error, config);
-
-    // Enforce max entries
-    while (dlq.length >= config.maxEntries) {
-      dlq.shift(); // Remove oldest
-      this.decrementDlq();
-    }
-
-    dlq.push(entry);
-    this.incrementDlq();
-    return entry;
+    return this.dlqManager.add(job, reason, error);
   }
 
-  /** Get DLQ entries (raw) */
   getDlqEntries(queue: string): DlqEntry[] {
-    return this.dlq.get(queue) ?? [];
+    return this.dlqManager.getEntries(queue);
   }
 
-  /** Get DLQ jobs (for backward compatibility) */
   getDlq(queue: string, count?: number): Job[] {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return [];
-    const entries = count ? dlq.slice(0, count) : dlq;
-    return entries.map((e) => e.job);
+    return this.dlqManager.getJobs(queue, count);
   }
 
-  /** Get DLQ entries with filter */
   getDlqFiltered(queue: string, filter: DlqFilter): DlqEntry[] {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return [];
-
-    const now = Date.now();
-    let result = dlq.filter((entry) => {
-      if (filter.reason && entry.reason !== filter.reason) return false;
-      if (filter.olderThan && entry.enteredAt >= filter.olderThan) return false;
-      if (filter.newerThan && entry.enteredAt <= filter.newerThan) return false;
-      if (filter.retriable && !canAutoRetry(entry, this.getDlqConfig(queue), now)) return false;
-      if (filter.expired && !isDlqEntryExpired(entry, now)) return false;
-      return true;
-    });
-
-    if (filter.offset) {
-      result = result.slice(filter.offset);
-    }
-    if (filter.limit) {
-      result = result.slice(0, filter.limit);
-    }
-
-    return result;
+    return this.dlqManager.getFiltered(queue, filter);
   }
 
-  /** Remove entry from DLQ by job ID */
   removeFromDlq(queue: string, jobId: JobId): DlqEntry | null {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return null;
-    const idx = dlq.findIndex((e) => e.job.id === jobId);
-    if (idx === -1) return null;
-    this.decrementDlq();
-    return dlq.splice(idx, 1)[0];
+    return this.dlqManager.remove(queue, jobId);
   }
 
-  /** Get entries ready for auto-retry */
   getAutoRetryEntries(queue: string, now: number = Date.now()): DlqEntry[] {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return [];
-    const config = this.getDlqConfig(queue);
-    return dlq.filter((entry) => canAutoRetry(entry, config, now));
+    return this.dlqManager.getAutoRetryEntries(queue, now);
   }
 
-  /** Get expired entries for cleanup */
   getExpiredEntries(queue: string, now: number = Date.now()): DlqEntry[] {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return [];
-    return dlq.filter((entry) => isDlqEntryExpired(entry, now));
+    return this.dlqManager.getExpiredEntries(queue, now);
   }
 
-  /** Remove expired entries */
   purgeExpired(queue: string, now: number = Date.now()): number {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return 0;
-
-    const before = dlq.length;
-    const remaining = dlq.filter((entry) => !isDlqEntryExpired(entry, now));
-
-    if (remaining.length < before) {
-      this.dlq.set(queue, remaining);
-      const removed = before - remaining.length;
-      this.decrementDlq(removed);
-      return removed;
-    }
-    return 0;
+    return this.dlqManager.purgeExpired(queue, now);
   }
 
-  /** Clear DLQ for queue */
   clearDlq(queue: string): number {
-    const dlq = this.dlq.get(queue);
-    if (!dlq) return 0;
-    const count = dlq.length;
-    this.dlq.delete(queue);
-    this.decrementDlq(count);
-    return count;
+    return this.dlqManager.clear(queue);
   }
 
   // ============ Queue Stats ============
 
-  /** Get waiting job count for queue */
   getWaitingCount(queue: string): number {
     return this.queues.get(queue)?.size ?? 0;
   }
 
-  /** Get DLQ count for queue */
   getDlqCount(queue: string): number {
-    return this.dlq.get(queue)?.length ?? 0;
+    return this.dlqManager.getCount(queue);
   }
 
-  /** Get all queue names in this shard */
   getQueueNames(): string[] {
     const names = new Set<string>();
     for (const name of this.queues.keys()) names.add(name);
-    for (const name of this.dlq.keys()) names.add(name);
-    for (const name of this.queueState.keys()) names.add(name);
+    for (const name of this.dlqManager.getQueueNames()) names.add(name);
+    for (const name of this.limiterManager.getQueueNames()) names.add(name);
     return Array.from(names);
   }
 
-  /** Get job counts grouped by priority for a queue */
   getCountsPerPriority(queue: string): Map<number, number> {
     const q = this.queues.get(queue);
     const counts = new Map<number, number>();
     if (!q) return counts;
-
     for (const job of q.values()) {
       const count = counts.get(job.priority) ?? 0;
       counts.set(job.priority, count + 1);
@@ -566,12 +386,10 @@ export class Shard {
 
   // ============ Running Counters (O(1) Stats) ============
 
-  /** Get shard statistics - O(1) */
   getStats(): ShardStats {
     return { ...this.stats };
   }
 
-  /** Get internal structure sizes for memory debugging */
   getInternalSizes(): {
     delayedJobIds: number;
     delayedHeap: number;
@@ -579,16 +397,10 @@ export class Shard {
     temporalIndex: number;
     waiters: number;
   } {
-    return {
-      delayedJobIds: this.delayedJobIds.size,
-      delayedHeap: this.delayedHeap.size,
-      delayedRunAt: this.delayedRunAt.size,
-      temporalIndex: this.temporalIndex.size,
-      waiters: this.waiters.length,
-    };
+    const sizes = this.temporalManager.getSizes();
+    return { ...sizes, waiters: this.waiters.length };
   }
 
-  /** Increment queued jobs counter and add to temporal index */
   incrementQueued(
     jobId: JobId,
     isDelayed: boolean,
@@ -599,204 +411,114 @@ export class Shard {
     this.stats.queuedJobs++;
     if (isDelayed) {
       this.stats.delayedJobs++;
-      this.delayedJobIds.add(jobId);
-      // Add to min-heap for O(k) refresh instead of O(n × queues)
-      // Only if runAt is provided (for full optimization)
       if (runAt !== undefined) {
-        this.delayedHeap.push({ jobId, runAt });
-        this.delayedRunAt.set(jobId, runAt);
+        this.temporalManager.addDelayed(jobId, runAt);
       }
     }
-    // Add to temporal index for efficient cleanQueue
     if (createdAt !== undefined && queue !== undefined) {
-      this.addToTemporalIndex(createdAt, jobId, queue);
+      this.temporalManager.addToIndex(createdAt, jobId, queue);
     }
   }
 
-  /** Decrement queued jobs counter and remove from temporal index */
   decrementQueued(jobId: JobId): void {
     this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - 1);
-    if (this.delayedJobIds.has(jobId)) {
+    if (this.temporalManager.removeDelayed(jobId)) {
       this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - 1);
-      this.delayedJobIds.delete(jobId);
-      // Mark as stale in heap (lazy removal)
-      this.delayedRunAt.delete(jobId);
     }
-    // Remove from temporal index (lazy removal - will be cleaned on next cleanQueue)
   }
 
-  /** Increment DLQ counter */
   incrementDlq(): void {
     this.stats.dlqJobs++;
   }
 
-  /** Decrement DLQ counter */
   decrementDlq(count: number = 1): void {
     this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - count);
   }
 
-  /**
-   * Update delayed jobs that have become ready (call periodically)
-   * O(k) where k = jobs that became ready, instead of O(n × queues)
-   */
   refreshDelayedCount(now: number): void {
-    // Process heap from top - jobs ordered by runAt ascending
-    while (!this.delayedHeap.isEmpty) {
-      const top = this.delayedHeap.peek();
-      if (!top || top.runAt > now) break;
-
-      // Pop from heap
-      this.delayedHeap.pop();
-
-      // Check if stale (job was removed or runAt changed)
-      const currentRunAt = this.delayedRunAt.get(top.jobId);
-      if (currentRunAt === undefined) {
-        // Job was removed, skip
-        continue;
-      }
-      if (currentRunAt !== top.runAt) {
-        // runAt changed, this entry is stale, skip
-        continue;
-      }
-
-      // Job is ready - remove from delayed tracking
-      this.delayedJobIds.delete(top.jobId);
-      this.delayedRunAt.delete(top.jobId);
-      this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - 1);
-    }
+    const readyCount = this.temporalManager.refreshDelayed(now);
+    this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - readyCount);
   }
 
-  /** Reset all counters (used after drain/obliterate) */
   resetQueuedCounters(): void {
     this.stats.queuedJobs = 0;
     this.stats.delayedJobs = 0;
-    this.delayedJobIds.clear();
-    this.delayedHeap.clear();
-    this.delayedRunAt.clear();
+    this.temporalManager.clearDelayed();
   }
 
-  /** Reset DLQ counter */
   resetDlqCounter(): void {
     this.stats.dlqJobs = 0;
   }
 
-  // ============ Temporal Index (for efficient cleanQueue) ============
+  // ============ Temporal Index (delegated) ============
 
-  /**
-   * Add job to temporal index - O(log n) with Skip List
-   * Previously O(n) with array splice
-   */
-  private addToTemporalIndex(createdAt: number, jobId: JobId, queue: string): void {
-    this.temporalIndex.insert({ createdAt, jobId, queue });
-  }
-
-  /**
-   * Get old jobs from temporal index - O(log n + k) where k = returned jobs
-   * Returns jobs older than threshold, up to limit
-   */
   getOldJobs(
     queue: string,
     thresholdMs: number,
     limit: number
   ): Array<{ jobId: JobId; createdAt: number }> {
-    const now = Date.now();
-    const threshold = now - thresholdMs;
-    const result: Array<{ jobId: JobId; createdAt: number }> = [];
-
-    // Use Skip List takeWhile for O(k) iteration from start
-    // Stops when createdAt > threshold
-    for (const entry of this.temporalIndex.values()) {
-      if (entry.createdAt > threshold) break;
-      if (entry.queue === queue) {
-        result.push({ jobId: entry.jobId, createdAt: entry.createdAt });
-        if (result.length >= limit) break;
-      }
-    }
-
-    return result;
+    return this.temporalManager.getOldJobs(queue, thresholdMs, limit);
   }
 
-  /**
-   * Remove job from temporal index (called after job is cleaned)
-   * O(n) in worst case but typically fast with deleteWhere
-   */
   removeFromTemporalIndex(jobId: JobId): void {
-    this.temporalIndex.deleteWhere((e) => e.jobId === jobId);
+    this.temporalManager.removeFromIndex(jobId);
   }
 
-  /** Clear temporal index for a queue */
   clearTemporalIndexForQueue(queue: string): void {
-    // Remove all entries for this queue
-    this.temporalIndex.removeAll((e) => e.queue === queue);
+    this.temporalManager.clearIndexForQueue(queue);
   }
 
-  /**
-   * Clean orphaned temporal index entries.
-   * Removes entries for jobs that no longer exist in the queue.
-   * Call periodically to prevent memory leaks.
-   */
   cleanOrphanedTemporalEntries(): number {
-    if (this.temporalIndex.size === 0) return 0;
+    if (this.temporalManager.indexSize === 0) return 0;
 
-    // Build a set of valid job IDs from all queues
     const validJobIds = new Set<JobId>();
-    for (const queue of this.queues.values()) {
-      for (const job of queue.values()) {
+    for (const pq of this.queues.values()) {
+      for (const job of pq.values()) {
         validJobIds.add(job.id);
       }
     }
-
-    // Remove entries that are not in any queue
-    const beforeSize = this.temporalIndex.size;
-    this.temporalIndex.removeAll((e) => !validJobIds.has(e.jobId));
-    return beforeSize - this.temporalIndex.size;
+    return this.temporalManager.cleanOrphaned(validJobIds);
   }
 
-  /** Drain all waiting jobs from queue, returns drained job IDs for cleanup */
+  // ============ Queue Lifecycle ============
+
   drain(queue: string): { count: number; jobIds: JobId[] } {
     const q = this.queues.get(queue);
     if (!q) return { count: 0, jobIds: [] };
+
     const count = q.size;
     const jobIds: JobId[] = [];
-    // Collect job IDs and remove delayed job tracking
     for (const job of q.values()) {
       jobIds.push(job.id);
-      this.delayedJobIds.delete(job.id);
+      this.temporalManager.removeDelayed(job.id);
     }
     q.clear();
-    // Clear temporal index for this queue
-    this.clearTemporalIndexForQueue(queue);
-    // Update counters
+    this.temporalManager.clearIndexForQueue(queue);
     this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - count);
-    this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs);
+    this.stats.delayedJobs = this.temporalManager.delayedCount;
     return { count, jobIds };
   }
 
-  /** Obliterate queue completely */
   obliterate(queue: string): void {
-    // Update counters before deleting
     const q = this.queues.get(queue);
     if (q) {
       for (const job of q.values()) {
-        this.delayedJobIds.delete(job.id);
+        this.temporalManager.removeDelayed(job.id);
       }
       this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - q.size);
     }
-    const dlqJobs = this.dlq.get(queue);
-    if (dlqJobs) {
-      this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - dlqJobs.length);
+
+    const dlqCount = this.dlqManager.deleteQueue(queue);
+    if (dlqCount > 0) {
+      this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - dlqCount);
     }
-    // Recalculate delayed count
-    this.stats.delayedJobs = this.delayedJobIds.size;
-    // Clear temporal index for this queue
-    this.clearTemporalIndexForQueue(queue);
+
+    this.stats.delayedJobs = this.temporalManager.delayedCount;
+    this.temporalManager.clearIndexForQueue(queue);
 
     this.queues.delete(queue);
-    this.dlq.delete(queue);
-    this.uniqueKeys.delete(queue);
-    this.queueState.delete(queue);
+    this.uniqueKeyManager.clearQueue(queue);
+    this.limiterManager.deleteQueue(queue);
     this.activeGroups.delete(queue);
-    this.rateLimiters.delete(queue);
-    this.concurrencyLimiters.delete(queue);
   }
 }

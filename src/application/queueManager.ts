@@ -16,15 +16,9 @@ import { WorkerManager } from './workerManager';
 import { EventsManager } from './eventsManager';
 import { RWLock } from '../shared/lock';
 import { shardIndex, SHARD_COUNT } from '../shared/hash';
-import { pushJob, pushJobBatch, type PushContext } from './operations/push';
-import { pullJob, pullJobBatch, type PullContext } from './operations/pull';
-import {
-  ackJob,
-  ackJobBatch,
-  ackJobBatchWithResults,
-  failJob,
-  type AckContext,
-} from './operations/ack';
+import { pushJob, pushJobBatch } from './operations/push';
+import { pullJob, pullJobBatch } from './operations/pull';
+import { ackJob, ackJobBatch, ackJobBatchWithResults, failJob } from './operations/ack';
 import * as queueControl from './operations/queueControl';
 import * as jobMgmt from './operations/jobManagement';
 import * as queryOps from './operations/queryOperations';
@@ -33,14 +27,13 @@ import * as logsOps from './jobLogsManager';
 import { generatePrometheusMetrics } from './metricsExporter';
 import { LRUMap, BoundedSet, BoundedMap, type SetLike } from '../shared/lru';
 
-// Import extracted modules
-import type { QueueManagerConfig, LockContext, BackgroundContext, StatsContext } from './types';
+import type { QueueManagerConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import * as lockMgr from './lockManager';
 import * as bgTasks from './backgroundTasks';
 import * as statsMgr from './statsManager';
+import { ContextFactory, type ContextDependencies, type ContextCallbacks } from './contextFactory';
 
-// Re-export config type for external use
 export type { QueueManagerConfig };
 
 /**
@@ -69,7 +62,7 @@ export class QueueManager {
   // Two-phase stall detection
   private readonly stalledCandidates = new Set<JobId>();
 
-  // Lock-based job ownership tracking (BullMQ-style)
+  // Lock-based job ownership tracking
   private readonly jobLocks = new Map<JobId, JobLock>();
   private readonly clientJobs = new Map<string, Set<JobId>>();
 
@@ -96,8 +89,11 @@ export class QueueManager {
   // Background task handles
   private readonly backgroundTaskHandles: bgTasks.BackgroundTaskHandles | null = null;
 
-  // Queue names cache for O(1) listQueues
+  // Queue names cache
   private readonly queueNamesCache = new Set<string>();
+
+  // Context factory
+  private readonly contextFactory: ContextFactory;
 
   constructor(config: QueueManagerConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -130,34 +126,26 @@ export class QueueManager {
     this.workerManager = new WorkerManager();
     this.eventsManager = new EventsManager(this.webhookManager);
 
+    // Initialize context factory
+    this.contextFactory = new ContextFactory(
+      this.getContextDependencies(),
+      this.getContextCallbacks()
+    );
+
     // Load and start
-    bgTasks.recover(this.getBackgroundContext());
-    // Load cron jobs from storage
+    bgTasks.recover(this.contextFactory.getBackgroundContext());
     if (this.storage) {
       this.cronScheduler.load(this.storage.loadCronJobs());
     }
     this.backgroundTaskHandles = bgTasks.startBackgroundTasks(
-      this.getBackgroundContext(),
+      this.contextFactory.getBackgroundContext(),
       this.cronScheduler
     );
   }
 
-  // ============ Context Builders ============
+  // ============ Context Dependencies ============
 
-  private getLockContext(): LockContext {
-    return {
-      jobIndex: this.jobIndex,
-      jobLocks: this.jobLocks,
-      clientJobs: this.clientJobs,
-      processingShards: this.processingShards,
-      processingLocks: this.processingLocks,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      eventsManager: this.eventsManager,
-    };
-  }
-
-  private getBackgroundContext(): BackgroundContext {
+  private getContextDependencies(): ContextDependencies {
     return {
       config: this.config,
       storage: this.storage,
@@ -179,72 +167,17 @@ export class QueueManager {
       webhookManager: this.webhookManager,
       metrics: this.metrics,
       startTime: this.startTime,
+      maxLogsPerJob: this.maxLogsPerJob,
+    };
+  }
+
+  private getContextCallbacks(): ContextCallbacks {
+    return {
       fail: this.fail.bind(this),
       registerQueueName: this.registerQueueName.bind(this),
       unregisterQueueName: this.unregisterQueueName.bind(this),
-    };
-  }
-
-  private getStatsContext(): StatsContext {
-    return {
-      shards: this.shards,
-      processingShards: this.processingShards,
-      completedJobs: this.completedJobs,
-      jobIndex: this.jobIndex,
-      jobResults: this.jobResults,
-      jobLogs: this.jobLogs,
-      customIdMap: this.customIdMap,
-      jobLocks: this.jobLocks,
-      clientJobs: this.clientJobs,
-      pendingDepChecks: this.pendingDepChecks,
-      stalledCandidates: this.stalledCandidates,
-      metrics: this.metrics,
-      startTime: this.startTime,
-    };
-  }
-
-  private getPushContext(): PushContext {
-    return {
-      storage: this.storage,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      completedJobs: this.completedJobs,
-      customIdMap: this.customIdMap,
-      jobIndex: this.jobIndex,
-      totalPushed: this.metrics.totalPushed,
-      broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
-    };
-  }
-
-  private getPullContext(): PullContext {
-    return {
-      storage: this.storage,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      processingShards: this.processingShards,
-      processingLocks: this.processingLocks,
-      jobIndex: this.jobIndex,
-      totalPulled: this.metrics.totalPulled,
-      broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
-    };
-  }
-
-  private getAckContext(): AckContext {
-    return {
-      storage: this.storage,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      processingShards: this.processingShards,
-      processingLocks: this.processingLocks,
-      completedJobs: this.completedJobs,
-      jobResults: this.jobResults,
-      jobIndex: this.jobIndex,
-      totalCompleted: this.metrics.totalCompleted,
-      totalFailed: this.metrics.totalFailed,
-      broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
       onJobCompleted: this.onJobCompleted.bind(this),
       onJobsCompleted: this.onJobsCompleted.bind(this),
-      needsBroadcast: this.eventsManager.needsBroadcast.bind(this.eventsManager),
       hasPendingDeps: this.hasPendingDeps.bind(this),
       onRepeat: this.handleRepeat.bind(this),
     };
@@ -275,54 +208,20 @@ export class QueueManager {
     });
   }
 
-  private getJobMgmtContext(): jobMgmt.JobManagementContext {
-    return {
-      storage: this.storage,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      processingShards: this.processingShards,
-      processingLocks: this.processingLocks,
-      jobIndex: this.jobIndex,
-      webhookManager: this.webhookManager,
-    };
-  }
-
-  private getQueryContext(): queryOps.QueryContext {
-    return {
-      storage: this.storage,
-      shards: this.shards,
-      shardLocks: this.shardLocks,
-      processingShards: this.processingShards,
-      processingLocks: this.processingLocks,
-      jobIndex: this.jobIndex,
-      completedJobs: this.completedJobs,
-      jobResults: this.jobResults,
-      customIdMap: this.customIdMap,
-    };
-  }
-
-  private getDlqContext(): dlqOps.DlqContext {
-    return {
-      shards: this.shards,
-      jobIndex: this.jobIndex,
-      storage: this.storage,
-    };
-  }
-
   // ============ Core Operations ============
 
   async push(queue: string, input: JobInput): Promise<Job> {
     this.registerQueueName(queue);
-    return pushJob(queue, input, this.getPushContext());
+    return pushJob(queue, input, this.contextFactory.getPushContext());
   }
 
   async pushBatch(queue: string, inputs: JobInput[]): Promise<JobId[]> {
     this.registerQueueName(queue);
-    return pushJobBatch(queue, inputs, this.getPushContext());
+    return pushJobBatch(queue, inputs, this.contextFactory.getPushContext());
   }
 
   async pull(queue: string, timeoutMs: number = 0): Promise<Job | null> {
-    return pullJob(queue, timeoutMs, this.getPullContext());
+    return pullJob(queue, timeoutMs, this.contextFactory.getPullContext());
   }
 
   async pullWithLock(
@@ -331,14 +230,14 @@ export class QueueManager {
     timeoutMs: number = 0,
     lockTtl: number = DEFAULT_LOCK_TTL
   ): Promise<{ job: Job | null; token: string | null }> {
-    const job = await pullJob(queue, timeoutMs, this.getPullContext());
+    const job = await pullJob(queue, timeoutMs, this.contextFactory.getPullContext());
     if (!job) return { job: null, token: null };
-    const token = lockMgr.createLock(job.id, owner, this.getLockContext(), lockTtl);
+    const token = lockMgr.createLock(job.id, owner, this.contextFactory.getLockContext(), lockTtl);
     return { job, token };
   }
 
   async pullBatch(queue: string, count: number, timeoutMs: number = 0): Promise<Job[]> {
-    return pullJobBatch(queue, count, timeoutMs, this.getPullContext());
+    return pullJobBatch(queue, count, timeoutMs, this.contextFactory.getPullContext());
   }
 
   async pullBatchWithLock(
@@ -348,36 +247,42 @@ export class QueueManager {
     timeoutMs: number = 0,
     lockTtl: number = DEFAULT_LOCK_TTL
   ): Promise<{ jobs: Job[]; tokens: string[] }> {
-    const jobs = await pullJobBatch(queue, count, timeoutMs, this.getPullContext());
+    const jobs = await pullJobBatch(queue, count, timeoutMs, this.contextFactory.getPullContext());
     const tokens: string[] = [];
     for (const job of jobs) {
-      const token = lockMgr.createLock(job.id, owner, this.getLockContext(), lockTtl);
+      const token = lockMgr.createLock(
+        job.id,
+        owner,
+        this.contextFactory.getLockContext(),
+        lockTtl
+      );
       tokens.push(token ?? '');
     }
     return { jobs, tokens };
   }
 
   async ack(jobId: JobId, result?: unknown, token?: string): Promise<void> {
-    if (token && !lockMgr.verifyLock(jobId, token, this.getLockContext())) {
+    if (token && !lockMgr.verifyLock(jobId, token, this.contextFactory.getLockContext())) {
       throw new Error(`Invalid or expired lock token for job ${jobId}`);
     }
-    await ackJob(jobId, result, this.getAckContext());
-    lockMgr.releaseLock(jobId, this.getLockContext(), token);
+    await ackJob(jobId, result, this.contextFactory.getAckContext());
+    lockMgr.releaseLock(jobId, this.contextFactory.getLockContext(), token);
   }
 
   async ackBatch(jobIds: JobId[], tokens?: string[]): Promise<void> {
+    const lockCtx = this.contextFactory.getLockContext();
     if (tokens?.length === jobIds.length) {
       for (let i = 0; i < jobIds.length; i++) {
         const t = tokens[i];
-        if (t && !lockMgr.verifyLock(jobIds[i], t, this.getLockContext())) {
+        if (t && !lockMgr.verifyLock(jobIds[i], t, lockCtx)) {
           throw new Error(`Invalid or expired lock token for job ${jobIds[i]}`);
         }
       }
     }
-    await ackJobBatch(jobIds, this.getAckContext());
+    await ackJobBatch(jobIds, this.contextFactory.getAckContext());
     if (tokens) {
       for (let i = 0; i < jobIds.length; i++) {
-        lockMgr.releaseLock(jobIds[i], this.getLockContext(), tokens[i]);
+        lockMgr.releaseLock(jobIds[i], lockCtx, tokens[i]);
       }
     }
   }
@@ -385,23 +290,25 @@ export class QueueManager {
   async ackBatchWithResults(
     items: Array<{ id: JobId; result: unknown; token?: string }>
   ): Promise<void> {
+    const lockCtx = this.contextFactory.getLockContext();
     for (const item of items) {
-      if (item.token && !lockMgr.verifyLock(item.id, item.token, this.getLockContext())) {
+      if (item.token && !lockMgr.verifyLock(item.id, item.token, lockCtx)) {
         throw new Error(`Invalid or expired lock token for job ${item.id}`);
       }
     }
-    await ackJobBatchWithResults(items, this.getAckContext());
+    await ackJobBatchWithResults(items, this.contextFactory.getAckContext());
     for (const item of items) {
-      lockMgr.releaseLock(item.id, this.getLockContext(), item.token);
+      lockMgr.releaseLock(item.id, lockCtx, item.token);
     }
   }
 
   async fail(jobId: JobId, error?: string, token?: string): Promise<void> {
-    if (token && !lockMgr.verifyLock(jobId, token, this.getLockContext())) {
+    const lockCtx = this.contextFactory.getLockContext();
+    if (token && !lockMgr.verifyLock(jobId, token, lockCtx)) {
       throw new Error(`Invalid or expired lock token for job ${jobId}`);
     }
-    await failJob(jobId, error, this.getAckContext());
-    lockMgr.releaseLock(jobId, this.getLockContext(), token);
+    await failJob(jobId, error, this.contextFactory.getAckContext());
+    lockMgr.releaseLock(jobId, lockCtx, token);
   }
 
   jobHeartbeat(jobId: JobId, token?: string): boolean {
@@ -409,7 +316,7 @@ export class QueueManager {
     if (loc?.type !== 'processing') return false;
 
     if (token) {
-      return lockMgr.renewJobLock(jobId, token, this.getLockContext());
+      return lockMgr.renewJobLock(jobId, token, this.contextFactory.getLockContext());
     }
 
     const processing = this.processingShards[loc.shardIdx];
@@ -429,88 +336,88 @@ export class QueueManager {
     return count;
   }
 
-  // ============ Lock Management (delegated) ============
+  // ============ Lock Management ============
 
   createLock(jobId: JobId, owner: string, ttl: number = DEFAULT_LOCK_TTL): LockToken | null {
-    return lockMgr.createLock(jobId, owner, this.getLockContext(), ttl);
+    return lockMgr.createLock(jobId, owner, this.contextFactory.getLockContext(), ttl);
   }
 
   verifyLock(jobId: JobId, token: string): boolean {
-    return lockMgr.verifyLock(jobId, token, this.getLockContext());
+    return lockMgr.verifyLock(jobId, token, this.contextFactory.getLockContext());
   }
 
   renewJobLock(jobId: JobId, token: string, newTtl?: number): boolean {
-    return lockMgr.renewJobLock(jobId, token, this.getLockContext(), newTtl);
+    return lockMgr.renewJobLock(jobId, token, this.contextFactory.getLockContext(), newTtl);
   }
 
   renewJobLockBatch(items: Array<{ id: JobId; token: string; ttl?: number }>): string[] {
-    return lockMgr.renewJobLockBatch(items, this.getLockContext());
+    return lockMgr.renewJobLockBatch(items, this.contextFactory.getLockContext());
   }
 
   releaseLock(jobId: JobId, token?: string): boolean {
-    return lockMgr.releaseLock(jobId, this.getLockContext(), token);
+    return lockMgr.releaseLock(jobId, this.contextFactory.getLockContext(), token);
   }
 
   getLockInfo(jobId: JobId): JobLock | null {
-    return lockMgr.getLockInfo(jobId, this.getLockContext());
+    return lockMgr.getLockInfo(jobId, this.contextFactory.getLockContext());
   }
 
-  // ============ Client-Job Tracking (delegated) ============
+  // ============ Client-Job Tracking ============
 
   registerClientJob(clientId: string, jobId: JobId): void {
-    lockMgr.registerClientJob(clientId, jobId, this.getLockContext());
+    lockMgr.registerClientJob(clientId, jobId, this.contextFactory.getLockContext());
   }
 
   unregisterClientJob(clientId: string | undefined, jobId: JobId): void {
-    lockMgr.unregisterClientJob(clientId, jobId, this.getLockContext());
+    lockMgr.unregisterClientJob(clientId, jobId, this.contextFactory.getLockContext());
   }
 
   releaseClientJobs(clientId: string): Promise<number> {
-    return lockMgr.releaseClientJobs(clientId, this.getLockContext());
+    return lockMgr.releaseClientJobs(clientId, this.contextFactory.getLockContext());
   }
 
-  // ============ Query Operations (delegated) ============
+  // ============ Query Operations ============
 
   async getJob(jobId: JobId): Promise<Job | null> {
-    return queryOps.getJob(jobId, this.getQueryContext());
+    return queryOps.getJob(jobId, this.contextFactory.getQueryContext());
   }
 
   getResult(jobId: JobId): unknown {
-    return queryOps.getJobResult(jobId, this.getQueryContext());
+    return queryOps.getJobResult(jobId, this.contextFactory.getQueryContext());
   }
 
   getJobByCustomId(customId: string): Job | null {
-    return queryOps.getJobByCustomId(customId, this.getQueryContext());
+    return queryOps.getJobByCustomId(customId, this.contextFactory.getQueryContext());
   }
 
   getProgress(jobId: JobId) {
-    return queryOps.getJobProgress(jobId, this.getQueryContext());
+    return queryOps.getJobProgress(jobId, this.contextFactory.getQueryContext());
   }
 
   count(queue: string): number {
-    return queueControl.getQueueCount(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    return queueControl.getQueueCount(queue, this.contextFactory.getQueueControlContext());
   }
 
-  // ============ Queue Control (delegated) ============
+  // ============ Queue Control ============
 
   pause(queue: string): void {
-    queueControl.pauseQueue(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    queueControl.pauseQueue(queue, this.contextFactory.getQueueControlContext());
   }
 
   resume(queue: string): void {
-    queueControl.resumeQueue(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    queueControl.resumeQueue(queue, this.contextFactory.getQueueControlContext());
   }
 
   isPaused(queue: string): boolean {
-    return queueControl.isQueuePaused(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    return queueControl.isQueuePaused(queue, this.contextFactory.getQueueControlContext());
   }
 
   drain(queue: string): number {
-    return queueControl.drainQueue(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    return queueControl.drainQueue(queue, this.contextFactory.getQueueControlContext());
   }
 
   obliterate(queue: string): void {
-    queueControl.obliterateQueue(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    queueControl.obliterateQueue(queue, this.contextFactory.getQueueControlContext());
     this.unregisterQueueName(queue);
   }
 
@@ -530,7 +437,7 @@ export class QueueManager {
     return queueControl.cleanQueue(
       queue,
       graceMs,
-      { shards: this.shards, jobIndex: this.jobIndex },
+      this.contextFactory.getQueueControlContext(),
       state,
       limit
     );
@@ -551,89 +458,29 @@ export class QueueManager {
       asc?: boolean;
     } = {}
   ): Job[] {
-    const { state, start = 0, end = 100, asc = true } = options;
     const idx = shardIndex(queue);
-    const shard = this.shards[idx];
-    const now = Date.now();
-    const jobs: Job[] = [];
-
-    if (!state || state === 'waiting') {
-      jobs.push(
-        ...shard
-          .getQueue(queue)
-          .values()
-          .filter((j) => j.runAt <= now)
-      );
-    }
-    if (!state || state === 'delayed') {
-      jobs.push(
-        ...shard
-          .getQueue(queue)
-          .values()
-          .filter((j) => j.runAt > now)
-      );
-    }
-    if (!state || state === 'active') {
-      for (let i = 0; i < SHARD_COUNT; i++) {
-        for (const job of this.processingShards[i].values()) {
-          if (job.queue === queue) jobs.push(job);
-        }
-      }
-    }
-    if (!state || state === 'failed') {
-      jobs.push(...shard.getDlq(queue));
-    }
-
-    jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
-    return jobs.slice(start, end);
+    return queryOps.getJobs(queue, idx, options, {
+      ...this.contextFactory.getQueryContext(),
+      shardCount: SHARD_COUNT,
+    });
   }
 
-  // ============ DLQ Operations (delegated) ============
+  // ============ DLQ Operations ============
 
   getDlq(queue: string, count?: number): Job[] {
-    return dlqOps.getDlqJobs(queue, this.getDlqContext(), count);
+    return dlqOps.getDlqJobs(queue, this.contextFactory.getDlqContext(), count);
   }
 
   retryDlq(queue: string, jobId?: JobId): number {
-    return dlqOps.retryDlqJobs(queue, this.getDlqContext(), jobId);
+    return dlqOps.retryDlqJobs(queue, this.contextFactory.getDlqContext(), jobId);
   }
 
   purgeDlq(queue: string): number {
-    return dlqOps.purgeDlqJobs(queue, this.getDlqContext());
+    return dlqOps.purgeDlqJobs(queue, this.contextFactory.getDlqContext());
   }
 
   retryCompleted(queue: string, jobId?: JobId): number {
-    if (jobId) {
-      if (!this.completedJobs.has(jobId)) return 0;
-      const job = this.storage?.getJob(jobId);
-      if (job?.queue !== queue) return 0;
-      return this.requeueCompletedJob(job);
-    }
-    let count = 0;
-    for (const id of this.completedJobs) {
-      const job = this.storage?.getJob(id);
-      if (job?.queue === queue) count += this.requeueCompletedJob(job);
-    }
-    return count;
-  }
-
-  private requeueCompletedJob(job: Job): number {
-    job.attempts = 0;
-    job.startedAt = null;
-    job.completedAt = null;
-    job.runAt = Date.now();
-    job.progress = 0;
-
-    const idx = shardIndex(job.queue);
-    const shard = this.shards[idx];
-    shard.getQueue(job.queue).push(job);
-    shard.incrementQueued(job.id, false, job.createdAt, job.queue, job.runAt);
-    this.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
-    this.completedJobs.delete(job.id);
-    this.jobResults.delete(job.id);
-    this.storage?.updateForRetry(job);
-    shard.notify();
-    return 1;
+    return dlqOps.retryCompletedJobs(queue, this.contextFactory.getRetryCompletedContext(), jobId);
   }
 
   // ============ Rate Limiting ============
@@ -654,61 +501,53 @@ export class QueueManager {
     this.shards[shardIndex(queue)].clearConcurrency(queue);
   }
 
-  // ============ Job Management (delegated) ============
+  // ============ Job Management ============
 
   async cancel(jobId: JobId): Promise<boolean> {
-    return jobMgmt.cancelJob(jobId, this.getJobMgmtContext());
+    return jobMgmt.cancelJob(jobId, this.contextFactory.getJobMgmtContext());
   }
 
   async updateProgress(jobId: JobId, progress: number, message?: string): Promise<boolean> {
-    return jobMgmt.updateJobProgress(jobId, progress, this.getJobMgmtContext(), message);
-  }
-
-  async updateJobData(jobId: JobId, data: unknown): Promise<boolean> {
-    return jobMgmt.updateJobData(jobId, data, this.getJobMgmtContext());
-  }
-
-  async changePriority(jobId: JobId, priority: number): Promise<boolean> {
-    return jobMgmt.changeJobPriority(jobId, priority, this.getJobMgmtContext());
-  }
-
-  async promote(jobId: JobId): Promise<boolean> {
-    return jobMgmt.promoteJob(jobId, this.getJobMgmtContext());
-  }
-
-  async moveToDelayed(jobId: JobId, delay: number): Promise<boolean> {
-    return jobMgmt.moveJobToDelayed(jobId, delay, this.getJobMgmtContext());
-  }
-
-  async discard(jobId: JobId): Promise<boolean> {
-    return jobMgmt.discardJob(jobId, this.getJobMgmtContext());
-  }
-
-  // ============ Job Logs (delegated) ============
-
-  addLog(jobId: JobId, message: string, level: 'info' | 'warn' | 'error' = 'info'): boolean {
-    return logsOps.addJobLog(
+    return jobMgmt.updateJobProgress(
       jobId,
-      message,
-      { jobIndex: this.jobIndex, jobLogs: this.jobLogs, maxLogsPerJob: this.maxLogsPerJob },
-      level
+      progress,
+      this.contextFactory.getJobMgmtContext(),
+      message
     );
   }
 
+  async updateJobData(jobId: JobId, data: unknown): Promise<boolean> {
+    return jobMgmt.updateJobData(jobId, data, this.contextFactory.getJobMgmtContext());
+  }
+
+  async changePriority(jobId: JobId, priority: number): Promise<boolean> {
+    return jobMgmt.changeJobPriority(jobId, priority, this.contextFactory.getJobMgmtContext());
+  }
+
+  async promote(jobId: JobId): Promise<boolean> {
+    return jobMgmt.promoteJob(jobId, this.contextFactory.getJobMgmtContext());
+  }
+
+  async moveToDelayed(jobId: JobId, delay: number): Promise<boolean> {
+    return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
+  }
+
+  async discard(jobId: JobId): Promise<boolean> {
+    return jobMgmt.discardJob(jobId, this.contextFactory.getJobMgmtContext());
+  }
+
+  // ============ Job Logs ============
+
+  addLog(jobId: JobId, message: string, level: 'info' | 'warn' | 'error' = 'info'): boolean {
+    return logsOps.addJobLog(jobId, message, this.contextFactory.getLogsContext(), level);
+  }
+
   getLogs(jobId: JobId): JobLogEntry[] {
-    return logsOps.getJobLogs(jobId, {
-      jobIndex: this.jobIndex,
-      jobLogs: this.jobLogs,
-      maxLogsPerJob: this.maxLogsPerJob,
-    });
+    return logsOps.getJobLogs(jobId, this.contextFactory.getLogsContext());
   }
 
   clearLogs(jobId: JobId): void {
-    logsOps.clearJobLogs(jobId, {
-      jobIndex: this.jobIndex,
-      jobLogs: this.jobLogs,
-      maxLogsPerJob: this.maxLogsPerJob,
-    });
+    logsOps.clearJobLogs(jobId, this.contextFactory.getLogsContext());
   }
 
   // ============ Metrics ============
@@ -759,7 +598,6 @@ export class QueueManager {
     return this.completedJobs;
   }
 
-  /** Expose shards for testing (internal use only) */
   getShards(): Shard[] {
     return this.shards;
   }
@@ -779,18 +617,18 @@ export class QueueManager {
     return false;
   }
 
-  // ============ Stats (delegated) ============
+  // ============ Stats ============
 
   getStats() {
-    return statsMgr.getStats(this.getStatsContext(), this.cronScheduler);
+    return statsMgr.getStats(this.contextFactory.getStatsContext(), this.cronScheduler);
   }
 
   getMemoryStats() {
-    return statsMgr.getMemoryStats(this.getStatsContext());
+    return statsMgr.getMemoryStats(this.contextFactory.getStatsContext());
   }
 
   compactMemory(): void {
-    statsMgr.compactMemory(this.getStatsContext());
+    statsMgr.compactMemory(this.contextFactory.getStatsContext());
   }
 
   // ============ Lifecycle ============

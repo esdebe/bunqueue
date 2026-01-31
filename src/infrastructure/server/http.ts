@@ -6,22 +6,24 @@
 import type { Server, ServerWebSocket } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
 import { handleCommand, type HandlerContext } from './handler';
-import { parseCommand, serializeResponse, errorResponse } from './protocol';
 import { constantTimeEqual, uuid } from '../../shared/hash';
 import type { JobEvent } from '../../domain/types/queue';
-import { httpLog, wsLog } from '../../shared/logger';
+import { httpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
-import { VERSION } from '../../shared/version';
-
-/** Singleton TextEncoder for SSE messages - avoids allocation per message */
-const textEncoder = new TextEncoder();
-
-/** Singleton TextDecoder for WebSocket messages */
-const textDecoder = new TextDecoder();
+import { SseHandler } from './sseHandler';
+import { WsHandler, type WsData } from './wsHandler';
+import {
+  jsonResponse,
+  corsResponse,
+  healthEndpoint,
+  gcEndpoint,
+  heapStatsEndpoint,
+  statsEndpoint,
+  metricsEndpoint,
+} from './httpEndpoints';
 
 /**
- * Validate auth token against valid tokens set - O(n) but single function
- * Uses constant-time comparison to prevent timing attacks
+ * Validate auth token against valid tokens set
  */
 function validateAuthToken(token: string, authTokens: Set<string>): boolean {
   for (const validToken of authTokens) {
@@ -34,32 +36,12 @@ function validateAuthToken(token: string, authTokens: Set<string>): boolean {
 
 /** HTTP Server configuration */
 export interface HttpServerConfig {
-  /** HTTP port (ignored if socketPath is set) */
   port?: number;
-  /** Hostname to bind (ignored if socketPath is set) */
   hostname?: string;
-  /** Unix socket path (takes priority over port/hostname) */
   socketPath?: string;
-  /** Auth tokens for authentication */
   authTokens?: string[];
-  /** CORS allowed origins */
   corsOrigins?: string[];
-  /** Require auth for metrics endpoint */
   requireAuthForMetrics?: boolean;
-}
-
-/** WebSocket client data */
-interface WsData {
-  id: string;
-  authenticated: boolean;
-  queueFilter: string | null;
-}
-
-/** SSE client tracking */
-interface SseClient {
-  id: string;
-  controller: ReadableStreamDefaultController;
-  queueFilter: string | null;
 }
 
 /**
@@ -67,39 +49,18 @@ interface SseClient {
  */
 export function createHttpServer(queueManager: QueueManager, config: HttpServerConfig) {
   const authTokens = new Set(config.authTokens ?? []);
-  const wsClients = new Map<string, ServerWebSocket<WsData>>();
-  const sseClients = new Map<string, SseClient>();
   const corsOrigins = new Set(config.corsOrigins ?? ['*']);
+  const wsHandler = new WsHandler();
+  const sseHandler = new SseHandler();
 
-  // Subscribe to queue events for WebSocket and SSE broadcast
+  // Subscribe to queue events for broadcast
   queueManager.subscribe((event: JobEvent) => {
-    const message = JSON.stringify(event);
-
-    // WebSocket clients
-    for (const [, ws] of wsClients) {
-      if (!ws.data.queueFilter || ws.data.queueFilter === event.queue) {
-        ws.send(message);
-      }
-    }
-
-    // SSE clients
-    const sseMessage = `data: ${message}\n\n`;
-    const disconnectedClients: string[] = [];
-    for (const [clientId, client] of sseClients) {
-      if (!client.queueFilter || client.queueFilter === event.queue) {
-        try {
-          client.controller.enqueue(textEncoder.encode(sseMessage));
-        } catch {
-          // Client disconnected, mark for removal
-          disconnectedClients.push(clientId);
-        }
-      }
-    }
-    // Remove disconnected clients
-    for (const clientId of disconnectedClients) {
-      sseClients.delete(clientId);
-    }
+    wsHandler.broadcast(event);
+    sseHandler.broadcast(event);
   });
+
+  // Helper to get CORS origin string
+  const getCorsOrigin = () => (corsOrigins.has('*') ? '*' : Array.from(corsOrigins).join(', '));
 
   // Fetch handler
   const fetch = async (req: Request, server: Server<WsData>) => {
@@ -111,110 +72,26 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       return corsResponse(corsOrigins);
     }
 
-    // Health check (no auth, no rate limit)
+    // Health endpoints (no auth, no rate limit)
     if (path === '/health') {
-      const stats = queueManager.getStats();
-      const uptime = process.uptime();
-      const memoryUsage = process.memoryUsage();
-
-      return jsonResponse({
-        ok: true,
-        status: 'healthy',
-        uptime: Math.floor(uptime),
-        version: VERSION,
-        queues: {
-          waiting: stats.waiting,
-          active: stats.active,
-          delayed: stats.delayed,
-          completed: stats.completed,
-          dlq: stats.dlq,
-        },
-        connections: {
-          tcp: 0, // Would need server reference
-          ws: wsClients.size,
-          sse: sseClients.size,
-        },
-        memory: {
-          heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
-          rss: Math.round(memoryUsage.rss / 1024 / 1024),
-        },
-      });
+      return healthEndpoint(queueManager, wsHandler.size, sseHandler.size);
     }
-
-    // Simple liveness probe (minimal response)
     if (path === '/healthz' || path === '/live') {
       return new Response('OK', { status: 200 });
     }
-
-    // Readiness probe (checks if server can accept work)
     if (path === '/ready') {
       return jsonResponse({ ok: true, ready: true });
     }
 
-    // Force garbage collection (for debugging memory issues)
+    // Debug endpoints
     if (path === '/gc' && req.method === 'POST') {
-      const before = process.memoryUsage();
-      if (typeof Bun !== 'undefined' && Bun.gc) {
-        Bun.gc(true); // Aggressive GC
-      }
-      queueManager.compactMemory();
-      const after = process.memoryUsage();
-      return jsonResponse({
-        ok: true,
-        before: {
-          heapUsed: Math.round(before.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(before.heapTotal / 1024 / 1024),
-          rss: Math.round(before.rss / 1024 / 1024),
-        },
-        after: {
-          heapUsed: Math.round(after.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(after.heapTotal / 1024 / 1024),
-          rss: Math.round(after.rss / 1024 / 1024),
-        },
-      });
+      return gcEndpoint(queueManager);
     }
-
-    // Heap statistics (for debugging memory leaks)
     if (path === '/heapstats' && req.method === 'GET') {
-      // Run GC first for accurate stats
-      if (typeof Bun !== 'undefined' && Bun.gc) {
-        Bun.gc(true);
-      }
-
-      // Get heap stats from bun:jsc
-      const { heapStats } = await import('bun:jsc');
-      const stats = heapStats();
-      const mem = process.memoryUsage();
-      const memStats = queueManager.getMemoryStats();
-
-      // Get top object types by count
-      const typeCounts = stats.objectTypeCounts as Record<string, number> | undefined;
-      const topTypes = typeCounts
-        ? Object.entries(typeCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 20)
-            .map(([type, count]) => ({ type, count }))
-        : [];
-
-      return jsonResponse({
-        ok: true,
-        memory: {
-          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-          rss: Math.round(mem.rss / 1024 / 1024),
-        },
-        heap: {
-          objectCount: stats.objectCount,
-          protectedCount: stats.protectedObjectCount,
-          globalCount: stats.globalObjectCount,
-        },
-        collections: memStats,
-        topObjectTypes: topTypes,
-      });
+      return heapStatsEndpoint(queueManager);
     }
 
-    // Rate limiting (use IP as client ID for HTTP)
+    // Rate limiting
     const clientIp =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       req.headers.get('x-real-ip') ??
@@ -226,100 +103,49 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     // WebSocket upgrade
     if (path === '/ws' || path.startsWith('/ws/')) {
       const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
-
       const upgraded = server.upgrade(req, {
-        data: {
-          id: uuid(),
-          authenticated: authTokens.size === 0,
-          queueFilter,
-        },
+        data: { id: uuid(), authenticated: authTokens.size === 0, queueFilter },
       });
-
-      if (!upgraded) {
-        return new Response('WebSocket upgrade failed', { status: 400 });
-      }
-      return undefined;
+      return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 400 });
     }
 
-    // SSE (Server-Sent Events) endpoint - requires auth when enabled
+    // SSE endpoint
     if (path === '/events' || path.startsWith('/events/')) {
-      // Check authentication for SSE
       if (authTokens.size > 0) {
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') ?? '';
+        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
         if (!validateAuthToken(token, authTokens)) {
           return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
         }
       }
-
       const queueFilter = path.startsWith('/events/queues/')
         ? path.slice('/events/queues/'.length)
         : null;
-
-      const clientId = uuid();
-
-      const stream = new ReadableStream({
-        start(controller) {
-          sseClients.set(clientId, {
-            id: clientId,
-            controller,
-            queueFilter,
-          });
-
-          // Send initial connection message
-          controller.enqueue(
-            textEncoder.encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
-          );
-        },
-        cancel() {
-          sseClients.delete(clientId);
-        },
-      });
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'Access-Control-Allow-Origin': corsOrigins.has('*')
-            ? '*'
-            : Array.from(corsOrigins).join(', '),
-        },
-      });
+      return sseHandler.createResponse(queueFilter, getCorsOrigin());
     }
 
-    // Prometheus metrics endpoint (auth optional via config)
+    // Prometheus metrics
     if (path === '/prometheus' && req.method === 'GET') {
       if (config.requireAuthForMetrics && authTokens.size > 0) {
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') ?? '';
+        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
         if (!validateAuthToken(token, authTokens)) {
           return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
         }
       }
-      const metrics = queueManager.getPrometheusMetrics();
-      return new Response(metrics, {
+      return new Response(queueManager.getPrometheusMetrics(), {
         headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
       });
     }
 
-    // Check authentication
+    // Check authentication for other endpoints
     if (authTokens.size > 0) {
-      const authHeader = req.headers.get('Authorization');
-      const token = authHeader?.replace('Bearer ', '') ?? '';
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
       if (!validateAuthToken(token, authTokens)) {
         return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
       }
     }
 
-    // Create handler context
-    const ctx: HandlerContext = {
-      queueManager,
-      authTokens,
-      authenticated: true,
-    };
+    const ctx: HandlerContext = { queueManager, authTokens, authenticated: true };
 
-    // Route request
     try {
       return await routeRequest(req, path, ctx, corsOrigins);
     } catch (err) {
@@ -331,55 +157,25 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
   // WebSocket handlers
   const websocket = {
     open(ws: ServerWebSocket<WsData>) {
-      wsClients.set(ws.data.id, ws);
-      wsLog.info('Client connected', { clientId: ws.data.id });
+      wsHandler.onOpen(ws);
     },
-
     async message(ws: ServerWebSocket<WsData>, message: string | Buffer) {
-      const text = typeof message === 'string' ? message : textDecoder.decode(message);
-      const cmd = parseCommand(text);
-
-      if (!cmd) {
-        ws.send(errorResponse('Invalid command'));
-        return;
-      }
-
       const ctx: HandlerContext = {
         queueManager,
         authTokens,
         authenticated: ws.data.authenticated,
       };
-
-      try {
-        const response = await handleCommand(cmd, ctx);
-
-        // Update authentication state
-        if (cmd.cmd === 'Auth' && response.ok) {
-          ws.data.authenticated = true;
-        }
-
-        ws.send(serializeResponse(response));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        ws.send(errorResponse(msg, cmd.reqId));
-      }
+      await wsHandler.onMessage(ws, message, ctx);
     },
-
     close(ws: ServerWebSocket<WsData>) {
-      wsClients.delete(ws.data.id);
-      wsLog.info('Client disconnected', { clientId: ws.data.id });
+      wsHandler.onClose(ws);
     },
   };
 
-  // Create server - Unix socket or TCP based on config
+  // Create server
   let server: Server<WsData>;
-
   if (config.socketPath) {
-    server = Bun.serve<WsData>({
-      unix: config.socketPath,
-      fetch,
-      websocket,
-    });
+    server = Bun.serve<WsData>({ unix: config.socketPath, fetch, websocket });
     httpLog.info('Server listening', { unix: config.socketPath });
   } else {
     server = Bun.serve<WsData>({
@@ -393,40 +189,19 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
   return {
     server,
-    wsClients,
-    sseClients,
-
-    /** Get WebSocket client count */
-    getWsClientCount(): number {
-      return wsClients.size;
-    },
-
-    /** Get SSE client count */
-    getSseClientCount(): number {
-      return sseClients.size;
-    },
-
-    /** Stop the server */
+    wsClients: wsHandler.getClients(),
+    sseClients: sseHandler.getClients(),
+    getWsClientCount: () => wsHandler.size,
+    getSseClientCount: () => sseHandler.size,
     stop(): void {
-      // Close all SSE connections
-      for (const [, client] of sseClients) {
-        try {
-          client.controller.close();
-        } catch {
-          // Ignore
-        }
-      }
-      sseClients.clear();
-
+      sseHandler.closeAll();
       void server.stop();
       httpLog.info('Server stopped');
     },
   };
 }
 
-/**
- * Route HTTP request to appropriate handler
- */
+/** Route HTTP request to handler */
 async function routeRequest(
   req: Request,
   path: string,
@@ -437,52 +212,15 @@ async function routeRequest(
 
   // Stats endpoint
   if (path === '/stats' && method === 'GET') {
-    const stats = ctx.queueManager.getStats();
-    const memStats = ctx.queueManager.getMemoryStats();
-    const mem = process.memoryUsage();
-    return jsonResponse(
-      {
-        ok: true,
-        stats: {
-          ...stats,
-          totalPushed: Number(stats.totalPushed),
-          totalPulled: Number(stats.totalPulled),
-          totalCompleted: Number(stats.totalCompleted),
-          totalFailed: Number(stats.totalFailed),
-        },
-        memory: {
-          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-          rss: Math.round(mem.rss / 1024 / 1024),
-          external: Math.round(mem.external / 1024 / 1024),
-          arrayBuffers: Math.round(mem.arrayBuffers / 1024 / 1024),
-        },
-        collections: memStats,
-      },
-      200,
-      corsOrigins
-    );
+    return statsEndpoint(ctx.queueManager, corsOrigins);
   }
 
   // Metrics endpoint
   if (path === '/metrics' && method === 'GET') {
-    const stats = ctx.queueManager.getStats();
-    return jsonResponse(
-      {
-        ok: true,
-        metrics: {
-          totalPushed: Number(stats.totalPushed),
-          totalPulled: Number(stats.totalPulled),
-          totalCompleted: Number(stats.totalCompleted),
-          totalFailed: Number(stats.totalFailed),
-        },
-      },
-      200,
-      corsOrigins
-    );
+    return metricsEndpoint(ctx.queueManager, corsOrigins);
   }
 
-  // Queue operations: POST /queues/:queue/jobs
+  // Queue operations: POST/GET /queues/:queue/jobs
   const queueJobsMatch = path.match(/^\/queues\/([^/]+)\/jobs$/);
   if (queueJobsMatch) {
     const queue = decodeURIComponent(queueJobsMatch[1]);
@@ -500,7 +238,6 @@ async function routeRequest(
     }
 
     if (method === 'GET') {
-      // Pull job
       const timeout = parseInt(new URL(req.url).searchParams.get('timeout') ?? '0');
       const cmd = { cmd: 'PULL' as const, queue, timeout };
       const response = await handleCommand(cmd, ctx);
@@ -512,13 +249,11 @@ async function routeRequest(
   const jobMatch = path.match(/^\/jobs\/(\d+)$/);
   if (jobMatch) {
     const id = jobMatch[1];
-
     if (method === 'GET') {
       const cmd = { cmd: 'GetJob' as const, id };
       const response = await handleCommand(cmd, ctx);
       return jsonResponse(response, response.ok ? 200 : 404, corsOrigins);
     }
-
     if (method === 'DELETE') {
       const cmd = { cmd: 'Cancel' as const, id };
       const response = await handleCommand(cmd, ctx);
@@ -546,38 +281,7 @@ async function routeRequest(
     return jsonResponse(response, response.ok ? 200 : 400, corsOrigins);
   }
 
-  // Not found
   return jsonResponse({ ok: false, error: 'Not found' }, 404, corsOrigins);
-}
-
-/** Create JSON response with CORS headers */
-function jsonResponse(data: unknown, status = 200, corsOrigins?: Set<string>): Response {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (corsOrigins) {
-    headers['Access-Control-Allow-Origin'] = corsOrigins.has('*')
-      ? '*'
-      : Array.from(corsOrigins).join(', ');
-  }
-
-  return new Response(JSON.stringify(data), { status, headers });
-}
-
-/** Create CORS preflight response */
-function corsResponse(corsOrigins: Set<string>): Response {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': corsOrigins.has('*')
-        ? '*'
-        : Array.from(corsOrigins).join(', '),
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
 }
 
 export type HttpServer = ReturnType<typeof createHttpServer>;

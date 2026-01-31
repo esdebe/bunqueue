@@ -183,8 +183,7 @@ function cleanEmptyQueues(ctx: BackgroundContext): void {
       shard.uniqueKeys.delete(queueName);
       shard.queueState.delete(queueName);
       shard.activeGroups.delete(queueName);
-      shard.rateLimiters.delete(queueName);
-      shard.concurrencyLimiters.delete(queueName);
+      shard.clearQueueLimiters(queueName);
       shard.stallConfig.delete(queueName);
       shard.dlqConfig.delete(queueName);
       ctx.unregisterQueueName(queueName);

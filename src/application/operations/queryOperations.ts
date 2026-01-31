@@ -80,3 +80,56 @@ export function getJobProgress(
 
   return { progress: job.progress, message: job.progressMessage };
 }
+
+/** Extended context for getJobs (needs SHARD_COUNT) */
+export interface GetJobsContext extends QueryContext {
+  shardCount: number;
+}
+
+/** Get jobs from queue with filters */
+export function getJobs(
+  queue: string,
+  shardIdx: number,
+  options: {
+    state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+    start?: number;
+    end?: number;
+    asc?: boolean;
+  },
+  ctx: GetJobsContext
+): Job[] {
+  const { state, start = 0, end = 100, asc = true } = options;
+  const shard = ctx.shards[shardIdx];
+  const now = Date.now();
+  const jobs: Job[] = [];
+
+  if (!state || state === 'waiting') {
+    jobs.push(
+      ...shard
+        .getQueue(queue)
+        .values()
+        .filter((j) => j.runAt <= now)
+    );
+  }
+  if (!state || state === 'delayed') {
+    jobs.push(
+      ...shard
+        .getQueue(queue)
+        .values()
+        .filter((j) => j.runAt > now)
+    );
+  }
+  if (!state || state === 'active') {
+    for (let i = 0; i < ctx.shardCount; i++) {
+      for (const job of ctx.processingShards[i].values()) {
+        if (job.queue === queue) jobs.push(job);
+      }
+    }
+  }
+  if (!state || state === 'failed') {
+    jobs.push(...shard.getDlq(queue));
+  }
+
+  jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+  return jobs.slice(start, end);
+}
