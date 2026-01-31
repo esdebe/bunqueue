@@ -128,6 +128,13 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
     ? `${bold}${options.httpSocketPath}${reset} ${dim}(unix)${reset}`
     : `${bold}${options.host}:${options.httpPort}${reset}`;
 
+  // Socket mode display
+  const hasUnixSockets =
+    options.tcpSocketPath !== undefined || options.httpSocketPath !== undefined;
+  const socketDisplay = hasUnixSockets
+    ? `${green}enabled${reset} ${dim}(${options.tcpSocketPath ? 'TCP' : ''}${options.tcpSocketPath && options.httpSocketPath ? '+' : ''}${options.httpSocketPath ? 'HTTP' : ''})${reset}`
+    : `${dim}disabled${reset}`;
+
   console.log(`
 ${magenta}        (\\(\\        ${reset}
 ${magenta}        ( -.-)      ${bold}bunqueue${reset} ${dim}v${VERSION}${reset}
@@ -137,6 +144,7 @@ ${dim}────────────────────────�
 
   ${green}●${reset} TCP    ${tcpDisplay}
   ${green}●${reset} HTTP   ${httpDisplay}
+  ${yellow}●${reset} Socket ${socketDisplay}
   ${yellow}●${reset} Data   ${options.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${authTokens ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
 

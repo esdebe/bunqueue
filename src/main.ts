@@ -99,6 +99,12 @@ function printBanner(config: ServerConfig): void {
     ? `${bold}${config.httpSocketPath}${reset} ${dim}(unix)${reset}`
     : `${bold}${config.hostname}:${config.httpPort}${reset}`;
 
+  // Socket mode display
+  const hasUnixSockets = config.tcpSocketPath !== undefined || config.httpSocketPath !== undefined;
+  const socketDisplay = hasUnixSockets
+    ? `${green}enabled${reset} ${dim}(${config.tcpSocketPath ? 'TCP' : ''}${config.tcpSocketPath && config.httpSocketPath ? '+' : ''}${config.httpSocketPath ? 'HTTP' : ''})${reset}`
+    : `${dim}disabled${reset}`;
+
   console.log(`
 ${magenta}        (\\(\\        ${reset}
 ${magenta}        ( -.-)      ${bold}bunqueue${reset} ${dim}v${VERSION}${reset}
@@ -108,6 +114,7 @@ ${dim}────────────────────────�
 
   ${green}●${reset} TCP    ${tcpDisplay}
   ${green}●${reset} HTTP   ${httpDisplay}
+  ${yellow}●${reset} Socket ${socketDisplay}
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
