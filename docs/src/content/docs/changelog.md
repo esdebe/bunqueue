@@ -8,10 +8,128 @@ head:
       content: https://egeominotti.github.io/bunqueue/og/getting-started.png
 ---
 
-
 All notable changes to bunqueue are documented here.
 
-## [1.6.0] - 2026-01-30
+## [1.9.3] - 2026-01-31
+
+### Added
+- **Unix Socket Support** - TCP and HTTP servers can now bind to Unix sockets
+  - Configure via `TCP_SOCKET_PATH` and `HTTP_SOCKET_PATH` environment variables
+  - CLI flags `--tcp-socket` and `--http-socket`
+  - Lower latency for local connections
+- Socket status line in startup banner
+
+### Fixed
+- Test alignment for shard drain return type
+
+## [1.9.2] - 2026-01-30
+
+### Fixed
+- **Critical Memory Leak** - Resolved `temporalIndex` leak causing 5.5M object retention after 1M jobs
+  - Added `cleanOrphanedTemporalEntries()` method to Shard
+  - Memory now properly released after job completion with `removeOnComplete: true`
+  - `heapUsed` drops to ~6MB after processing (vs 264MB before fix)
+
+### Changed
+- Improved error logging in ackBatcher flush operations
+
+## [1.9.1] - 2026-01-29
+
+### Added
+- **Two-Phase Stall Detection** - BullMQ-style stall detection to prevent false positives
+  - Jobs marked as candidates on first check, confirmed stalled on second
+  - Prevents requeuing jobs that complete between checks
+- `stallTimeout` support in client push options
+- Advanced health checks for TCP connections
+
+### Fixed
+- Defensive checks and cleanup for TCP pool and worker
+- Server banner alignment between CLI and main.ts
+
+### Changed
+- Modularized client code into separate TCP, Worker, Queue, and Sandboxed modules
+
+## [1.9.0] - 2026-01-28
+
+### Added
+- **TCP Client** - High-performance TCP client for remote server connections
+  - Connection pooling with configurable pool size
+  - Heartbeat keepalive mechanism
+  - Batch pull/ACK operations (PULLB, ACKB with results)
+  - Long polling support
+  - Ping/pong health checks
+- 4.7x faster push throughput with optimized TCP client
+
+### Changed
+- Connection pool enabled by default for TCP clients
+- Improved ESLint compliance across TCP client code
+
+## [1.6.8] - 2026-01-27
+
+### Fixed
+- Renamed bunq to bunqueue in Dockerfile
+- CLI version now read dynamically from package.json
+
+### Changed
+- Centralized version in `shared/version.ts`
+
+## [1.6.7] - 2026-01-26
+
+### Added
+- Dynamic version badge in documentation
+- Mobile-responsive layout improvements
+- Comprehensive stress tests
+
+## [1.6.6] - 2026-01-25
+
+### Fixed
+- Counter updates when recovering jobs from SQLite on restart
+
+## [1.6.5] - 2026-01-24
+
+### Fixed
+- Production readiness improvements with critical fixes
+
+## [1.6.4] - 2026-01-23
+
+### Fixed
+- SQLite persistence for DLQ entries
+- Client SDK persistence issues
+
+## [1.6.3] - 2026-01-22
+
+### Added
+- **MCP Server** - Model Context Protocol server for AI assistant integration
+  - Queue management tools for Claude, Cursor, and other AI assistants
+  - BigInt serialization handling in stats
+
+### Fixed
+- Deployment guide documentation corrections
+
+## [1.6.2] - 2026-01-21
+
+### Added
+- **SandboxedWorker** - Isolated worker processes for crash protection
+- Hono and Elysia integration guides
+- Section-specific OG images and sitemap
+
+### Changed
+- Enhanced SEO with Open Graph and Twitter meta tags
+- Improved mobile responsiveness in documentation
+
+## [1.6.1] - 2026-01-20
+
+### Added
+- Bunny ASCII art in server startup and CLI help
+- Professional benchmark charts using QuickChart.io
+- BullMQ vs bunqueue comparison benchmarks
+
+### Changed
+- Optimized event subscriptions and batch operations
+- Replaced Math.random UUID with Bun.randomUUIDv7 (10x faster)
+- High-impact algorithm optimizations
+
+## [1.6.0] - 2026-01-19
 
 ### Added
 - **Stall Detection** - Automatic recovery of unresponsive jobs
@@ -36,7 +154,7 @@ All notable changes to bunqueue are documented here.
 ### Fixed
 - DLQ entry return type consistency
 
-## [1.5.0] - 2026-01-28
+## [1.5.0] - 2026-01-15
 
 ### Added
 - S3 backup with configurable retention
@@ -47,7 +165,7 @@ All notable changes to bunqueue are documented here.
 - Improved backup compression
 - Better error messages for S3 configuration
 
-## [1.4.0] - 2026-01-25
+## [1.4.0] - 2026-01-10
 
 ### Added
 - Rate limiting per queue
@@ -59,7 +177,7 @@ All notable changes to bunqueue are documented here.
 - Optimized batch operations (3x faster)
 - Reduced memory usage for large queues
 
-## [1.3.0] - 2026-01-20
+## [1.3.0] - 2026-01-05
 
 ### Added
 - Cron job scheduling
@@ -71,7 +189,7 @@ All notable changes to bunqueue are documented here.
 - Memory leak in event listeners
 - Race condition in batch acknowledgment
 
-## [1.2.0] - 2026-01-15
+## [1.2.0] - 2025-12-28
 
 ### Added
 - Priority queues
@@ -83,7 +201,7 @@ All notable changes to bunqueue are documented here.
 - Improved SQLite schema with indexes
 - Better error handling
 
-## [1.1.0] - 2026-01-10
+## [1.1.0] - 2025-12-20
 
 ### Added
 - TCP protocol for high-performance clients
@@ -91,7 +209,7 @@ All notable changes to bunqueue are documented here.
 - Authentication tokens
 - CORS configuration
 
-## [1.0.0] - 2026-01-05
+## [1.0.0] - 2025-12-15
 
 ### Added
 - Initial release

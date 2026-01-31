@@ -3,8 +3,12 @@ import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { readFileSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Read version from root package.json
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'));
 
 export default defineConfig({
   site: 'https://egeominotti.github.io',
@@ -318,9 +322,9 @@ export default defineConfig({
             description: 'High-performance job queue for Bun. SQLite persistence, DLQ, cron jobs, S3 backups. 32x faster than BullMQ.',
             applicationCategory: 'DeveloperApplication',
             operatingSystem: 'Cross-platform',
-            softwareVersion: '1.6.3',
+            softwareVersion: pkg.version,
             datePublished: '2024-01-01',
-            dateModified: '2025-01-30',
+            dateModified: new Date().toISOString().split('T')[0],
             license: 'https://opensource.org/licenses/MIT',
             offers: {
               '@type': 'Offer',
