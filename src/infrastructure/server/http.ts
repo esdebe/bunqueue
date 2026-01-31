@@ -3,7 +3,7 @@
  * REST API and WebSocket support
  */
 
-import type { ServerWebSocket } from 'bun';
+import type { Server, ServerWebSocket } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
 import { handleCommand, type HandlerContext } from './handler';
 import { parseCommand, serializeResponse, errorResponse } from './protocol';
@@ -34,10 +34,17 @@ function validateAuthToken(token: string, authTokens: Set<string>): boolean {
 
 /** HTTP Server configuration */
 export interface HttpServerConfig {
-  port: number;
+  /** HTTP port (ignored if socketPath is set) */
+  port?: number;
+  /** Hostname to bind (ignored if socketPath is set) */
   hostname?: string;
+  /** Unix socket path (takes priority over port/hostname) */
+  socketPath?: string;
+  /** Auth tokens for authentication */
   authTokens?: string[];
+  /** CORS allowed origins */
   corsOrigins?: string[];
+  /** Require auth for metrics endpoint */
   requireAuthForMetrics?: boolean;
 }
 
@@ -94,214 +101,149 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     }
   });
 
-  const server = Bun.serve<WsData>({
-    hostname: config.hostname ?? '0.0.0.0',
-    port: config.port,
+  // Fetch handler
+  const fetch = async (req: Request, server: Server<WsData>) => {
+    const url = new URL(req.url);
+    const path = url.pathname;
 
-    async fetch(req, server) {
-      const url = new URL(req.url);
-      const path = url.pathname;
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      return corsResponse(corsOrigins);
+    }
 
-      // CORS preflight
-      if (req.method === 'OPTIONS') {
-        return corsResponse(corsOrigins);
+    // Health check (no auth, no rate limit)
+    if (path === '/health') {
+      const stats = queueManager.getStats();
+      const uptime = process.uptime();
+      const memoryUsage = process.memoryUsage();
+
+      return jsonResponse({
+        ok: true,
+        status: 'healthy',
+        uptime: Math.floor(uptime),
+        version: VERSION,
+        queues: {
+          waiting: stats.waiting,
+          active: stats.active,
+          delayed: stats.delayed,
+          completed: stats.completed,
+          dlq: stats.dlq,
+        },
+        connections: {
+          tcp: 0, // Would need server reference
+          ws: wsClients.size,
+          sse: sseClients.size,
+        },
+        memory: {
+          heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+          rss: Math.round(memoryUsage.rss / 1024 / 1024),
+        },
+      });
+    }
+
+    // Simple liveness probe (minimal response)
+    if (path === '/healthz' || path === '/live') {
+      return new Response('OK', { status: 200 });
+    }
+
+    // Readiness probe (checks if server can accept work)
+    if (path === '/ready') {
+      return jsonResponse({ ok: true, ready: true });
+    }
+
+    // Force garbage collection (for debugging memory issues)
+    if (path === '/gc' && req.method === 'POST') {
+      const before = process.memoryUsage();
+      if (typeof Bun !== 'undefined' && Bun.gc) {
+        Bun.gc(true); // Aggressive GC
+      }
+      queueManager.compactMemory();
+      const after = process.memoryUsage();
+      return jsonResponse({
+        ok: true,
+        before: {
+          heapUsed: Math.round(before.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(before.heapTotal / 1024 / 1024),
+          rss: Math.round(before.rss / 1024 / 1024),
+        },
+        after: {
+          heapUsed: Math.round(after.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(after.heapTotal / 1024 / 1024),
+          rss: Math.round(after.rss / 1024 / 1024),
+        },
+      });
+    }
+
+    // Heap statistics (for debugging memory leaks)
+    if (path === '/heapstats' && req.method === 'GET') {
+      // Run GC first for accurate stats
+      if (typeof Bun !== 'undefined' && Bun.gc) {
+        Bun.gc(true);
       }
 
-      // Health check (no auth, no rate limit)
-      if (path === '/health') {
-        const stats = queueManager.getStats();
-        const uptime = process.uptime();
-        const memoryUsage = process.memoryUsage();
+      // Get heap stats from bun:jsc
+      const { heapStats } = await import('bun:jsc');
+      const stats = heapStats();
+      const mem = process.memoryUsage();
+      const memStats = queueManager.getMemoryStats();
 
-        return jsonResponse({
-          ok: true,
-          status: 'healthy',
-          uptime: Math.floor(uptime),
-          version: VERSION,
-          queues: {
-            waiting: stats.waiting,
-            active: stats.active,
-            delayed: stats.delayed,
-            completed: stats.completed,
-            dlq: stats.dlq,
-          },
-          connections: {
-            tcp: 0, // Would need server reference
-            ws: wsClients.size,
-            sse: sseClients.size,
-          },
-          memory: {
-            heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
-            rss: Math.round(memoryUsage.rss / 1024 / 1024),
-          },
-        });
+      // Get top object types by count
+      const typeCounts = stats.objectTypeCounts as Record<string, number> | undefined;
+      const topTypes = typeCounts
+        ? Object.entries(typeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20)
+            .map(([type, count]) => ({ type, count }))
+        : [];
+
+      return jsonResponse({
+        ok: true,
+        memory: {
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+          rss: Math.round(mem.rss / 1024 / 1024),
+        },
+        heap: {
+          objectCount: stats.objectCount,
+          protectedCount: stats.protectedObjectCount,
+          globalCount: stats.globalObjectCount,
+        },
+        collections: memStats,
+        topObjectTypes: topTypes,
+      });
+    }
+
+    // Rate limiting (use IP as client ID for HTTP)
+    const clientIp =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      req.headers.get('x-real-ip') ??
+      'unknown';
+    if (!getRateLimiter().isAllowed(clientIp)) {
+      return jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429);
+    }
+
+    // WebSocket upgrade
+    if (path === '/ws' || path.startsWith('/ws/')) {
+      const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
+
+      const upgraded = server.upgrade(req, {
+        data: {
+          id: uuid(),
+          authenticated: authTokens.size === 0,
+          queueFilter,
+        },
+      });
+
+      if (!upgraded) {
+        return new Response('WebSocket upgrade failed', { status: 400 });
       }
+      return undefined;
+    }
 
-      // Simple liveness probe (minimal response)
-      if (path === '/healthz' || path === '/live') {
-        return new Response('OK', { status: 200 });
-      }
-
-      // Readiness probe (checks if server can accept work)
-      if (path === '/ready') {
-        return jsonResponse({ ok: true, ready: true });
-      }
-
-      // Force garbage collection (for debugging memory issues)
-      if (path === '/gc' && req.method === 'POST') {
-        const before = process.memoryUsage();
-        if (typeof Bun !== 'undefined' && Bun.gc) {
-          Bun.gc(true); // Aggressive GC
-        }
-        queueManager.compactMemory();
-        const after = process.memoryUsage();
-        return jsonResponse({
-          ok: true,
-          before: {
-            heapUsed: Math.round(before.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(before.heapTotal / 1024 / 1024),
-            rss: Math.round(before.rss / 1024 / 1024),
-          },
-          after: {
-            heapUsed: Math.round(after.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(after.heapTotal / 1024 / 1024),
-            rss: Math.round(after.rss / 1024 / 1024),
-          },
-        });
-      }
-
-      // Heap statistics (for debugging memory leaks)
-      if (path === '/heapstats' && req.method === 'GET') {
-        // Run GC first for accurate stats
-        if (typeof Bun !== 'undefined' && Bun.gc) {
-          Bun.gc(true);
-        }
-
-        // Get heap stats from bun:jsc
-        const { heapStats } = await import('bun:jsc');
-        const stats = heapStats();
-        const mem = process.memoryUsage();
-        const memStats = queueManager.getMemoryStats();
-
-        // Get top object types by count
-        const typeCounts = stats.objectTypeCounts as Record<string, number> | undefined;
-        const topTypes = typeCounts
-          ? Object.entries(typeCounts)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 20)
-              .map(([type, count]) => ({ type, count }))
-          : [];
-
-        return jsonResponse({
-          ok: true,
-          memory: {
-            heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-            rss: Math.round(mem.rss / 1024 / 1024),
-          },
-          heap: {
-            objectCount: stats.objectCount,
-            protectedCount: stats.protectedObjectCount,
-            globalCount: stats.globalObjectCount,
-          },
-          collections: memStats,
-          topObjectTypes: topTypes,
-        });
-      }
-
-      // Rate limiting (use IP as client ID for HTTP)
-      const clientIp =
-        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-        req.headers.get('x-real-ip') ??
-        'unknown';
-      if (!getRateLimiter().isAllowed(clientIp)) {
-        return jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429);
-      }
-
-      // WebSocket upgrade
-      if (path === '/ws' || path.startsWith('/ws/')) {
-        const queueFilter = path.startsWith('/ws/queues/')
-          ? path.slice('/ws/queues/'.length)
-          : null;
-
-        const upgraded = server.upgrade(req, {
-          data: {
-            id: uuid(),
-            authenticated: authTokens.size === 0,
-            queueFilter,
-          },
-        });
-
-        if (!upgraded) {
-          return new Response('WebSocket upgrade failed', { status: 400 });
-        }
-        return undefined;
-      }
-
-      // SSE (Server-Sent Events) endpoint - requires auth when enabled
-      if (path === '/events' || path.startsWith('/events/')) {
-        // Check authentication for SSE
-        if (authTokens.size > 0) {
-          const authHeader = req.headers.get('Authorization');
-          const token = authHeader?.replace('Bearer ', '') ?? '';
-          if (!validateAuthToken(token, authTokens)) {
-            return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-          }
-        }
-
-        const queueFilter = path.startsWith('/events/queues/')
-          ? path.slice('/events/queues/'.length)
-          : null;
-
-        const clientId = uuid();
-
-        const stream = new ReadableStream({
-          start(controller) {
-            sseClients.set(clientId, {
-              id: clientId,
-              controller,
-              queueFilter,
-            });
-
-            // Send initial connection message
-            controller.enqueue(
-              textEncoder.encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
-            );
-          },
-          cancel() {
-            sseClients.delete(clientId);
-          },
-        });
-
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-            'Access-Control-Allow-Origin': corsOrigins.has('*')
-              ? '*'
-              : Array.from(corsOrigins).join(', '),
-          },
-        });
-      }
-
-      // Prometheus metrics endpoint (auth optional via config)
-      if (path === '/prometheus' && req.method === 'GET') {
-        if (config.requireAuthForMetrics && authTokens.size > 0) {
-          const authHeader = req.headers.get('Authorization');
-          const token = authHeader?.replace('Bearer ', '') ?? '';
-          if (!validateAuthToken(token, authTokens)) {
-            return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-          }
-        }
-        const metrics = queueManager.getPrometheusMetrics();
-        return new Response(metrics, {
-          headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
-        });
-      }
-
-      // Check authentication
+    // SSE (Server-Sent Events) endpoint - requires auth when enabled
+    if (path === '/events' || path.startsWith('/events/')) {
+      // Check authentication for SSE
       if (authTokens.size > 0) {
         const authHeader = req.headers.get('Authorization');
         const token = authHeader?.replace('Bearer ', '') ?? '';
@@ -310,66 +252,144 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         }
       }
 
-      // Create handler context
+      const queueFilter = path.startsWith('/events/queues/')
+        ? path.slice('/events/queues/'.length)
+        : null;
+
+      const clientId = uuid();
+
+      const stream = new ReadableStream({
+        start(controller) {
+          sseClients.set(clientId, {
+            id: clientId,
+            controller,
+            queueFilter,
+          });
+
+          // Send initial connection message
+          controller.enqueue(
+            textEncoder.encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
+          );
+        },
+        cancel() {
+          sseClients.delete(clientId);
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': corsOrigins.has('*')
+            ? '*'
+            : Array.from(corsOrigins).join(', '),
+        },
+      });
+    }
+
+    // Prometheus metrics endpoint (auth optional via config)
+    if (path === '/prometheus' && req.method === 'GET') {
+      if (config.requireAuthForMetrics && authTokens.size > 0) {
+        const authHeader = req.headers.get('Authorization');
+        const token = authHeader?.replace('Bearer ', '') ?? '';
+        if (!validateAuthToken(token, authTokens)) {
+          return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+        }
+      }
+      const metrics = queueManager.getPrometheusMetrics();
+      return new Response(metrics, {
+        headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
+      });
+    }
+
+    // Check authentication
+    if (authTokens.size > 0) {
+      const authHeader = req.headers.get('Authorization');
+      const token = authHeader?.replace('Bearer ', '') ?? '';
+      if (!validateAuthToken(token, authTokens)) {
+        return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+      }
+    }
+
+    // Create handler context
+    const ctx: HandlerContext = {
+      queueManager,
+      authTokens,
+      authenticated: true,
+    };
+
+    // Route request
+    try {
+      return await routeRequest(req, path, ctx, corsOrigins);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Internal error';
+      return jsonResponse({ ok: false, error: message }, 500);
+    }
+  };
+
+  // WebSocket handlers
+  const websocket = {
+    open(ws: ServerWebSocket<WsData>) {
+      wsClients.set(ws.data.id, ws);
+      wsLog.info('Client connected', { clientId: ws.data.id });
+    },
+
+    async message(ws: ServerWebSocket<WsData>, message: string | Buffer) {
+      const text = typeof message === 'string' ? message : textDecoder.decode(message);
+      const cmd = parseCommand(text);
+
+      if (!cmd) {
+        ws.send(errorResponse('Invalid command'));
+        return;
+      }
+
       const ctx: HandlerContext = {
         queueManager,
         authTokens,
-        authenticated: true,
+        authenticated: ws.data.authenticated,
       };
 
-      // Route request
       try {
-        return await routeRequest(req, path, ctx, corsOrigins);
+        const response = await handleCommand(cmd, ctx);
+
+        // Update authentication state
+        if (cmd.cmd === 'Auth' && response.ok) {
+          ws.data.authenticated = true;
+        }
+
+        ws.send(serializeResponse(response));
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Internal error';
-        return jsonResponse({ ok: false, error: message }, 500);
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        ws.send(errorResponse(msg, cmd.reqId));
       }
     },
 
-    websocket: {
-      open(ws) {
-        wsClients.set(ws.data.id, ws);
-        wsLog.info('Client connected', { clientId: ws.data.id });
-      },
-
-      async message(ws, message) {
-        const text = typeof message === 'string' ? message : textDecoder.decode(message);
-        const cmd = parseCommand(text);
-
-        if (!cmd) {
-          ws.send(errorResponse('Invalid command'));
-          return;
-        }
-
-        const ctx: HandlerContext = {
-          queueManager,
-          authTokens,
-          authenticated: ws.data.authenticated,
-        };
-
-        try {
-          const response = await handleCommand(cmd, ctx);
-
-          // Update authentication state
-          if (cmd.cmd === 'Auth' && response.ok) {
-            ws.data.authenticated = true;
-          }
-
-          ws.send(serializeResponse(response));
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          ws.send(errorResponse(message, cmd.reqId));
-        }
-      },
-
-      close(ws) {
-        wsClients.delete(ws.data.id);
-        wsLog.info('Client disconnected', { clientId: ws.data.id });
-      },
+    close(ws: ServerWebSocket<WsData>) {
+      wsClients.delete(ws.data.id);
+      wsLog.info('Client disconnected', { clientId: ws.data.id });
     },
-  });
+  };
 
-  httpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
+  // Create server - Unix socket or TCP based on config
+  let server: Server<WsData>;
+
+  if (config.socketPath) {
+    server = Bun.serve<WsData>({
+      unix: config.socketPath,
+      fetch,
+      websocket,
+    });
+    httpLog.info('Server listening', { unix: config.socketPath });
+  } else {
+    server = Bun.serve<WsData>({
+      hostname: config.hostname ?? '0.0.0.0',
+      port: config.port ?? 6790,
+      fetch,
+      websocket,
+    });
+    httpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
+  }
 
   return {
     server,

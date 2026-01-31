@@ -52,6 +52,10 @@ interface ServerConfig {
   tcpPort: number;
   httpPort: number;
   hostname: string;
+  /** Unix socket path for TCP (takes priority over port) */
+  tcpSocketPath: string | undefined;
+  /** Unix socket path for HTTP (takes priority over port) */
+  httpSocketPath: string | undefined;
   authTokens: string[];
   dataPath: string | undefined;
   corsOrigins: string[];
@@ -65,6 +69,8 @@ function loadConfig(): ServerConfig {
     tcpPort: parseInt(process.env.TCP_PORT ?? '6789'),
     httpPort: parseInt(process.env.HTTP_PORT ?? '6790'),
     hostname: process.env.HOST ?? '0.0.0.0',
+    tcpSocketPath: process.env.TCP_SOCKET_PATH,
+    httpSocketPath: process.env.HTTP_SOCKET_PATH,
     authTokens: process.env.AUTH_TOKENS?.split(',').filter(Boolean) ?? [],
     dataPath: process.env.DATA_PATH ?? process.env.SQLITE_PATH,
     corsOrigins: process.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? ['*'],
@@ -83,6 +89,16 @@ function printBanner(config: ServerConfig): void {
   const green = '\x1b[32m';
   const yellow = '\x1b[33m';
 
+  // Format TCP endpoint display
+  const tcpDisplay = config.tcpSocketPath
+    ? `${bold}${config.tcpSocketPath}${reset} ${dim}(unix)${reset}`
+    : `${bold}${config.hostname}:${config.tcpPort}${reset}`;
+
+  // Format HTTP endpoint display
+  const httpDisplay = config.httpSocketPath
+    ? `${bold}${config.httpSocketPath}${reset} ${dim}(unix)${reset}`
+    : `${bold}${config.hostname}:${config.httpPort}${reset}`;
+
   console.log(`
 ${magenta}        (\\(\\        ${reset}
 ${magenta}        ( -.-)      ${bold}bunqueue${reset} ${dim}v${VERSION}${reset}
@@ -90,8 +106,8 @@ ${magenta}        o_(")(")    ${reset}${dim}High-performance job queue for Bun${
 
 ${dim}─────────────────────────────────────────────────${reset}
 
-  ${green}●${reset} TCP    ${bold}${config.hostname}:${config.tcpPort}${reset}
-  ${green}●${reset} HTTP   ${bold}${config.hostname}:${config.httpPort}${reset}
+  ${green}●${reset} TCP    ${tcpDisplay}
+  ${green}●${reset} HTTP   ${httpDisplay}
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
@@ -113,15 +129,17 @@ function startServer(): void {
     dataPath: config.dataPath,
   });
 
-  // Start TCP server
+  // Start TCP server (Unix socket or TCP)
   const tcpServer = createTcpServer(queueManager, {
+    socketPath: config.tcpSocketPath,
     port: config.tcpPort,
     hostname: config.hostname,
     authTokens: config.authTokens,
   });
 
-  // Start HTTP server
+  // Start HTTP server (Unix socket or TCP)
   const httpServer = createHttpServer(queueManager, {
+    socketPath: config.httpSocketPath,
     port: config.httpPort,
     hostname: config.hostname,
     authTokens: config.authTokens,

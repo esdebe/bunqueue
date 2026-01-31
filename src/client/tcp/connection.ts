@@ -3,6 +3,7 @@
  * Manages low-level socket connection and data handling
  */
 
+import type { Socket } from 'bun';
 import type { SocketWrapper, PendingCommand } from './types';
 import { LineBuffer } from './lineBuffer';
 
@@ -19,12 +20,21 @@ export interface ConnectionResult {
   cleanup: () => void;
 }
 
+/** Connection target - either Unix socket or TCP */
+export interface ConnectionTarget {
+  /** Unix socket path (takes priority if set) */
+  socketPath?: string;
+  /** TCP host (used if socketPath not set) */
+  host?: string;
+  /** TCP port (used if socketPath not set) */
+  port?: number;
+}
+
 /**
- * Establish TCP connection to server
+ * Establish connection to server (Unix socket or TCP)
  */
 export async function createConnection(
-  host: string,
-  port: number,
+  target: ConnectionTarget,
   connectTimeout: number,
   events: ConnectionEvents
 ): Promise<ConnectionResult> {
@@ -45,53 +55,66 @@ export async function createConnection(
       }
     };
 
-    void Bun.connect({
-      hostname: host,
-      port: port,
-      socket: {
-        data: (_sock, data) => {
-          const lines = socketData.lineBuffer.addData(data.toString());
-          for (const line of lines) {
-            events.onData(line);
-          }
-        },
-        open: (sock) => {
-          cleanup();
-          socketData.write = (d: string) => sock.write(d);
-          socketData.end = () => sock.end();
-          connectionResolved = true;
-          resolve({ socket: socketData, cleanup });
-        },
-        close: () => {
-          if (!connectionResolved) {
-            connectionResolved = true;
-            cleanup();
-            reject(new Error('Connection closed'));
-          }
-          events.onClose();
-        },
-        error: (_sock, error) => {
-          if (!connectionResolved) {
-            connectionResolved = true;
-            cleanup();
-            reject(new Error(`Connection error: ${error.message}`));
-          }
-          events.onError(error);
-        },
-        connectError: (_sock, error) => {
-          if (!connectionResolved) {
-            connectionResolved = true;
-            cleanup();
-            reject(new Error(`Failed to connect to ${host}:${port}: ${error.message}`));
-          }
-        },
+    const targetDesc = target.socketPath ?? `${target.host}:${target.port}`;
+
+    // Socket handlers
+    const socketHandlers = {
+      data(_sock: Socket<unknown>, data: Buffer) {
+        const lines = socketData.lineBuffer.addData(data.toString());
+        for (const line of lines) {
+          events.onData(line);
+        }
       },
-    });
+      open(sock: Socket<unknown>) {
+        cleanup();
+        socketData.write = (d: string) => sock.write(d);
+        socketData.end = () => sock.end();
+        connectionResolved = true;
+        resolve({ socket: socketData, cleanup });
+      },
+      close() {
+        if (!connectionResolved) {
+          connectionResolved = true;
+          cleanup();
+          reject(new Error('Connection closed'));
+        }
+        events.onClose();
+      },
+      error(_sock: Socket<unknown>, error: Error) {
+        if (!connectionResolved) {
+          connectionResolved = true;
+          cleanup();
+          reject(new Error(`Connection error: ${error.message}`));
+        }
+        events.onError(error);
+      },
+      connectError(_sock: Socket<unknown>, error: Error) {
+        if (!connectionResolved) {
+          connectionResolved = true;
+          cleanup();
+          reject(new Error(`Failed to connect to ${targetDesc}: ${error.message}`));
+        }
+      },
+    };
+
+    // Connect using Unix socket or TCP based on target
+    if (target.socketPath) {
+      void Bun.connect({
+        unix: target.socketPath,
+        socket: socketHandlers,
+      });
+    } else {
+      void Bun.connect({
+        hostname: target.host ?? 'localhost',
+        port: target.port ?? 6789,
+        socket: socketHandlers,
+      });
+    }
 
     timeoutId = setTimeout(() => {
       if (!connectionResolved) {
         connectionResolved = true;
-        reject(new Error(`Connection timeout to ${host}:${port}`));
+        reject(new Error(`Connection timeout to ${targetDesc}`));
       }
     }, connectTimeout);
   });

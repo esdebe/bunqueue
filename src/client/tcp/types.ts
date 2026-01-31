@@ -5,8 +5,13 @@
 
 /** Connection options */
 export interface ConnectionOptions {
+  /** Server host (ignored if socketPath is set) */
   host: string;
+  /** Server port (ignored if socketPath is set) */
   port: number;
+  /** Unix socket path (takes priority over host/port) */
+  socketPath?: string;
+  /** Auth token */
   token?: string;
   /** Max reconnection attempts (default: Infinity) */
   maxReconnectAttempts?: number;
@@ -49,9 +54,12 @@ export interface ConnectionHealth {
 }
 
 /** Default connection options */
-export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
+export const DEFAULT_CONNECTION: Required<Omit<ConnectionOptions, 'socketPath'>> & {
+  socketPath: string | undefined;
+} = {
   host: 'localhost',
   port: 6789,
+  socketPath: undefined,
   token: '',
   maxReconnectAttempts: Infinity,
   reconnectDelay: 100,

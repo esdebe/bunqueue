@@ -46,10 +46,12 @@ export interface JobOptions {
 
 /** Connection options for TCP mode */
 export interface ConnectionOptions {
-  /** Server host (default: localhost) */
+  /** Server host (default: localhost, ignored if socketPath is set) */
   host?: string;
-  /** Server port (default: 6789) */
+  /** Server port (default: 6789, ignored if socketPath is set) */
   port?: number;
+  /** Unix socket path (takes priority over host/port) */
+  socketPath?: string;
   /** Auth token */
   token?: string;
   /** Connection pool size for parallel operations (default: 1, set >1 to enable pooling) */

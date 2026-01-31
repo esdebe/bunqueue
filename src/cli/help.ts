@@ -96,6 +96,7 @@ BACKUP (S3):
 GLOBAL OPTIONS:
   -H, --host <host>               Server host (default: localhost)
   -p, --port <port>               TCP port (default: 6789)
+  -S, --socket <path>             Unix socket path (overrides host/port)
   -t, --token <token>             Authentication token
   --json                          Output as JSON
   --help                          Show help
@@ -120,16 +121,19 @@ Usage: bunqueue start [options]
 Start the bunQ server.
 
 Options:
-  --tcp-port <port>     TCP server port (default: 6789, env: TCP_PORT)
-  --http-port <port>    HTTP server port (default: 6790, env: HTTP_PORT)
-  --host <host>         Bind address (default: 0.0.0.0, env: HOST)
-  --data-path <path>    SQLite database path (env: DATA_PATH)
-  --auth-tokens <list>  Comma-separated auth tokens (env: AUTH_TOKENS)
-  --help                Show this help
+  --tcp-port <port>       TCP server port (default: 6789, env: TCP_PORT)
+  --http-port <port>      HTTP server port (default: 6790, env: HTTP_PORT)
+  --tcp-socket <path>     Unix socket for TCP (env: TCP_SOCKET_PATH)
+  --http-socket <path>    Unix socket for HTTP (env: HTTP_SOCKET_PATH)
+  --host <host>           Bind address (default: 0.0.0.0, env: HOST)
+  --data-path <path>      SQLite database path (env: DATA_PATH)
+  --auth-tokens <list>    Comma-separated auth tokens (env: AUTH_TOKENS)
+  --help                  Show this help
 
 Examples:
   bunqueue start
   bunqueue start --tcp-port 7000 --http-port 7001
+  bunqueue start --tcp-socket /tmp/bunqueue.sock
   bunqueue start --data-path ./data/queue.db
 `);
 }

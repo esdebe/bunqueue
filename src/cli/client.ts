@@ -3,13 +3,20 @@
  * Connects to bunQ server and executes commands
  */
 
+import type { Socket } from 'bun';
 import { formatOutput, formatError } from './output';
 
 /** Client options */
 export interface ClientOptions {
+  /** Server host (ignored if socketPath is set) */
   host: string;
+  /** Server port (ignored if socketPath is set) */
   port: number;
+  /** Unix socket path (takes priority over host/port) */
+  socketPath?: string;
+  /** Auth token */
   token?: string;
+  /** Output as JSON */
   json: boolean;
 }
 
@@ -41,7 +48,7 @@ async function sendCommand(
   });
 }
 
-/** Create TCP connection */
+/** Create connection (Unix socket or TCP) */
 async function connect(options: ClientOptions): Promise<{
   socket: { write: (data: string) => void; end: () => void; data: SocketData };
   close: () => void;
@@ -54,67 +61,77 @@ async function connect(options: ClientOptions): Promise<{
     };
 
     let connected = false;
+    const targetDesc = options.socketPath ?? `${options.host}:${options.port}`;
 
-    void Bun.connect({
-      hostname: options.host,
-      port: options.port,
-      socket: {
-        data(_sock, data) {
-          socketData.buffer += data.toString();
+    // Socket handlers
+    const socketHandlers = {
+      data(_sock: Socket<unknown>, data: Buffer) {
+        socketData.buffer += data.toString();
 
-          // Look for complete JSON response (newline-delimited)
-          let newlineIdx: number;
-          while ((newlineIdx = socketData.buffer.indexOf('\n')) !== -1) {
-            const line = socketData.buffer.slice(0, newlineIdx);
-            socketData.buffer = socketData.buffer.slice(newlineIdx + 1);
+        // Look for complete JSON response (newline-delimited)
+        let newlineIdx: number;
+        while ((newlineIdx = socketData.buffer.indexOf('\n')) !== -1) {
+          const line = socketData.buffer.slice(0, newlineIdx);
+          socketData.buffer = socketData.buffer.slice(newlineIdx + 1);
 
-            if (line.trim() && socketData.resolve) {
-              try {
-                const response = JSON.parse(line) as Record<string, unknown>;
-                socketData.resolve(response);
+          if (line.trim() && socketData.resolve) {
+            try {
+              const response = JSON.parse(line) as Record<string, unknown>;
+              socketData.resolve(response);
+              socketData.resolve = null;
+              socketData.reject = null;
+            } catch {
+              if (socketData.reject) {
+                socketData.reject(new Error('Invalid response from server'));
                 socketData.resolve = null;
                 socketData.reject = null;
-              } catch {
-                if (socketData.reject) {
-                  socketData.reject(new Error('Invalid response from server'));
-                  socketData.resolve = null;
-                  socketData.reject = null;
-                }
               }
             }
           }
-        },
-        open(sock) {
-          connected = true;
-          resolve({
-            socket: {
-              write: (data: string) => sock.write(data),
-              end: () => sock.end(),
-              data: socketData,
-            },
-            close: () => sock.end(),
-          });
-        },
-        close() {
-          if (socketData.reject) {
-            socketData.reject(new Error('Connection closed'));
-          }
-        },
-        error(_sock, error) {
-          reject(new Error(`Connection error: ${error.message}`));
-        },
-        connectError(_sock, error) {
-          reject(
-            new Error(`Failed to connect to ${options.host}:${options.port}: ${error.message}`)
-          );
-        },
+        }
       },
-    });
+      open(sock: Socket<unknown>) {
+        connected = true;
+        resolve({
+          socket: {
+            write: (data: string) => sock.write(data),
+            end: () => sock.end(),
+            data: socketData,
+          },
+          close: () => sock.end(),
+        });
+      },
+      close() {
+        if (socketData.reject) {
+          socketData.reject(new Error('Connection closed'));
+        }
+      },
+      error(_sock: Socket<unknown>, error: Error) {
+        reject(new Error(`Connection error: ${error.message}`));
+      },
+      connectError(_sock: Socket<unknown>, error: Error) {
+        reject(new Error(`Failed to connect to ${targetDesc}: ${error.message}`));
+      },
+    };
+
+    // Connect using Unix socket or TCP
+    if (options.socketPath) {
+      void Bun.connect({
+        unix: options.socketPath,
+        socket: socketHandlers,
+      });
+    } else {
+      void Bun.connect({
+        hostname: options.host,
+        port: options.port,
+        socket: socketHandlers,
+      });
+    }
 
     // Handle connection timeout
     setTimeout(() => {
       if (!connected) {
-        reject(new Error(`Connection timeout to ${options.host}:${options.port}`));
+        reject(new Error(`Connection timeout to ${targetDesc}`));
       }
     }, 5000);
   });

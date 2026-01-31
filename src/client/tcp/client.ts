@@ -13,11 +13,16 @@ import { createConnection, CommandQueue } from './connection';
 /**
  * TCP Client - manages connection to bunqueue server
  */
+/** Resolved options type - socketPath stays optional */
+type ResolvedOptions = Required<Omit<ConnectionOptions, 'socketPath'>> & {
+  socketPath: string | undefined;
+};
+
 export class TcpClient extends EventEmitter {
   private socket: SocketWrapper | null = null;
   private connected = false;
   private connecting = false;
-  private readonly options: Required<ConnectionOptions>;
+  private readonly options: ResolvedOptions;
   private readonly health: HealthTracker;
   private readonly reconnect: ReconnectManager;
   private readonly commands: CommandQueue;
@@ -88,8 +93,11 @@ export class TcpClient extends EventEmitter {
 
   private async doConnect(): Promise<void> {
     const { socket } = await createConnection(
-      this.options.host,
-      this.options.port,
+      {
+        socketPath: this.options.socketPath,
+        host: this.options.host,
+        port: this.options.port,
+      },
       this.options.connectTimeout,
       {
         onData: (line) => {

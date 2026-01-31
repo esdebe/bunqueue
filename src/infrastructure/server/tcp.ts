@@ -3,7 +3,7 @@
  * Handles TCP connections with JSON line protocol
  */
 
-import type { Socket } from 'bun';
+import type { Socket, TCPSocketListener, UnixSocketListener } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
 import type { Response } from '../../domain/types/response';
 import { handleCommand, type HandlerContext } from './handler';
@@ -14,8 +14,13 @@ import { getRateLimiter } from './rateLimiter';
 
 /** TCP Server configuration */
 export interface TcpServerConfig {
-  port: number;
+  /** TCP port (ignored if socketPath is set) */
+  port?: number;
+  /** Hostname to bind (ignored if socketPath is set) */
   hostname?: string;
+  /** Unix socket path (takes priority over port/hostname) */
+  socketPath?: string;
+  /** Auth tokens for authentication */
   authTokens?: string[];
 }
 
@@ -49,85 +54,96 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
   const authTokens = new Set(config.authTokens ?? []);
   const connections = new Map<string, Socket<ConnectionData>>();
 
-  const server = Bun.listen<ConnectionData>({
-    hostname: config.hostname ?? '0.0.0.0',
-    port: config.port,
+  const socketHandlers = {
+    open(socket: Socket<ConnectionData>) {
+      const clientId = uuid();
+      const state = createConnectionState(clientId);
+      const ctx: HandlerContext = {
+        queueManager,
+        authTokens,
+        authenticated: authTokens.size === 0, // Auto-auth if no tokens
+        clientId, // For job ownership tracking
+      };
 
-    socket: {
-      open(socket) {
-        const clientId = uuid();
-        const state = createConnectionState(clientId);
-        const ctx: HandlerContext = {
-          queueManager,
-          authTokens,
-          authenticated: authTokens.size === 0, // Auto-auth if no tokens
-          clientId, // For job ownership tracking
-        };
+      socket.data = {
+        state,
+        buffer: new LineBuffer(),
+        ctx,
+      };
 
-        socket.data = {
-          state,
-          buffer: new LineBuffer(),
-          ctx,
-        };
-
-        connections.set(clientId, socket);
-        tcpLog.info('Client connected', { clientId });
-      },
-
-      async data(socket, data) {
-        const { buffer, ctx, state } = socket.data;
-        const rateLimiter = getRateLimiter();
-
-        // Check rate limit
-        if (!rateLimiter.isAllowed(state.clientId)) {
-          socket.write(errorResponseLine('Rate limit exceeded'));
-          return;
-        }
-
-        const text = textDecoder.decode(data);
-        const lines = buffer.addData(text);
-
-        for (const line of lines) {
-          const cmd = parseCommand(line);
-          if (!cmd) {
-            socket.write(errorResponseLine('Invalid command'));
-            continue;
-          }
-          try {
-            const response = await handleCommand(cmd, ctx);
-            socket.write(serializeResponseLine(response));
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Unknown error';
-            socket.write(errorResponseLine(message, cmd.reqId));
-          }
-        }
-      },
-
-      close(socket) {
-        const clientId = socket.data.state.clientId;
-        connections.delete(clientId);
-        getRateLimiter().removeClient(clientId);
-
-        // Release all jobs owned by this client back to queue
-        const released = queueManager.releaseClientJobs(clientId);
-        if (released > 0) {
-          tcpLog.info('Client disconnected, released jobs', { clientId, released });
-        } else {
-          tcpLog.info('Client disconnected', { clientId });
-        }
-      },
-
-      error(_socket, error) {
-        tcpLog.error('Connection error', { error: error.message });
-      },
-
-      drain(_socket) {
-        // Called when socket is ready for more writes after backpressure
-      },
+      connections.set(clientId, socket);
+      tcpLog.info('Client connected', { clientId });
     },
-  });
 
-  tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
+    async data(socket: Socket<ConnectionData>, data: Buffer) {
+      const { buffer, ctx, state } = socket.data;
+      const rateLimiter = getRateLimiter();
+
+      // Check rate limit
+      if (!rateLimiter.isAllowed(state.clientId)) {
+        socket.write(errorResponseLine('Rate limit exceeded'));
+        return;
+      }
+
+      const text = textDecoder.decode(data);
+      const lines = buffer.addData(text);
+
+      for (const line of lines) {
+        const cmd = parseCommand(line);
+        if (!cmd) {
+          socket.write(errorResponseLine('Invalid command'));
+          continue;
+        }
+        try {
+          const response = await handleCommand(cmd, ctx);
+          socket.write(serializeResponseLine(response));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          socket.write(errorResponseLine(message, cmd.reqId));
+        }
+      }
+    },
+
+    close(socket: Socket<ConnectionData>) {
+      const clientId = socket.data.state.clientId;
+      connections.delete(clientId);
+      getRateLimiter().removeClient(clientId);
+
+      // Release all jobs owned by this client back to queue
+      const released = queueManager.releaseClientJobs(clientId);
+      if (released > 0) {
+        tcpLog.info('Client disconnected, released jobs', { clientId, released });
+      } else {
+        tcpLog.info('Client disconnected', { clientId });
+      }
+    },
+
+    error(_socket: Socket<ConnectionData>, error: Error) {
+      tcpLog.error('Connection error', { error: error.message });
+    },
+
+    drain(_socket: Socket<ConnectionData>) {
+      // Called when socket is ready for more writes after backpressure
+    },
+  };
+
+  // Create server - Unix socket or TCP based on config
+  let server: TCPSocketListener<ConnectionData> | UnixSocketListener<ConnectionData>;
+
+  if (config.socketPath) {
+    server = Bun.listen<ConnectionData>({
+      unix: config.socketPath,
+      socket: socketHandlers,
+    });
+    tcpLog.info('Server listening', { unix: config.socketPath });
+  } else {
+    server = Bun.listen<ConnectionData>({
+      hostname: config.hostname ?? '0.0.0.0',
+      port: config.port ?? 6789,
+      socket: socketHandlers,
+    });
+    tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
+  }
 
   return {
     server,
