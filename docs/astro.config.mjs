@@ -87,9 +87,10 @@ export default defineConfig({
           items: [
             { label: 'Queue', link: '/guide/queue/' },
             { label: 'Worker', link: '/guide/worker/' },
+            { label: 'Queue Group', link: '/guide/queue-group/' },
+            { label: 'Flow Producer', link: '/guide/flow/' },
             { label: 'Stall Detection', link: '/guide/stall-detection/' },
             { label: 'Dead Letter Queue', link: '/guide/dlq/' },
-            { label: 'Flow Producer', link: '/guide/flow/' },
           ],
         },
         {
@@ -127,8 +128,16 @@ export default defineConfig({
         {
           label: 'Integrations',
           items: [
-            { label: 'Hono & Elysia', link: '/guide/integrations/' },
+            { label: 'Overview', link: '/guide/integrations/' },
+            { label: 'Hono', link: '/guide/hono/' },
+            { label: 'Elysia', link: '/guide/elysia/' },
             { label: 'MCP Server (AI)', link: '/guide/mcp/' },
+          ],
+        },
+        {
+          label: 'Use Cases',
+          items: [
+            { label: 'Production Patterns', link: '/guide/use-cases/' },
           ],
         },
         {
