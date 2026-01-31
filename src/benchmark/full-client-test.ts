@@ -296,16 +296,22 @@ async function testQueueEvents(): Promise<void> {
       'test-events',
       async (job) => {
         await job.updateProgress(50);
+        await sleep(50); // Small delay to ensure progress event is processed
         return { y: job.data.x + 1 };
       },
-      { concurrency: 1, embedded: true }
+      { concurrency: 1, embedded: true, autorun: false }
     );
+
+    // Start worker first
+    worker.run();
+    await sleep(100); // Wait for worker to be ready
 
     // Add job
     const job = await queue.add('event-test', { x: 10 });
     pass(`Job ${job.id} added`);
 
-    await sleep(500);
+    // Wait longer for all events including progress
+    await sleep(1500);
 
     const hasWaiting = receivedEvents.some((e) => e.startsWith('waiting:'));
     const hasActive = receivedEvents.some((e) => e.startsWith('active:'));

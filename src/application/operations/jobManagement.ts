@@ -4,10 +4,11 @@
  */
 
 import type { Job, JobId } from '../../domain/types/job';
-import type { JobLocation } from '../../domain/types/queue';
+import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { WebhookManager } from '../webhookManager';
+import type { EventsManager } from '../eventsManager';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 import { webhookLog } from '../../shared/logger';
 import { type RWLock, withWriteLock } from '../../shared/lock';
@@ -21,6 +22,7 @@ export interface JobManagementContext {
   processingLocks: RWLock[];
   jobIndex: Map<JobId, JobLocation>;
   webhookManager: WebhookManager;
+  eventsManager: EventsManager;
 }
 
 /** Cancel a job (remove from queue) */
@@ -63,6 +65,15 @@ export async function updateJobProgress(
 
     job.progress = Math.max(0, Math.min(100, progress));
     if (message !== undefined) job.progressMessage = message;
+
+    // Broadcast progress event to internal subscribers
+    ctx.eventsManager.broadcast({
+      eventType: 'progress' as EventType,
+      jobId,
+      queue: job.queue,
+      timestamp: Date.now(),
+      data: { progress: job.progress, message: job.progressMessage },
+    });
 
     ctx.webhookManager
       .trigger('job.progress', String(jobId), job.queue, { progress: job.progress })

@@ -186,6 +186,7 @@ export class ContextFactory {
       processingLocks: this.deps.processingLocks,
       jobIndex: this.deps.jobIndex,
       webhookManager: this.deps.webhookManager,
+      eventsManager: this.deps.eventsManager,
     };
   }
 

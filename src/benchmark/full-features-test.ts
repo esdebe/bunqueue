@@ -251,15 +251,11 @@ async function main() {
 
   // ============ 10. Unique Keys ============
   await section('Unique Keys', async () => {
-    await qm.push('unique', { data: { id: 1 }, uniqueKey: 'unique-1' });
+    const job1 = await qm.push('unique', { data: { id: 1 }, uniqueKey: 'unique-1' });
 
-    let duplicateError = false;
-    try {
-      await qm.push('unique', { data: { id: 2 }, uniqueKey: 'unique-1' });
-    } catch (e: any) {
-      duplicateError = e.message.includes('Duplicate');
-    }
-    await test('duplicate uniqueKey rejected', () => duplicateError);
+    // BullMQ-style: duplicate uniqueKey returns existing job
+    const job2 = await qm.push('unique', { data: { id: 2 }, uniqueKey: 'unique-1' });
+    await test('duplicate uniqueKey returns existing job', () => job2.id === job1.id);
 
     // Process and complete the job
     const j = await qm.pull('unique', 0);
@@ -268,9 +264,9 @@ async function main() {
     // Wait for unique key to be released
     await new Promise((r) => setTimeout(r, 50));
 
-    // Now should be able to push with same key
+    // Now should be able to push with same key (new job)
     const reused = await qm.push('unique', { data: { id: 3 }, uniqueKey: 'unique-1' });
-    await test('uniqueKey can be reused after completion', () => !!reused);
+    await test('uniqueKey can be reused after completion', () => reused.id !== job1.id);
     const j2 = await qm.pull('unique', 0);
     if (j2) await qm.ack(j2.id);
   });
