@@ -482,6 +482,9 @@ await queue.addBulk([
   { name: 'send', data: { email: 'b@test.com' } },
 ]);
 
+// Critical jobs with guaranteed persistence (bypass write buffer)
+await queue.add('payment', { orderId: '123' }, { durable: true });
+
 // Query
 const job = await queue.getJob('123');
 const counts = queue.getJobCounts();
@@ -492,6 +495,23 @@ queue.resume();
 queue.drain();
 queue.obliterate();
 ```
+
+### Durability Options
+
+By default, jobs are buffered in memory and flushed to disk every 10ms for high throughput. For critical jobs where data loss is unacceptable, use the `durable` option:
+
+```typescript
+// Best-effort (default): ~100k jobs/sec, jobs may be lost on crash
+await queue.add('email', data);
+
+// Durable: immediate disk write, guaranteed persistence
+await queue.add('payment', data, { durable: true });
+```
+
+| Mode | Throughput | Data Loss Risk | Use Case |
+|------|------------|----------------|----------|
+| Default (buffered) | High (~100k/s) | Up to 10ms of jobs | Emails, notifications, logs |
+| Durable | Lower (~10k/s) | None | Payments, orders, critical events |
 
 ### Worker
 

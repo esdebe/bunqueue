@@ -42,6 +42,12 @@ export interface JobOptions {
     /** Cron pattern (alternative to every) */
     pattern?: string;
   };
+  /**
+   * Force immediate persistence to disk (bypass write buffer).
+   * Use for critical jobs where data loss is unacceptable.
+   * Default: false (uses buffered writes for better throughput)
+   */
+  durable?: boolean;
 }
 
 /** Connection options for TCP mode */

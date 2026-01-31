@@ -126,6 +126,12 @@ export interface JobInput {
     /** Replace job data on duplicate instead of rejecting */
     replace?: boolean;
   };
+  /**
+   * Force immediate persistence to disk (bypass write buffer).
+   * Use for critical jobs where data loss is unacceptable.
+   * Default: false (uses buffered writes for better throughput)
+   */
+  durable?: boolean;
 }
 
 /** Job creation defaults */

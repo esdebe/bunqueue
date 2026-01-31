@@ -10,6 +10,19 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [1.9.5] - 2026-01-31
+
+### Added
+- **Durable Writes** - New `durable: true` option for critical jobs
+  - Bypasses write buffer for immediate disk persistence
+  - Guarantees no data loss on process crash
+  - Use for payments, orders, and critical events
+
+### Changed
+- **Reduced write buffer flush interval** from 50ms to 10ms
+  - Smaller data loss window for non-durable jobs
+  - Better balance between throughput and safety
+
 ## [1.9.4] - 2026-01-31
 
 ### Added

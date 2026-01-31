@@ -106,6 +106,7 @@ Best for:
 | Advanced DLQ | ✅ | Basic |
 | S3 backups | ✅ | ❌ |
 | Sandboxed workers | ✅ | ✅ |
+| Durable writes | ✅ | ✅ (Redis AOF) |
 
 ## Next Steps
 

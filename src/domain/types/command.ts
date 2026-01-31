@@ -31,6 +31,8 @@ export interface PushCommand extends BaseCommand {
   readonly lifo?: boolean;
   readonly removeOnComplete?: boolean;
   readonly removeOnFail?: boolean;
+  /** Force immediate persistence to disk (bypass write buffer) */
+  readonly durable?: boolean;
 }
 
 export interface PushBatchCommand extends BaseCommand {

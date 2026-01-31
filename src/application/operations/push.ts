@@ -143,8 +143,8 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
     return returnedJob;
   }
 
-  // Persist
-  ctx.storage?.insertJob(job);
+  // Persist (with optional durable flag for critical jobs)
+  ctx.storage?.insertJob(job, input.durable);
 
   // Update metrics & notify
   ctx.totalPushed.value++;

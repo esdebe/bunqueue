@@ -116,6 +116,40 @@ await queue.add('weekly', {}, {
 });
 ```
 
+### Durable Jobs
+
+By default, bunqueue uses a **write buffer** for high throughput: jobs are batched in memory and flushed to SQLite every 10ms. This achieves ~100k jobs/sec but means jobs could be lost if the process crashes before the buffer is flushed.
+
+For **critical jobs** where data loss is unacceptable, use the `durable` option:
+
+```typescript
+// Critical job: immediate disk write, guaranteed persistence
+await queue.add('process-payment', { orderId: '123', amount: 99.99 }, {
+  durable: true,
+});
+
+// Batch of critical jobs
+await queue.addBulk([
+  { name: 'payment-1', data: { orderId: '1' }, opts: { durable: true } },
+  { name: 'payment-2', data: { orderId: '2' }, opts: { durable: true } },
+]);
+```
+
+:::tip[When to use durable]
+Use `durable: true` for:
+- **Payment processing** - financial transactions must not be lost
+- **Order creation** - e-commerce orders require guaranteed persistence
+- **Critical events** - audit logs, compliance data, legal records
+- **Idempotency keys** - when retry is expensive or impossible
+:::
+
+:::note[Performance trade-off]
+| Mode | Throughput | Data Loss Window | Use Case |
+|------|------------|------------------|----------|
+| Default | ~100k jobs/sec | Up to 10ms | Emails, notifications, analytics |
+| Durable | ~10k jobs/sec | None | Payments, orders, critical events |
+:::
+
 ## Query Operations
 
 ```typescript
@@ -233,6 +267,7 @@ See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
 | `removeOnFail` | `boolean` | `false` | Auto-delete after failure |
 | `stallTimeout` | `number` | - | Per-job stall timeout override |
 | `repeat` | `object` | - | Repeating job config |
+| `durable` | `boolean` | `false` | Immediate disk write (bypass buffer) |
 
 ## Closing
 

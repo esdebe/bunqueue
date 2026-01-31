@@ -81,6 +81,7 @@ export class Queue<T = unknown> {
         removeOnFail: merged.removeOnFail,
         repeat: merged.repeat,
         stallTimeout: merged.stallTimeout,
+        durable: merged.durable,
       });
       return toPublicJob<T>(job, name);
     }
@@ -98,6 +99,7 @@ export class Queue<T = unknown> {
       removeOnComplete: merged.removeOnComplete,
       removeOnFail: merged.removeOnFail,
       stallTimeout: merged.stallTimeout,
+      durable: merged.durable,
     });
 
     if (!response.ok) {

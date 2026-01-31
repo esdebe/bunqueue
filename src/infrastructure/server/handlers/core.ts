@@ -67,6 +67,7 @@ export async function handlePush(
     lifo: cmd.lifo,
     removeOnComplete: cmd.removeOnComplete,
     removeOnFail: cmd.removeOnFail,
+    durable: cmd.durable,
   });
 
   return resp.ok(job.id, reqId);

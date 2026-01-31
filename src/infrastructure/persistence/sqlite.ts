@@ -64,7 +64,7 @@ export class SqliteStorage {
 
     // Initialize write buffer
     this.writeBufferSize = config.writeBufferSize ?? 100;
-    const flushInterval = config.writeBufferFlushMs ?? 50;
+    const flushInterval = config.writeBufferFlushMs ?? 10;
 
     // Auto-flush timer
     this.writeBufferTimer = setInterval(() => {
@@ -113,8 +113,18 @@ export class SqliteStorage {
 
   // ============ Job Operations ============
 
-  /** Insert job using write buffer for better throughput */
-  insertJob(job: Job): void {
+  /**
+   * Insert job using write buffer for better throughput.
+   * @param job The job to insert
+   * @param durable If true, bypasses write buffer and writes immediately to disk
+   */
+  insertJob(job: Job, durable?: boolean): void {
+    if (durable) {
+      // Critical job: write immediately to disk
+      this.insertJobImmediate(job);
+      return;
+    }
+
     this.writeBuffer.push(job);
 
     // Flush if buffer is full
