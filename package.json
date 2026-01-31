@@ -58,7 +58,7 @@
     "prepublishOnly": "bun run build:lib"
   },
   "dependencies": {
-    "@msgpack/msgpack": "^3.0.0",
+    "msgpackr": "^1.11.0",
     "croner": "^9.0.0"
   },
   "devDependencies": {

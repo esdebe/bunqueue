@@ -1,9 +1,10 @@
 /**
  * SQLite Serialization Utilities
  * MessagePack encoding/decoding and row conversion
+ * Uses msgpackr for 2-3x faster serialization
  */
 
-import { encode, decode } from '@msgpack/msgpack';
+import { pack as msgpackEncode, unpack as msgpackDecode } from 'msgpackr';
 import { type Job, jobId } from '../../domain/types/job';
 import type { DlqEntry } from '../../domain/types/dlq';
 import type { DbJob } from './statements';
@@ -11,14 +12,14 @@ import { storageLog } from '../../shared/logger';
 
 /** Encode data to MessagePack buffer */
 export function pack(data: unknown): Uint8Array {
-  return encode(data);
+  return msgpackEncode(data);
 }
 
 /** Decode MessagePack buffer to data */
 export function unpack<T>(buffer: Uint8Array | null, fallback: T, context: string): T {
   if (!buffer) return fallback;
   try {
-    return decode(buffer) as T;
+    return msgpackDecode(buffer) as T;
   } catch (err) {
     storageLog.error('MessagePack decode error', { context, error: String(err) });
     return fallback;
