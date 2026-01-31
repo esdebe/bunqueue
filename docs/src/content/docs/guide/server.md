@@ -59,6 +59,51 @@ docker run -p 6789:6789 -p 6790:6790 \
   bunqueue
 ```
 
+## Connecting from Client
+
+When the server is running, clients connect automatically via TCP:
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// No embedded option = TCP mode (connects to localhost:6789)
+const queue = new Queue('tasks');
+const worker = new Worker('tasks', async (job) => {
+  console.log('Processing:', job.data);
+  return { success: true };
+});
+
+// Add jobs
+await queue.add('my-job', { foo: 'bar' });
+```
+
+### Custom Connection
+
+```typescript
+const queue = new Queue('tasks', {
+  connection: {
+    host: '192.168.1.100',
+    port: 6789,
+    token: 'my-secret-token',  // If AUTH_TOKENS is set on server
+  }
+});
+
+const worker = new Worker('tasks', handler, {
+  connection: {
+    host: '192.168.1.100',
+    port: 6789,
+    token: 'my-secret-token',
+  }
+});
+```
+
+:::tip[Embedded vs Server Mode]
+- **Embedded Mode**: Use `embedded: true` - no server needed, runs in-process
+- **Server Mode**: No option needed - connects to bunqueue server via TCP
+
+See [Quick Start](/bunqueue/guide/quickstart/) for a comparison.
+:::
+
 ## Graceful Shutdown
 
 The server handles `SIGINT` and `SIGTERM`:

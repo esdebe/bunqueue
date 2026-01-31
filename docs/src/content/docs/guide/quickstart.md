@@ -11,9 +11,36 @@ head:
 
 This guide will get you up and running with bunqueue in 5 minutes.
 
-:::caution[Important]
-Both `Queue` and `Worker` **must** have `embedded: true` to use embedded mode.
-Without it, they default to TCP mode and try to connect to a bunqueue server.
+## Choose Your Mode
+
+bunqueue supports two deployment modes:
+
+| | Embedded Mode | TCP Server Mode |
+|---|---------------|-----------------|
+| **Best for** | Single-process apps, serverless | Multi-process, microservices |
+| **Setup** | Zero config | Run `bunqueue start` first |
+| **Option needed** | `embedded: true` | None (default) |
+| **Persistence** | `DATA_PATH` env var | `--data-path` flag |
+
+**This guide covers Embedded Mode** (most common). For TCP Server Mode, see [Server Guide](/bunqueue/guide/server/).
+
+:::danger[Common Mistake]
+If `Queue` has `embedded: true` but `Worker` doesn't (or vice versa), the Worker will try to connect to a non-existent TCP server and **timeout with "Command timeout" error**.
+
+**Both must have the same mode!**
+```typescript
+// ✅ Correct - both embedded
+const queue = new Queue('tasks', { embedded: true });
+const worker = new Worker('tasks', handler, { embedded: true });
+
+// ✅ Correct - both TCP (server must be running)
+const queue = new Queue('tasks');
+const worker = new Worker('tasks', handler);
+
+// ❌ Wrong - mixed modes = timeout error
+const queue = new Queue('tasks', { embedded: true });
+const worker = new Worker('tasks', handler);  // Missing embedded: true!
+```
 :::
 
 ## Create a Queue

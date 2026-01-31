@@ -37,6 +37,13 @@ head:
 
 ## Two Modes of Operation
 
+| | Embedded | TCP Server |
+|---|----------|------------|
+| **Use case** | Single process apps | Multi-process / Microservices |
+| **Setup** | Zero config | Run `bunqueue start` |
+| **Option** | `embedded: true` | Default (no option) |
+| **Persistence** | `DATA_PATH` env var | `--data-path` flag |
+
 ### Embedded Mode
 
 Use bunqueue as a library directly in your application:
@@ -44,10 +51,11 @@ Use bunqueue as a library directly in your application:
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-const queue = new Queue('tasks');
+// ⚠️ BOTH must have embedded: true
+const queue = new Queue('tasks', { embedded: true });
 const worker = new Worker('tasks', async (job) => {
   // Process job
-});
+}, { embedded: true });
 ```
 
 Best for:
@@ -60,7 +68,20 @@ Best for:
 Run bunqueue as a standalone server:
 
 ```bash
+# Start the server
 bunqueue start --data-path ./data/queue.db
+```
+
+Then connect from your application:
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// No embedded option = connects to localhost:6789
+const queue = new Queue('tasks');
+const worker = new Worker('tasks', async (job) => {
+  // Process job
+});
 ```
 
 Best for:
