@@ -828,7 +828,28 @@ await indexQueue.addBulk(
 
 ## Scheduled Tasks with Cron
 
-Recurring tasks using cron expressions.
+:::note[Server Mode Feature]
+Cron scheduling via `upsertJobScheduler()` is only available in **server mode**. In embedded mode, use `setInterval()` + `queue.add()` for recurring jobs.
+:::
+
+Recurring tasks using cron expressions (server mode) or intervals (embedded mode).
+
+### Server Mode (with Cron)
+
+```typescript
+// Server mode: use upsertJobScheduler
+await scheduledQueue.upsertJobScheduler('daily-cleanup', {
+  pattern: '0 3 * * *', // Every day at 3:00 AM
+  data: { task: 'cleanup', params: { olderThanDays: 30 } },
+});
+
+await scheduledQueue.upsertJobScheduler('health-check', {
+  every: 300000, // Every 5 minutes
+  data: { task: 'health-check' },
+});
+```
+
+### Embedded Mode (with setInterval)
 
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
@@ -840,28 +861,18 @@ interface ScheduledJob {
 
 const scheduledQueue = new Queue<ScheduledJob>('scheduled', { embedded: true });
 
-// Daily database cleanup at 3 AM
-await scheduledQueue.upsertJobScheduler('daily-cleanup', {
-  pattern: '0 3 * * *', // Every day at 3:00 AM
-  data: { task: 'cleanup', params: { olderThanDays: 30 } },
-});
+// Recurring job using setInterval
+const healthCheckInterval = setInterval(async () => {
+  await scheduledQueue.add('health-check', { task: 'health-check' });
+}, 300000); // Every 5 minutes
 
-// Hourly stats aggregation
-await scheduledQueue.upsertJobScheduler('hourly-stats', {
-  pattern: '0 * * * *', // Every hour
-  data: { task: 'aggregate-stats' },
-});
-
-// Weekly report every Monday at 9 AM
-await scheduledQueue.upsertJobScheduler('weekly-report', {
-  pattern: '0 9 * * 1', // Monday at 9:00 AM
-  data: { task: 'weekly-report', params: { recipients: ['team@company.com'] } },
-});
-
-// Every 5 minutes health check
-await scheduledQueue.upsertJobScheduler('health-check', {
-  every: 300000, // 5 minutes in ms
-  data: { task: 'health-check' },
+// Daily cleanup (use node-cron or similar for cron expressions)
+import cron from 'node-cron';
+cron.schedule('0 3 * * *', async () => {
+  await scheduledQueue.add('cleanup', {
+    task: 'cleanup',
+    params: { olderThanDays: 30 },
+  });
 });
 
 const scheduledWorker = new Worker<ScheduledJob>('scheduled', async (job) => {
@@ -869,16 +880,8 @@ const scheduledWorker = new Worker<ScheduledJob>('scheduled', async (job) => {
 
   switch (task) {
     case 'cleanup':
-      const deleted = await cleanupOldRecords(params.olderThanDays);
+      const deleted = await cleanupOldRecords(params?.olderThanDays);
       return { deleted };
-
-    case 'aggregate-stats':
-      await aggregateHourlyStats();
-      return { aggregated: true };
-
-    case 'weekly-report':
-      await generateAndSendWeeklyReport(params.recipients);
-      return { sent: true };
 
     case 'health-check':
       const status = await checkSystemHealth();
@@ -888,6 +891,12 @@ const scheduledWorker = new Worker<ScheduledJob>('scheduled', async (job) => {
       return status;
   }
 }, { embedded: true });
+
+// Clean up on shutdown
+process.on('SIGINT', () => {
+  clearInterval(healthCheckInterval);
+  scheduledWorker.close();
+});
 ```
 
 ---
@@ -973,37 +982,22 @@ console.log(tenantA.group.listQueues()); // ['emails', 'reports', 'webhooks']
 
 ## Rate-Limited API Calls
 
+:::note[Server Mode Feature]
+Rate limiting via `setRateLimit()` is only available in **server mode**. In embedded mode, control throughput using worker `concurrency` and job `backoff` options.
+:::
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                           RATE LIMITER                                    │
-│                       100 requests / minute                               │
+│                     THROUGHPUT CONTROL                                    │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                           │
-│   ┌───────┐  ┌───────┐  ┌───────┐  ┌───────┐  ┌───────┐                 │
-│   │ Job 1 │  │ Job 2 │  │ Job 3 │  │ Job 4 │  │ Job 5 │  ...            │
-│   └───┬───┘  └───┬───┘  └───┬───┘  └───┬───┘  └───┬───┘                 │
-│       │          │          │          │          │                      │
-│       └──────────┴──────────┴──────────┴──────────┘                      │
-│                              │                                            │
-│                              ▼                                            │
-│                    ┌──────────────────┐                                   │
-│                    │   Token Bucket   │                                   │
-│                    │   ████████░░░░   │  (tokens available)              │
-│                    └────────┬─────────┘                                   │
-│                             │                                             │
-│              ┌──────────────┴──────────────┐                             │
-│              ▼                             ▼                             │
-│       ┌────────────┐               ┌────────────┐                        │
-│       │  Execute   │               │   Queue    │                        │
-│       │ (has token)│               │(wait token)│                        │
-│       └────────────┘               └────────────┘                        │
+│   SERVER MODE: setRateLimit(100, 60000)  →  Token bucket algorithm       │
+│   EMBEDDED MODE: concurrency + backoff   →  Parallel limit + retry delay │
 │                                                                           │
 └──────────────────────────────────────────────────────────────────────────┘
-
-          External API returns 429? → Exponential backoff
 ```
 
-External API integration with rate limiting.
+External API integration with controlled throughput.
 
 ```typescript
 interface ApiJob {
@@ -1017,13 +1011,11 @@ const apiQueue = new Queue<ApiJob>('external-api', {
   embedded: true,
   defaultJobOptions: {
     attempts: 5,
-    backoff: 10000, // 10 second base backoff
+    backoff: 10000, // 10 second base backoff for retries
   },
 });
 
-// Rate limit: 100 requests per minute
-apiQueue.setRateLimit(100, 60000);
-
+// Control throughput via worker concurrency
 const apiWorker = new Worker<ApiJob>('external-api', async (job) => {
   const { endpoint, method, body, headers } = job.data;
 
@@ -1036,7 +1028,7 @@ const apiWorker = new Worker<ApiJob>('external-api', async (job) => {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // Handle rate limiting from API
+  // Handle rate limiting from external API
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
     throw new Error(`Rate limited. Retry after ${retryAfter}s`);
@@ -1047,9 +1039,12 @@ const apiWorker = new Worker<ApiJob>('external-api', async (job) => {
   }
 
   return await response.json();
-}, { embedded: true, concurrency: 10 });
+}, {
+  embedded: true,
+  concurrency: 10, // Max 10 parallel requests (controls throughput)
+});
 
-// Queue many API calls - rate limiting handles throttling
+// Queue many API calls
 for (const item of items) {
   await apiQueue.add('sync', {
     endpoint: 'https://api.external.com/items',
