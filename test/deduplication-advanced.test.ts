@@ -54,18 +54,17 @@ describe('Advanced Deduplication', () => {
 
       expect(job1).toBeDefined();
 
-      // Second add immediately should fail
-      await expect(
-        manager.push(QUEUE_NAME, {
-          data: { name: 'job2', msg: 'second' },
-          uniqueKey: 'ttl-key-1',
-        })
-      ).rejects.toThrow(/unique_key/i);
+      // Second add immediately returns existing job (BullMQ-style)
+      const job2 = await manager.push(QUEUE_NAME, {
+        data: { name: 'job2', msg: 'second' },
+        uniqueKey: 'ttl-key-1',
+      });
+      expect(job2.id).toBe(job1.id);
 
       // Wait for TTL to expire
       await sleep(150);
 
-      // Now it should succeed (key expired)
+      // Now it should succeed with new job (key expired)
       const job3 = await manager.push(QUEUE_NAME, {
         data: { name: 'job3', msg: 'third' },
         uniqueKey: 'ttl-key-1',
@@ -132,7 +131,7 @@ describe('Advanced Deduplication', () => {
   });
 
   describe('Mixed scenarios', () => {
-    test('default behavior without dedup option uses simple Set logic', async () => {
+    test('default behavior without dedup option returns existing job', async () => {
       const manager = getSharedManager();
 
       const job1 = await manager.push(QUEUE_NAME, {
@@ -140,15 +139,14 @@ describe('Advanced Deduplication', () => {
         uniqueKey: 'simple-key',
       });
 
-      // Should reject duplicate
-      await expect(
-        manager.push(QUEUE_NAME, {
-          data: { name: 'job2', msg: 'second' },
-          uniqueKey: 'simple-key',
-        })
-      ).rejects.toThrow(/unique_key/i);
+      // Should return existing job (BullMQ-style)
+      const job2 = await manager.push(QUEUE_NAME, {
+        data: { name: 'job2', msg: 'second' },
+        uniqueKey: 'simple-key',
+      });
 
       expect(job1).toBeDefined();
+      expect(job2.id).toBe(job1.id);
     });
   });
 });

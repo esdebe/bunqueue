@@ -104,11 +104,17 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
           }
           throw new Error('Duplicate unique_key (extended TTL)');
         } else {
-          // Default: reject
+          // Default: return existing job (BullMQ-style idempotency)
           if (input.customId) {
             ctx.customIdMap.delete(input.customId);
           }
-          throw new Error('Duplicate unique_key');
+          const existingJob = shard.getQueue(queue).find(existingEntry.jobId);
+          if (existingJob) {
+            returnedJob = existingJob;
+            return; // Exit early, return existing job
+          }
+          // Job not in queue (maybe completed/failed) - allow new insert
+          shard.registerUniqueKeyWithTtl(queue, job.uniqueKey, job.id, input.dedup?.ttl);
         }
       } else {
         // No existing entry - register with TTL if specified

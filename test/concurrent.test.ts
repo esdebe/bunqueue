@@ -204,24 +204,22 @@ describe('Concurrent Operations', () => {
   });
 
   describe('Unique Key Concurrent', () => {
-    test('should reject duplicate unique keys in concurrent pushes', async () => {
+    test('should return same job for duplicate unique keys in concurrent pushes', async () => {
       const pushes = Array.from({ length: 5 }, () =>
-        qm
-          .push('test', {
-            data: { msg: 'test' },
-            uniqueKey: 'same-key',
-          })
-          .catch((e) => e)
+        qm.push('test', {
+          data: { msg: 'test' },
+          uniqueKey: 'same-key',
+        })
       );
 
       const results = await Promise.all(pushes);
 
-      // One should succeed, others should fail
-      const successes = results.filter((r) => r.id !== undefined);
-      const failures = results.filter((r) => r instanceof Error);
+      // All should succeed and return the same job ID (BullMQ-style)
+      const jobIds = results.map((r) => r.id);
+      const uniqueIds = new Set(jobIds);
 
-      expect(successes.length).toBe(1);
-      expect(failures.length).toBe(4);
+      expect(uniqueIds.size).toBe(1); // All return same job
+      expect(results.length).toBe(5);
     });
   });
 

@@ -55,18 +55,19 @@ describe('QueueManager', () => {
       expect(ids.length).toBe(3);
     });
 
-    test('should reject duplicate unique key', async () => {
-      await qm.push('emails', {
+    test('should return existing job for duplicate unique key', async () => {
+      const job1 = await qm.push('emails', {
         data: { msg: 'first' },
         uniqueKey: 'unique1',
       });
 
-      await expect(
-        qm.push('emails', {
-          data: { msg: 'second' },
-          uniqueKey: 'unique1',
-        })
-      ).rejects.toThrow('Duplicate unique_key');
+      const job2 = await qm.push('emails', {
+        data: { msg: 'second' },
+        uniqueKey: 'unique1',
+      });
+
+      // BullMQ-style: returns existing job instead of throwing
+      expect(job2.id).toBe(job1.id);
     });
   });
 

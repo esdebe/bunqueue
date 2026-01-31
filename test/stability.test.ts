@@ -346,20 +346,19 @@ describe('Stability Tests', () => {
       cleanup();
     });
 
-    test('unique key prevents duplicates', async () => {
+    test('unique key returns existing job for duplicates', async () => {
       const job1 = await manager.push('unique-queue', {
         data: { msg: 'first' },
         uniqueKey: 'unique-123',
       });
       expect(job1).toBeDefined();
 
-      // Second push with same key should fail
-      await expect(
-        manager.push('unique-queue', {
-          data: { msg: 'second' },
-          uniqueKey: 'unique-123',
-        })
-      ).rejects.toThrow('Duplicate unique_key');
+      // Second push with same key returns existing job (BullMQ-style)
+      const job2 = await manager.push('unique-queue', {
+        data: { msg: 'second' },
+        uniqueKey: 'unique-123',
+      });
+      expect(job2.id).toBe(job1.id);
 
       const stats = manager.getStats();
       expect(stats.waiting).toBe(1);
