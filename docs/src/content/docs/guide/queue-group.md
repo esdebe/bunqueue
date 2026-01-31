@@ -15,8 +15,8 @@ head:
 ```typescript
 import { QueueGroup } from 'bunqueue/client';
 
-// Create a group with namespace
-const billing = new QueueGroup('billing');
+// Create a group with namespace (embedded mode)
+const billing = new QueueGroup('billing', { embedded: true });
 
 // Get queues (automatically prefixed)
 const invoices = billing.getQueue('invoices');   // → "billing:invoices"
@@ -66,18 +66,21 @@ billing.drainAll();
 
 // Obliterate all queues (remove all data)
 billing.obliterateAll();
+
+// Get aggregated stats for all queues
+const stats = billing.getStats();
+// { waiting: 10, active: 2, completed: 150, failed: 3 }
 ```
 
 ## Options
 
-Pass options when creating queues or workers:
+Pass options when creating the group, queues or workers:
 
 ```typescript
-const billing = new QueueGroup('billing');
+const billing = new QueueGroup('billing', { embedded: true });
 
-// Queue with options
+// Queue with options (inherits embedded from group)
 const invoices = billing.getQueue<InvoiceData>('invoices', {
-  embedded: true,
   defaultJobOptions: {
     attempts: 5,
     backoff: 2000,
@@ -96,13 +99,13 @@ const worker = billing.getWorker('invoices', processor, {
 ### Multi-Tenant Applications
 
 ```typescript
-// Create a group per tenant
-const tenantA = new QueueGroup('tenant-a');
-const tenantB = new QueueGroup('tenant-b');
+// Create a group per tenant (embedded mode)
+const tenantA = new QueueGroup('tenant-a', { embedded: true });
+const tenantB = new QueueGroup('tenant-b', { embedded: true });
 
 // Each tenant has isolated queues
-const tasksA = tenantA.getQueue('tasks', { embedded: true });
-const tasksB = tenantB.getQueue('tasks', { embedded: true });
+const tasksA = tenantA.getQueue('tasks');
+const tasksB = tenantB.getQueue('tasks');
 
 // Jobs are isolated
 await tasksA.add('process', { tenantId: 'a' });
@@ -112,15 +115,15 @@ await tasksB.add('process', { tenantId: 'b' });
 ### Microservice Domains
 
 ```typescript
-// Group queues by domain
-const orders = new QueueGroup('orders');
-const notifications = new QueueGroup('notifications');
-const analytics = new QueueGroup('analytics');
+// Group queues by domain (embedded mode)
+const orders = new QueueGroup('orders', { embedded: true });
+const notifications = new QueueGroup('notifications', { embedded: true });
+const analytics = new QueueGroup('analytics', { embedded: true });
 
 // Each domain has its own queues
-const orderQueue = orders.getQueue('process', { embedded: true });
-const emailQueue = notifications.getQueue('email', { embedded: true });
-const eventQueue = analytics.getQueue('events', { embedded: true });
+const orderQueue = orders.getQueue('process');
+const emailQueue = notifications.getQueue('email');
+const eventQueue = analytics.getQueue('events');
 ```
 
 ### Environment Separation

@@ -736,7 +736,7 @@ const paymentWorker = new Worker<PaymentJob>('payments', async (job) => {
   };
 }, { embedded: true, concurrency: 5 });
 
-// Process order payment
+// Process order payment - CRITICAL: use durable for guaranteed persistence
 await paymentQueue.add('charge', {
   orderId: 'ORD-123',
   amount: 99.99,
@@ -744,7 +744,7 @@ await paymentQueue.add('charge', {
   customerId: 'cus_xxx',
   paymentMethodId: 'pm_xxx',
   idempotencyKey: `order-${orderId}-payment`,
-});
+}, { durable: true }); // Immediate disk write - no data loss on crash
 ```
 
 ---

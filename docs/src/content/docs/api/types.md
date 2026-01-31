@@ -241,14 +241,24 @@ interface DlqConfig {
 
 ```typescript
 type FailureReason =
-  | 'explicit_fail'        // Job explicitly failed
-  | 'max_attempts_exceeded' // Exceeded retry attempts
-  | 'timeout'              // Job timed out
-  | 'stalled'              // Job stalled (no heartbeat)
-  | 'ttl_expired'          // Time-to-live expired
-  | 'worker_lost'          // Worker disconnected
-  | 'unknown';             // Unknown reason
+  | 'explicit_fail'        // Job explicitly failed via job.fail() or thrown error
+  | 'max_attempts_exceeded' // Exceeded retry attempts after all retries exhausted
+  | 'timeout'              // Job processing timed out (exceeded job.timeout)
+  | 'stalled'              // Job stalled (no heartbeat within stallInterval)
+  | 'ttl_expired'          // Time-to-live expired before job could be processed
+  | 'worker_lost'          // Worker disconnected while processing (TCP mode)
+  | 'unknown';             // Catch-all for edge cases (e.g., corrupt job data, internal errors)
 ```
+
+:::note[When is 'unknown' used?]
+The `unknown` reason is a catch-all for rare edge cases:
+- Job data corruption during serialization
+- Internal queue manager errors
+- Jobs recovered from database without failure metadata
+- Race conditions during shutdown
+
+If you see many `unknown` failures, check logs for underlying errors.
+:::
 
 ### DlqEntry
 

@@ -91,12 +91,22 @@ videoQueue.setStallConfig({
 const worker = new Worker('video-processing', async (job) => {
   for (const chunk of video.chunks) {
     await processChunk(chunk);
-    await job.updateProgress(chunk.progress); // This also acts as a heartbeat
+    // updateProgress() also sends a heartbeat to reset the stall timer
+    await job.updateProgress(chunk.progress);
   }
 }, {
   embedded: true,
-  heartbeatInterval: 30000, // Every 30 seconds
+  heartbeatInterval: 30000, // Automatic heartbeat every 30 seconds
 });
+```
+
+:::tip[Heartbeat Methods]
+Both methods reset the stall detection timer:
+- `job.updateProgress()` - Use when you have progress to report
+- Worker's automatic heartbeat - Runs every `heartbeatInterval` ms in the background
+
+For long-running jobs without natural progress points, rely on `heartbeatInterval`.
+:::
 ```
 
 ## Monitoring

@@ -162,10 +162,14 @@ X-Webhook-ID: wh_abc123
 
 bunqueue signs all webhook payloads using HMAC-SHA256. Always verify signatures to ensure requests are authentic.
 
+:::caution[Security Warning]
+If `WEBHOOK_SECRET` is not set, webhooks are sent **without signatures**. This means anyone could forge webhook requests to your endpoint. Always set a secret in production.
+:::
+
 ### Setting the Secret
 
 ```bash
-# Set webhook secret
+# Set webhook secret (REQUIRED for production)
 WEBHOOK_SECRET=your-secret-key bunqueue start
 ```
 

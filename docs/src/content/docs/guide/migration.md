@@ -46,9 +46,17 @@ const queue = new Queue('my-queue', { connection });
 // After (bunqueue)
 import { Queue, Worker, QueueEvents } from 'bunqueue/client';
 
-const queue = new Queue('my-queue');
-// No connection needed!
+const queue = new Queue('my-queue', { embedded: true });
+// No connection needed - uses in-process SQLite!
 ```
+
+:::caution[Persistence Setup]
+For data persistence in embedded mode, set the `DATA_PATH` environment variable:
+```bash
+export DATA_PATH=./data/bunq.db
+```
+Without this, data is stored in-memory only and will be lost on restart.
+:::
 
 ## Step 3: Remove Redis Configuration
 
@@ -68,9 +76,10 @@ const queue = new Queue('emails', {
 
 // After (bunqueue)
 const queue = new Queue('emails', {
+  embedded: true,
   defaultJobOptions: {
     attempts: 3,
-    backoff: 1000, // Simplified backoff
+    backoff: 1000, // Base delay for exponential backoff
   },
 });
 ```
@@ -93,8 +102,9 @@ const worker = new Worker('emails', async (job) => {
   await sendEmail(job.data);
   return { sent: true };
 }, {
+  embedded: true,
   concurrency: 5,
-  // Rate limiting is set on queue, not worker
+  // Rate limiting is set on queue via server mode, not worker
 });
 
 // Set rate limit separately
@@ -135,11 +145,12 @@ await queue.add('task', data, {
 });
 
 // After (bunqueue) - Almost identical
+// Queue created with: new Queue('tasks', { embedded: true })
 await queue.add('task', data, {
   priority: 1,
   delay: 5000,
   attempts: 3,
-  backoff: 1000, // Just the delay value
+  backoff: 1000, // Base delay (exponential: 1s, 2s, 4s, 8s...)
   removeOnComplete: true,
   removeOnFail: false,
   jobId: 'custom-id',
@@ -151,13 +162,23 @@ await queue.add('task', data, {
 ### Backoff Configuration
 
 ```typescript
-// BullMQ
+// BullMQ supports both types
 backoff: { type: 'exponential', delay: 1000 }
 backoff: { type: 'fixed', delay: 5000 }
 
-// bunqueue (simplified)
-backoff: 1000 // Always exponential
+// bunqueue only supports exponential backoff
+backoff: 1000 // Base delay in ms
 ```
+
+:::note[Exponential Only]
+bunqueue uses exponential backoff exclusively. The value is the base delay:
+- Attempt 1 fails → wait 1000ms (1s)
+- Attempt 2 fails → wait 2000ms (2s)
+- Attempt 3 fails → wait 4000ms (4s)
+- Formula: `delay * 2^(attempt-1)`
+
+If you need fixed delays, implement custom retry logic in your processor.
+:::
 
 ### Rate Limiting
 
@@ -167,9 +188,14 @@ new Worker('queue', processor, {
   limiter: { max: 100, duration: 1000 }
 });
 
-// bunqueue (on queue)
-queue.setRateLimit(100);
+// bunqueue (server mode only - via CLI or TCP)
+// Rate limiting is not available in embedded mode
+bunqueue rate-limit set my-queue 100
 ```
+
+:::note
+Rate limiting in bunqueue is a server-side feature, configured via CLI or TCP protocol. It's not available when using embedded mode directly.
+:::
 
 ### Sandboxed Processors
 
@@ -181,6 +207,7 @@ new Worker('queue', './processor.js', { connection });
 import { SandboxedWorker } from 'bunqueue/client';
 
 const worker = new SandboxedWorker('queue', {
+  embedded: true,
   processor: './processor.ts',
   concurrency: 4,
   timeout: 30000,
@@ -196,7 +223,7 @@ await queue.add('task', data, {
   repeat: { cron: '0 * * * *' }
 });
 
-// bunqueue
+// bunqueue (queue created with embedded: true)
 await queue.add('task', data, {
   repeat: { pattern: '0 * * * *' }
 });

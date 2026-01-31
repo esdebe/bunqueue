@@ -168,12 +168,19 @@ When `useLocks: true` (default), workers use BullMQ-style lock tokens:
 - Prevents job theft between workers
 - Lock is renewed via heartbeats
 
-For high-throughput scenarios where stall detection is sufficient, you can disable locks:
+:::note[When Locks Matter]
+Locks are essential in **server mode** with multiple workers connecting via TCP. They prevent:
+- Two workers processing the same job simultaneously
+- A slow worker's job being "stolen" by a faster one
+- Race conditions when workers restart
+
+In **embedded mode** with a single process, locks add overhead but provide extra safety. You can disable them for maximum throughput:
+:::
 
 ```typescript
 const worker = new Worker('queue', processor, {
   embedded: true,
-  useLocks: false, // Rely on stall detection only
+  useLocks: false, // Rely on stall detection only (embedded mode)
 });
 ```
 
@@ -214,10 +221,15 @@ worker.on('failed', (job, error) => {
 
 For CPU-intensive tasks or jobs that might crash, use `SandboxedWorker` to run processors in **isolated Bun Worker processes**.
 
+:::note[Crash Isolation]
+Each job runs in a separate Bun Worker thread. If a job crashes (OOM, infinite loop, uncaught exception), only that worker is affected. The main process and other workers continue running. Crashed workers are automatically restarted up to `maxRestarts` times.
+:::
+
 ```typescript
 import { SandboxedWorker } from 'bunqueue/client';
 
 const worker = new SandboxedWorker('cpu-intensive', {
+  embedded: true,               // Required for embedded mode
   processor: './processor.ts',  // Path to processor file
   concurrency: 4,               // 4 parallel worker processes
   timeout: 60000,               // 60s timeout per job (default: 30000)

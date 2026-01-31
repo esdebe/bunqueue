@@ -11,6 +11,14 @@ head:
 
 Practical examples for common use cases.
 
+:::note[Persistence Setup]
+All examples below use embedded mode. For data persistence, set `DATA_PATH` before running:
+```bash
+export DATA_PATH=./data/bunq.db
+```
+Without this, data is stored in-memory only and will be lost on restart.
+:::
+
 ## Email Queue
 
 Send emails with retry and rate limiting.
@@ -18,10 +26,7 @@ Send emails with retry and rate limiting.
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-const emailQueue = new Queue('emails');
-
-// Rate limit: 100 emails per second
-emailQueue.setRateLimit(100);
+const emailQueue = new Queue('emails', { embedded: true });
 
 // Add email job
 await emailQueue.add('send', {
@@ -47,7 +52,7 @@ const worker = new Worker('emails', async (job) => {
 
   await job.updateProgress(100, 'Sent');
   return { messageId: result.id };
-});
+}, { embedded: true, concurrency: 10 });
 
 worker.on('completed', (job, result) => {
   console.log(`Email sent to ${job.data.to}: ${result.messageId}`);
@@ -65,13 +70,13 @@ Process images with parent-child flow.
 ```typescript
 import { Queue, Worker, FlowProducer } from 'bunqueue/client';
 
-// Create queues
-const uploadQueue = new Queue('uploads');
-const resizeQueue = new Queue('resize');
-const thumbnailQueue = new Queue('thumbnails');
+// Create queues (embedded mode)
+const uploadQueue = new Queue('uploads', { embedded: true });
+const resizeQueue = new Queue('resize', { embedded: true });
+const thumbnailQueue = new Queue('thumbnails', { embedded: true });
 
 // Flow producer for dependencies
-const flow = new FlowProducer();
+const flow = new FlowProducer({ embedded: true });
 
 // Add image processing flow
 await flow.add({
@@ -116,7 +121,7 @@ new Worker('uploads', async (job) => {
   });
 
   return { processed: true };
-});
+}, { embedded: true });
 
 // Resize workers
 new Worker('resize', async (job) => {
@@ -129,7 +134,7 @@ new Worker('resize', async (job) => {
   await saveImage(resized, outputPath);
 
   return outputPath;
-}, { concurrency: 4 });
+}, { embedded: true, concurrency: 4 });
 
 // Thumbnail worker
 new Worker('thumbnails', async (job) => {
@@ -142,7 +147,7 @@ new Worker('thumbnails', async (job) => {
   await saveImage(thumb, outputPath);
 
   return outputPath;
-});
+}, { embedded: true });
 ```
 
 ## Scheduled Reports
@@ -152,7 +157,7 @@ Generate reports on a schedule.
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-const reportsQueue = new Queue('reports');
+const reportsQueue = new Queue('reports', { embedded: true });
 
 // Daily report at 6 AM
 await reportsQueue.add('daily-sales', {
@@ -200,7 +205,7 @@ new Worker('reports', async (job) => {
   await sendReport(type, data);
 
   return { generated: new Date().toISOString() };
-});
+}, { embedded: true });
 ```
 
 ## Webhook Delivery
@@ -210,7 +215,7 @@ Reliable webhook delivery with retries.
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-const webhookQueue = new Queue('webhooks');
+const webhookQueue = new Queue('webhooks', { embedded: true });
 
 // Configure stall detection
 webhookQueue.setStallConfig({
@@ -257,7 +262,7 @@ new Worker('webhooks', async (job) => {
     status: response.status,
     delivered: Date.now()
   };
-}, { concurrency: 10 });
+}, { embedded: true, concurrency: 10 });
 
 // Track failed webhooks
 webhookQueue.on('failed', async (job, error) => {
@@ -279,10 +284,10 @@ ETL pipeline with stages.
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-// Stage queues
-const extractQueue = new Queue('extract');
-const transformQueue = new Queue('transform');
-const loadQueue = new Queue('load');
+// Stage queues (embedded mode)
+const extractQueue = new Queue('extract', { embedded: true });
+const transformQueue = new Queue('transform', { embedded: true });
+const loadQueue = new Queue('load', { embedded: true });
 
 // Extract worker - fetch data from source
 new Worker('extract', async (job) => {
@@ -305,7 +310,7 @@ new Worker('extract', async (job) => {
 
   await job.updateProgress(100, 'Sent to transform');
   return { recordCount: records.length };
-}, { concurrency: 2 });
+}, { embedded: true, concurrency: 2 });
 
 // Transform worker - clean and enrich data
 new Worker('transform', async (job) => {
@@ -336,7 +341,7 @@ new Worker('transform', async (job) => {
   });
 
   return { transformedCount: transformed.length };
-}, { concurrency: 4 });
+}, { embedded: true, concurrency: 4 });
 
 // Load worker - write to destination
 new Worker('load', async (job) => {
@@ -361,10 +366,10 @@ new Worker('load', async (job) => {
     loadedCount: records.length,
     batchId
   };
-});
+}, { embedded: true });
 ```
 
-## Distributed Task Processing
+## Distributed Task Processing (Server Mode)
 
 Multi-worker task distribution.
 

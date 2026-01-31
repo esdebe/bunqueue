@@ -88,19 +88,29 @@ const { jobIds } = await flow.addTree({
 
 Workers can access results from previous jobs in the chain.
 
+:::note[Automatic Properties]
+When using FlowProducer, bunqueue automatically injects special properties into job data:
+- `__flowParentId` - Parent job ID (for chain/tree flows)
+- `__flowParentIds` - Array of parent IDs (for merge flows)
+
+These allow child jobs to access parent results.
+:::
+
 ```typescript
 import { FlowProducer, Worker } from 'bunqueue/client';
 
-const flow = new FlowProducer();
+const flow = new FlowProducer({ embedded: true });
 
 const worker = new Worker('pipeline', async (job) => {
   // Check if this job has a parent (chain scenario)
+  // __flowParentId is automatically injected by FlowProducer
   if (job.data.__flowParentId) {
     const parentResult = flow.getParentResult(job.data.__flowParentId);
     console.log('Parent result:', parentResult);
   }
 
   // Check if this job has multiple parents (merge scenario)
+  // __flowParentIds is automatically injected for merge flows
   if (job.data.__flowParentIds) {
     const parentResults = flow.getParentResults(job.data.__flowParentIds);
     parentResults.forEach((result, id) => {
