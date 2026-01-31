@@ -10,7 +10,7 @@ head:
 
 All notable changes to bunqueue are documented here.
 
-## [1.9.5] - 2026-01-31
+## [1.9.6] - 2026-01-31
 
 ### Added
 - **Durable Writes** - New `durable: true` option for critical jobs
