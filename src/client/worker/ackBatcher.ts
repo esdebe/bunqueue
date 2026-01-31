@@ -84,6 +84,7 @@ export class AckBatcher {
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      console.error('[AckBatcher] Flush failed:', error.message, `(${batch.length} acks lost)`);
       for (const ack of batch) {
         ack.reject(error);
       }
