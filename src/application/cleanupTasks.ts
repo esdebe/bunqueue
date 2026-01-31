@@ -6,13 +6,14 @@
 import type { Job, JobId } from '../domain/types/job';
 import { queueLog } from '../shared/logger';
 import { processingShardIndex, SHARD_COUNT } from '../shared/hash';
+import { withWriteLock } from '../shared/lock';
 import type { BackgroundContext } from './types';
 
 /**
  * Main cleanup function - called periodically to maintain system health
  * Cleans orphaned entries, stale data, and manages memory
  */
-export function cleanup(ctx: BackgroundContext): void {
+export async function cleanup(ctx: BackgroundContext): Promise<void> {
   const now = Date.now();
   const stallTimeout = 30 * 60 * 1000; // 30 minutes max for processing
 
@@ -30,35 +31,42 @@ export function cleanup(ctx: BackgroundContext): void {
     }
   }
 
-  cleanOrphanedProcessingEntries(ctx, now, stallTimeout);
+  await cleanOrphanedProcessingEntries(ctx, now, stallTimeout);
   cleanStaleWaitingDependencies(ctx, now);
   cleanUniqueKeysAndGroups(ctx);
   cleanStalledCandidates(ctx);
-  cleanOrphanedJobIndex(ctx);
+  await cleanOrphanedJobIndex(ctx);
   cleanOrphanedJobLocks(ctx);
   cleanEmptyQueues(ctx);
 }
 
-function cleanOrphanedProcessingEntries(
+async function cleanOrphanedProcessingEntries(
   ctx: BackgroundContext,
   now: number,
   stallTimeout: number
-): void {
+): Promise<void> {
   for (let i = 0; i < SHARD_COUNT; i++) {
+    // Phase 1: Collect candidates (read-only, no lock needed)
     const orphaned: JobId[] = [];
     for (const [jobId, job] of ctx.processingShards[i]) {
       if (job.startedAt && now - job.startedAt > stallTimeout) {
         orphaned.push(jobId);
       }
     }
-    for (const jobId of orphaned) {
-      const job = ctx.processingShards[i].get(jobId);
-      if (job) {
-        ctx.processingShards[i].delete(jobId);
-        ctx.jobIndex.delete(jobId);
-        queueLog.warn('Cleaned orphaned processing job', { jobId: String(jobId) });
+
+    if (orphaned.length === 0) continue;
+
+    // Phase 2: Delete with lock to prevent race conditions
+    await withWriteLock(ctx.processingLocks[i], () => {
+      for (const jobId of orphaned) {
+        const job = ctx.processingShards[i].get(jobId);
+        if (job) {
+          ctx.processingShards[i].delete(jobId);
+          ctx.jobIndex.delete(jobId);
+          queueLog.warn('Cleaned orphaned processing job', { jobId: String(jobId) });
+        }
       }
-    }
+    });
   }
 }
 
@@ -131,26 +139,60 @@ function cleanStalledCandidates(ctx: BackgroundContext): void {
   }
 }
 
-function cleanOrphanedJobIndex(ctx: BackgroundContext): void {
+async function cleanOrphanedJobIndex(ctx: BackgroundContext): Promise<void> {
   // Expensive operation - only run when index is large
   if (ctx.jobIndex.size <= 100_000) return;
 
-  let orphanedCount = 0;
+  // Phase 1: Collect candidates grouped by shard (read-only)
+  const processingCandidates = new Map<number, JobId[]>();
+  const queueCandidates = new Map<number, Array<{ jobId: JobId; queueName: string }>>();
+
   for (const [jobId, loc] of ctx.jobIndex) {
     if (loc.type === 'processing') {
       const procIdx = processingShardIndex(String(jobId));
-      if (!ctx.processingShards[procIdx].has(jobId)) {
-        ctx.jobIndex.delete(jobId);
-        orphanedCount++;
+      let list = processingCandidates.get(procIdx);
+      if (!list) {
+        list = [];
+        processingCandidates.set(procIdx, list);
       }
+      list.push(jobId);
     } else if (loc.type === 'queue') {
-      const shard = ctx.shards[loc.shardIdx];
-      if (!shard.getQueue(loc.queueName).has(jobId)) {
-        ctx.jobIndex.delete(jobId);
-        orphanedCount++;
+      let list = queueCandidates.get(loc.shardIdx);
+      if (!list) {
+        list = [];
+        queueCandidates.set(loc.shardIdx, list);
       }
+      list.push({ jobId, queueName: loc.queueName });
     }
   }
+
+  let orphanedCount = 0;
+
+  // Phase 2: Check and delete processing entries with locks
+  for (const [procIdx, candidates] of processingCandidates) {
+    await withWriteLock(ctx.processingLocks[procIdx], () => {
+      for (const jobId of candidates) {
+        if (!ctx.processingShards[procIdx].has(jobId)) {
+          ctx.jobIndex.delete(jobId);
+          orphanedCount++;
+        }
+      }
+    });
+  }
+
+  // Phase 3: Check and delete queue entries with locks
+  for (const [shardIdx, candidates] of queueCandidates) {
+    await withWriteLock(ctx.shardLocks[shardIdx], () => {
+      const shard = ctx.shards[shardIdx];
+      for (const { jobId, queueName } of candidates) {
+        if (!shard.getQueue(queueName).has(jobId)) {
+          ctx.jobIndex.delete(jobId);
+          orphanedCount++;
+        }
+      }
+    });
+  }
+
   if (orphanedCount > 0) {
     queueLog.info('Cleaned orphaned jobIndex entries', { count: orphanedCount });
   }

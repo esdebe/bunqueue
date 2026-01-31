@@ -33,7 +33,9 @@ export function startBackgroundTasks(
   cronScheduler: CronScheduler
 ): BackgroundTaskHandles {
   const cleanupInterval = setInterval(() => {
-    cleanup(ctx);
+    cleanup(ctx).catch((err: unknown) => {
+      queueLog.error('Cleanup task failed', { error: String(err) });
+    });
   }, ctx.config.cleanupIntervalMs);
 
   const timeoutInterval = setInterval(() => {
