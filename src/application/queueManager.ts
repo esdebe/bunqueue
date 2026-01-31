@@ -90,6 +90,10 @@ export class QueueManager {
   private readonly pendingDepChecks = new Set<JobId>();
   private depCheckInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Two-phase stall detection (like BullMQ)
+  // Jobs are added here on first check, confirmed stalled on second check
+  private readonly stalledCandidates = new Set<JobId>();
+
   // Cron scheduler
   private readonly cronScheduler: CronScheduler;
 
@@ -686,34 +690,69 @@ export class QueueManager {
 
   /**
    * Check for stalled jobs and handle them
-   * Stalled = active job with no heartbeat for too long
+   * Uses two-phase detection (like BullMQ) to prevent false positives:
+   * - Phase 1: Jobs marked as candidates in previous check are confirmed stalled
+   * - Phase 2: Current processing jobs are marked as candidates for next check
    */
   private checkStalledJobs(): void {
     const now = Date.now();
+    const confirmedStalled: Array<{ job: Job; action: StallAction }> = [];
 
+    // Phase 1: Check jobs that were candidates from previous cycle
+    // If still in processing and still meets stall criteria → confirmed stalled
+    for (const jobId of this.stalledCandidates) {
+      // Find job in processing shards
+      const procIdx = processingShardIndex(String(jobId));
+      const job = this.processingShards[procIdx].get(jobId);
+
+      if (!job) {
+        // Job completed between checks - not stalled (false positive avoided!)
+        this.stalledCandidates.delete(jobId);
+        continue;
+      }
+
+      const stallConfig = this.shards[shardIndex(job.queue)].getStallConfig(job.queue);
+      if (!stallConfig.enabled) {
+        this.stalledCandidates.delete(jobId);
+        continue;
+      }
+
+      // Re-check stall criteria (job might have received heartbeat)
+      const action = getStallAction(job, stallConfig, now);
+      if (action !== StallAction.Keep) {
+        // Confirmed stalled - was candidate AND still meets criteria
+        confirmedStalled.push({ job, action });
+      }
+
+      // Remove from candidates (will be re-added in phase 2 if still processing)
+      this.stalledCandidates.delete(jobId);
+    }
+
+    // Phase 2: Mark current processing jobs as candidates for NEXT check
     for (let i = 0; i < SHARD_COUNT; i++) {
       const procShard = this.processingShards[i];
-      const stalledJobs: Array<{ job: Job; action: StallAction }> = [];
 
-      for (const [_jobId, job] of procShard) {
+      for (const [jobId, job] of procShard) {
         const stallConfig = this.shards[shardIndex(job.queue)].getStallConfig(job.queue);
         if (!stallConfig.enabled) continue;
 
+        // Only mark as candidate if past grace period and no recent heartbeat
         const action = getStallAction(job, stallConfig, now);
         if (action !== StallAction.Keep) {
-          stalledJobs.push({ job, action });
+          // Add to candidates - will be checked in NEXT cycle
+          this.stalledCandidates.add(jobId);
         }
       }
+    }
 
-      // Process stalled jobs
-      for (const { job, action } of stalledJobs) {
-        this.handleStalledJob(job, action).catch((err: unknown) => {
-          queueLog.error('Failed to handle stalled job', {
-            jobId: String(job.id),
-            error: String(err),
-          });
+    // Process confirmed stalled jobs
+    for (const { job, action } of confirmedStalled) {
+      this.handleStalledJob(job, action).catch((err: unknown) => {
+        queueLog.error('Failed to handle stalled job', {
+          jobId: String(job.id),
+          error: String(err),
         });
-      }
+      });
     }
   }
 
