@@ -3,8 +3,14 @@
  * Core orchestrator for all queue operations
  */
 
-import type { Job, JobId, JobInput } from '../domain/types/job';
-import { calculateBackoff } from '../domain/types/job';
+import type { Job, JobId, JobInput, JobLock, LockToken } from '../domain/types/job';
+import {
+  calculateBackoff,
+  createJobLock,
+  isLockExpired,
+  renewLock,
+  DEFAULT_LOCK_TTL,
+} from '../domain/types/job';
 import { queueLog } from '../shared/logger';
 import type { JobLocation, JobEvent } from '../domain/types/queue';
 import { EventType } from '../domain/types/queue';
@@ -94,6 +100,14 @@ export class QueueManager {
   // Jobs are added here on first check, confirmed stalled on second check
   private readonly stalledCandidates = new Set<JobId>();
 
+  // Lock-based job ownership tracking (BullMQ-style)
+  // Maps jobId to lock info (token, owner, expiration)
+  private readonly jobLocks = new Map<JobId, JobLock>();
+
+  // Client-job tracking for connection-based release
+  // When a TCP connection closes, all jobs owned by that client are released
+  private readonly clientJobs = new Map<string, Set<JobId>>();
+
   // Cron scheduler
   private readonly cronScheduler: CronScheduler;
 
@@ -119,6 +133,7 @@ export class QueueManager {
   private timeoutInterval: ReturnType<typeof setInterval> | null = null;
   private stallCheckInterval: ReturnType<typeof setInterval> | null = null;
   private dlqMaintenanceInterval: ReturnType<typeof setInterval> | null = null;
+  private lockCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   // Queue names cache for O(1) listQueues instead of O(32 * queues)
   private readonly queueNamesCache = new Set<string>();
@@ -287,34 +302,121 @@ export class QueueManager {
     return pullJob(queue, timeoutMs, this.getPullContext());
   }
 
+  /**
+   * Pull a job and create a lock for it (BullMQ-style).
+   * Returns both the job and its lock token for ownership verification.
+   */
+  async pullWithLock(
+    queue: string,
+    owner: string,
+    timeoutMs: number = 0,
+    lockTtl: number = DEFAULT_LOCK_TTL
+  ): Promise<{ job: Job | null; token: string | null }> {
+    const job = await pullJob(queue, timeoutMs, this.getPullContext());
+    if (!job) return { job: null, token: null };
+
+    const token = this.createLock(job.id, owner, lockTtl);
+    return { job, token };
+  }
+
   /** Pull multiple jobs in single lock acquisition - O(1) instead of O(n) locks */
   async pullBatch(queue: string, count: number, timeoutMs: number = 0): Promise<Job[]> {
     return pullJobBatch(queue, count, timeoutMs, this.getPullContext());
   }
 
-  async ack(jobId: JobId, result?: unknown): Promise<void> {
-    return ackJob(jobId, result, this.getAckContext());
+  /**
+   * Pull multiple jobs and create locks for them (BullMQ-style).
+   * Returns both jobs and their lock tokens for ownership verification.
+   */
+  async pullBatchWithLock(
+    queue: string,
+    count: number,
+    owner: string,
+    timeoutMs: number = 0,
+    lockTtl: number = DEFAULT_LOCK_TTL
+  ): Promise<{ jobs: Job[]; tokens: string[] }> {
+    const jobs = await pullJobBatch(queue, count, timeoutMs, this.getPullContext());
+    const tokens: string[] = [];
+
+    for (const job of jobs) {
+      const token = this.createLock(job.id, owner, lockTtl);
+      tokens.push(token ?? '');
+    }
+
+    return { jobs, tokens };
+  }
+
+  async ack(jobId: JobId, result?: unknown, token?: string): Promise<void> {
+    // If token provided, verify ownership before acknowledging
+    if (token && !this.verifyLock(jobId, token)) {
+      throw new Error(`Invalid or expired lock token for job ${jobId}`);
+    }
+    await ackJob(jobId, result, this.getAckContext());
+    // Release lock after successful ack
+    this.releaseLock(jobId, token);
   }
 
   /** Acknowledge multiple jobs in parallel with Promise.all */
-  async ackBatch(jobIds: JobId[]): Promise<void> {
-    return ackJobBatch(jobIds, this.getAckContext());
+  async ackBatch(jobIds: JobId[], tokens?: string[]): Promise<void> {
+    // Verify all tokens first if provided
+    if (tokens?.length === jobIds.length) {
+      for (let i = 0; i < jobIds.length; i++) {
+        const t = tokens[i];
+        if (t && !this.verifyLock(jobIds[i], t)) {
+          throw new Error(`Invalid or expired lock token for job ${jobIds[i]}`);
+        }
+      }
+    }
+    await ackJobBatch(jobIds, this.getAckContext());
+    // Release locks after successful ack
+    if (tokens) {
+      for (let i = 0; i < jobIds.length; i++) {
+        this.releaseLock(jobIds[i], tokens[i]);
+      }
+    }
   }
 
   /** Acknowledge multiple jobs with individual results - batch optimized */
-  async ackBatchWithResults(items: Array<{ id: JobId; result: unknown }>): Promise<void> {
-    return ackJobBatchWithResults(items, this.getAckContext());
+  async ackBatchWithResults(
+    items: Array<{ id: JobId; result: unknown; token?: string }>
+  ): Promise<void> {
+    // Verify all tokens first if provided
+    for (const item of items) {
+      if (item.token && !this.verifyLock(item.id, item.token)) {
+        throw new Error(`Invalid or expired lock token for job ${item.id}`);
+      }
+    }
+    await ackJobBatchWithResults(items, this.getAckContext());
+    // Release locks after successful ack
+    for (const item of items) {
+      this.releaseLock(item.id, item.token);
+    }
   }
 
-  async fail(jobId: JobId, error?: string): Promise<void> {
-    return failJob(jobId, error, this.getAckContext());
+  async fail(jobId: JobId, error?: string, token?: string): Promise<void> {
+    // If token provided, verify ownership before failing
+    if (token && !this.verifyLock(jobId, token)) {
+      throw new Error(`Invalid or expired lock token for job ${jobId}`);
+    }
+    await failJob(jobId, error, this.getAckContext());
+    // Release lock after fail
+    this.releaseLock(jobId, token);
   }
 
-  /** Update job heartbeat for stall detection (single job) */
-  jobHeartbeat(jobId: JobId): boolean {
+  /**
+   * Update job heartbeat for stall detection (single job).
+   * If token is provided, also renews the lock.
+   */
+  jobHeartbeat(jobId: JobId, token?: string): boolean {
     const loc = this.jobIndex.get(jobId);
     if (loc?.type !== 'processing') return false;
 
+    // If token provided, renew lock (which also updates heartbeat)
+    if (token) {
+      return this.renewJobLock(jobId, token);
+    }
+
+    // Legacy mode: just update heartbeat without token verification
     const processing = this.processingShards[loc.shardIdx];
     const job = processing.get(jobId);
 
@@ -325,13 +427,297 @@ export class QueueManager {
     return false;
   }
 
-  /** Update job heartbeat for multiple jobs (batch) */
-  jobHeartbeatBatch(jobIds: JobId[]): number {
+  /**
+   * Update job heartbeat for multiple jobs (batch).
+   * If tokens are provided, also renews the locks.
+   */
+  jobHeartbeatBatch(jobIds: JobId[], tokens?: string[]): number {
     let count = 0;
-    for (const id of jobIds) {
-      if (this.jobHeartbeat(id)) count++;
+    for (let i = 0; i < jobIds.length; i++) {
+      const token = tokens?.[i];
+      if (this.jobHeartbeat(jobIds[i], token)) count++;
     }
     return count;
+  }
+
+  // ============ Lock Management (BullMQ-style) ============
+
+  /**
+   * Create a lock for a job when it's pulled for processing.
+   * @returns The lock token, or null if job not in processing
+   */
+  createLock(jobId: JobId, owner: string, ttl: number = DEFAULT_LOCK_TTL): LockToken | null {
+    const loc = this.jobIndex.get(jobId);
+    if (loc?.type !== 'processing') return null;
+
+    // Check if lock already exists (shouldn't happen, but defensive)
+    if (this.jobLocks.has(jobId)) {
+      queueLog.warn('Lock already exists for job', { jobId: String(jobId), owner });
+      return null;
+    }
+
+    const lock = createJobLock(jobId, owner, ttl);
+    this.jobLocks.set(jobId, lock);
+    return lock.token;
+  }
+
+  /**
+   * Verify that a token is valid for a job.
+   * @returns true if token matches the active lock
+   */
+  verifyLock(jobId: JobId, token: string): boolean {
+    const lock = this.jobLocks.get(jobId);
+    if (!lock) return false;
+    if (lock.token !== token) return false;
+    if (isLockExpired(lock)) return false;
+    return true;
+  }
+
+  /**
+   * Renew a lock with the given token.
+   * @returns true if renewal succeeded, false if token invalid or lock expired
+   */
+  renewJobLock(jobId: JobId, token: string, newTtl?: number): boolean {
+    const lock = this.jobLocks.get(jobId);
+    if (!lock) return false;
+    if (lock.token !== token) return false;
+    if (isLockExpired(lock)) {
+      // Lock already expired, remove it
+      this.jobLocks.delete(jobId);
+      return false;
+    }
+
+    renewLock(lock, newTtl);
+
+    // Also update lastHeartbeat on the job (for legacy stall detection compatibility)
+    const loc = this.jobIndex.get(jobId);
+    if (loc?.type === 'processing') {
+      const job = this.processingShards[loc.shardIdx].get(jobId);
+      if (job) job.lastHeartbeat = Date.now();
+    }
+
+    return true;
+  }
+
+  /**
+   * Renew locks for multiple jobs (batch operation).
+   * @returns Array of jobIds that were successfully renewed
+   */
+  renewJobLockBatch(items: Array<{ id: JobId; token: string; ttl?: number }>): string[] {
+    const renewed: string[] = [];
+    for (const item of items) {
+      if (this.renewJobLock(item.id, item.token, item.ttl)) {
+        renewed.push(String(item.id));
+      }
+    }
+    return renewed;
+  }
+
+  /**
+   * Release a lock when job is completed or failed.
+   * Should be called by ACK/FAIL operations.
+   */
+  releaseLock(jobId: JobId, token?: string): boolean {
+    const lock = this.jobLocks.get(jobId);
+    if (!lock) return true; // No lock to release
+
+    // If token provided, verify it matches
+    if (token && lock.token !== token) {
+      queueLog.warn('Token mismatch on lock release', {
+        jobId: String(jobId),
+        expected: lock.token.substring(0, 8),
+        got: token.substring(0, 8),
+      });
+      return false;
+    }
+
+    this.jobLocks.delete(jobId);
+    return true;
+  }
+
+  /**
+   * Get lock info for a job (for debugging/monitoring).
+   */
+  getLockInfo(jobId: JobId): JobLock | null {
+    return this.jobLocks.get(jobId) ?? null;
+  }
+
+  // ============ Client-Job Tracking ============
+
+  /**
+   * Register a job as owned by a client (called on PULL).
+   */
+  registerClientJob(clientId: string, jobId: JobId): void {
+    let jobs = this.clientJobs.get(clientId);
+    if (!jobs) {
+      jobs = new Set();
+      this.clientJobs.set(clientId, jobs);
+    }
+    jobs.add(jobId);
+  }
+
+  /**
+   * Unregister a job from a client (called on ACK/FAIL).
+   */
+  unregisterClientJob(clientId: string | undefined, jobId: JobId): void {
+    if (!clientId) return;
+    const jobs = this.clientJobs.get(clientId);
+    if (jobs) {
+      jobs.delete(jobId);
+      if (jobs.size === 0) {
+        this.clientJobs.delete(clientId);
+      }
+    }
+  }
+
+  /**
+   * Release all jobs owned by a client back to queue (called on TCP disconnect).
+   * Returns the number of jobs released.
+   */
+  releaseClientJobs(clientId: string): number {
+    const jobs = this.clientJobs.get(clientId);
+    if (!jobs || jobs.size === 0) {
+      this.clientJobs.delete(clientId);
+      return 0;
+    }
+
+    let released = 0;
+    const now = Date.now();
+
+    for (const jobId of jobs) {
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') continue;
+
+      const procIdx = loc.shardIdx;
+      const job = this.processingShards[procIdx].get(jobId);
+      if (!job) continue;
+
+      // Remove from processing
+      this.processingShards[procIdx].delete(jobId);
+
+      // Release lock if exists
+      this.jobLocks.delete(jobId);
+
+      // Release concurrency
+      const idx = shardIndex(job.queue);
+      const shard = this.shards[idx];
+      shard.releaseConcurrency(job.queue);
+
+      // Release group if active
+      if (job.groupId) {
+        shard.releaseGroup(job.queue, job.groupId);
+      }
+
+      // Reset job state for retry
+      job.startedAt = null;
+      job.lastHeartbeat = now;
+
+      // Re-queue the job
+      shard.getQueue(job.queue).push(job);
+      const isDelayed = job.runAt > now;
+      shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue, job.runAt);
+      this.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+      released++;
+    }
+
+    // Clear client tracking
+    this.clientJobs.delete(clientId);
+
+    if (released > 0) {
+      queueLog.info('Released client jobs', { clientId: clientId.substring(0, 8), released });
+    }
+
+    return released;
+  }
+
+  /**
+   * Check and handle expired locks.
+   * Jobs with expired locks are requeued for retry.
+   */
+  private checkExpiredLocks(): void {
+    const now = Date.now();
+    const expired: Array<{ jobId: JobId; lock: JobLock }> = [];
+
+    for (const [jobId, lock] of this.jobLocks) {
+      if (isLockExpired(lock, now)) {
+        expired.push({ jobId, lock });
+      }
+    }
+
+    for (const { jobId, lock } of expired) {
+      const procIdx = processingShardIndex(String(jobId));
+      const job = this.processingShards[procIdx].get(jobId);
+
+      if (job) {
+        const idx = shardIndex(job.queue);
+        const shard = this.shards[idx];
+        const queue = shard.getQueue(job.queue);
+
+        // Remove from processing
+        this.processingShards[procIdx].delete(jobId);
+
+        // Increment attempts and reset state
+        job.attempts++;
+        job.startedAt = null;
+        job.lastHeartbeat = now;
+        job.stallCount++;
+
+        // Check if max stalls exceeded
+        const stallConfig = shard.getStallConfig(job.queue);
+        if (stallConfig.maxStalls > 0 && job.stallCount >= stallConfig.maxStalls) {
+          // Move to DLQ using shard's addToDlq method
+          shard.addToDlq(
+            job,
+            FailureReason.Stalled,
+            `Lock expired after ${lock.renewalCount} renewals`
+          );
+          this.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
+
+          queueLog.warn('Job moved to DLQ due to lock expiration', {
+            jobId: String(jobId),
+            queue: job.queue,
+            owner: lock.owner,
+            renewals: lock.renewalCount,
+            stallCount: job.stallCount,
+          });
+
+          this.eventsManager.broadcast({
+            eventType: EventType.Failed,
+            jobId,
+            queue: job.queue,
+            timestamp: now,
+            error: 'Lock expired (max stalls reached)',
+          });
+        } else {
+          // Requeue for retry (always push - priority queue handles ordering)
+          queue.push(job);
+          this.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+          queueLog.info('Job requeued due to lock expiration', {
+            jobId: String(jobId),
+            queue: job.queue,
+            owner: lock.owner,
+            renewals: lock.renewalCount,
+            attempt: job.attempts,
+          });
+
+          this.eventsManager.broadcast({
+            eventType: EventType.Stalled,
+            jobId,
+            queue: job.queue,
+            timestamp: now,
+          });
+        }
+      }
+
+      // Remove the expired lock
+      this.jobLocks.delete(jobId);
+    }
+
+    if (expired.length > 0) {
+      queueLog.info('Processed expired locks', { count: expired.length });
+    }
   }
 
   // ============ Query Operations (delegated) ============
@@ -669,6 +1055,10 @@ export class QueueManager {
     this.dlqMaintenanceInterval = setInterval(() => {
       this.performDlqMaintenance();
     }, this.config.dlqMaintenanceMs);
+    // Lock expiration check runs at same interval as stall check
+    this.lockCheckInterval = setInterval(() => {
+      this.checkExpiredLocks();
+    }, this.config.stallCheckMs);
     this.cronScheduler.start();
   }
 
@@ -991,6 +1381,84 @@ export class QueueManager {
         }
       }
     }
+
+    // Clean stale stalledCandidates (jobs no longer in processing)
+    for (const jobId of this.stalledCandidates) {
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') {
+        this.stalledCandidates.delete(jobId);
+      }
+    }
+
+    // Clean orphaned jobIndex entries (pointing to invalid locations)
+    // This is expensive so only run if index is large
+    if (this.jobIndex.size > 100_000) {
+      let orphanedCount = 0;
+      for (const [jobId, loc] of this.jobIndex) {
+        if (loc.type === 'processing') {
+          const procIdx = processingShardIndex(String(jobId));
+          if (!this.processingShards[procIdx].has(jobId)) {
+            this.jobIndex.delete(jobId);
+            orphanedCount++;
+          }
+        } else if (loc.type === 'queue') {
+          // Check if job still exists in shard
+          const shard = this.shards[loc.shardIdx];
+          if (!shard.getQueue(loc.queueName).has(jobId)) {
+            this.jobIndex.delete(jobId);
+            orphanedCount++;
+          }
+        }
+      }
+      if (orphanedCount > 0) {
+        queueLog.info('Cleaned orphaned jobIndex entries', { count: orphanedCount });
+      }
+    }
+
+    // Clean orphaned job locks (locks for jobs no longer in processing)
+    for (const jobId of this.jobLocks.keys()) {
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') {
+        this.jobLocks.delete(jobId);
+      }
+    }
+
+    // Remove empty queues to free memory (like obliterate but only for empty queues)
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const shard = this.shards[i];
+      const emptyQueues: string[] = [];
+
+      for (const [queueName, queue] of shard.queues) {
+        // Queue is empty and has no DLQ entries
+        const dlqEntries = shard.dlq.get(queueName);
+        if (queue.size === 0 && (!dlqEntries || dlqEntries.length === 0)) {
+          emptyQueues.push(queueName);
+        }
+      }
+
+      for (const queueName of emptyQueues) {
+        shard.queues.delete(queueName);
+        shard.dlq.delete(queueName);
+        shard.uniqueKeys.delete(queueName);
+        shard.queueState.delete(queueName);
+        shard.activeGroups.delete(queueName);
+        shard.rateLimiters.delete(queueName);
+        shard.concurrencyLimiters.delete(queueName);
+        shard.stallConfig.delete(queueName);
+        shard.dlqConfig.delete(queueName);
+        this.unregisterQueueName(queueName);
+      }
+
+      if (emptyQueues.length > 0) {
+        queueLog.info('Removed empty queues', { shard: i, count: emptyQueues.length });
+      }
+
+      // Clean orphaned temporal index entries (memory leak fix)
+      const cleanedTemporal = shard.cleanOrphanedTemporalEntries();
+      if (cleanedTemporal > 0) {
+        queueLog.info('Cleaned orphaned temporal entries', { shard: i, count: cleanedTemporal });
+      }
+    }
   }
 
   // ============ Lifecycle ============
@@ -1004,6 +1472,7 @@ export class QueueManager {
     if (this.depCheckInterval) clearInterval(this.depCheckInterval);
     if (this.stallCheckInterval) clearInterval(this.stallCheckInterval);
     if (this.dlqMaintenanceInterval) clearInterval(this.dlqMaintenanceInterval);
+    if (this.lockCheckInterval) clearInterval(this.lockCheckInterval);
     this.storage?.close();
 
     // Clear in-memory collections
@@ -1014,6 +1483,9 @@ export class QueueManager {
     this.customIdMap.clear();
     this.pendingDepChecks.clear();
     this.queueNamesCache.clear();
+    this.jobLocks.clear();
+    this.stalledCandidates.clear();
+    this.clientJobs.clear();
     for (const shard of this.processingShards) {
       shard.clear();
     }
@@ -1060,5 +1532,102 @@ export class QueueManager {
       cronJobs: cronStats.total,
       cronPending: cronStats.pending,
     };
+  }
+
+  /**
+   * Get detailed memory statistics for debugging memory issues.
+   * Returns counts of entries in all major collections.
+   */
+  getMemoryStats(): {
+    jobIndex: number;
+    completedJobs: number;
+    jobResults: number;
+    jobLogs: number;
+    customIdMap: number;
+    jobLocks: number;
+    clientJobs: number;
+    clientJobsTotal: number;
+    pendingDepChecks: number;
+    stalledCandidates: number;
+    processingTotal: number;
+    queuedTotal: number;
+    waitingDepsTotal: number;
+    // Internal shard structures (can accumulate and cause memory leaks)
+    temporalIndexTotal: number;
+    delayedHeapTotal: number;
+  } {
+    let processingTotal = 0;
+    let queuedTotal = 0;
+    let waitingDepsTotal = 0;
+    let temporalIndexTotal = 0;
+    let delayedHeapTotal = 0;
+
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      processingTotal += this.processingShards[i].size;
+      const shardStats = this.shards[i].getStats();
+      queuedTotal += shardStats.queuedJobs;
+      waitingDepsTotal += this.shards[i].waitingDeps.size;
+      // Get internal structure sizes
+      const internalSizes = this.shards[i].getInternalSizes();
+      temporalIndexTotal += internalSizes.temporalIndex;
+      delayedHeapTotal += internalSizes.delayedHeap;
+    }
+
+    // Count total jobs across all clients
+    let clientJobsTotal = 0;
+    for (const jobs of this.clientJobs.values()) {
+      clientJobsTotal += jobs.size;
+    }
+
+    return {
+      jobIndex: this.jobIndex.size,
+      completedJobs: this.completedJobs.size,
+      jobResults: this.jobResults.size,
+      jobLogs: this.jobLogs.size,
+      customIdMap: this.customIdMap.size,
+      jobLocks: this.jobLocks.size,
+      clientJobs: this.clientJobs.size,
+      clientJobsTotal,
+      pendingDepChecks: this.pendingDepChecks.size,
+      stalledCandidates: this.stalledCandidates.size,
+      processingTotal,
+      queuedTotal,
+      waitingDepsTotal,
+      temporalIndexTotal,
+      delayedHeapTotal,
+    };
+  }
+
+  /**
+   * Force compact all collections to reduce memory usage.
+   * Use after large batch operations or when memory pressure is high.
+   */
+  compactMemory(): void {
+    // Compact priority queues that have high stale ratios
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      for (const q of this.shards[i].queues.values()) {
+        if (q.needsCompaction(0.1)) {
+          // More aggressive: 10% stale threshold
+          q.compact();
+        }
+      }
+    }
+
+    // Clean up empty client tracking entries
+    for (const [clientId, jobs] of this.clientJobs) {
+      if (jobs.size === 0) {
+        this.clientJobs.delete(clientId);
+      }
+    }
+
+    // Clean orphaned job locks (jobs no longer in processing)
+    for (const jobId of this.jobLocks.keys()) {
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') {
+        this.jobLocks.delete(jobId);
+      }
+    }
+
+    queueLog.info('Memory compacted');
   }
 }

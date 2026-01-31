@@ -148,6 +148,68 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         return jsonResponse({ ok: true, ready: true });
       }
 
+      // Force garbage collection (for debugging memory issues)
+      if (path === '/gc' && req.method === 'POST') {
+        const before = process.memoryUsage();
+        if (typeof Bun !== 'undefined' && Bun.gc) {
+          Bun.gc(true); // Aggressive GC
+        }
+        queueManager.compactMemory();
+        const after = process.memoryUsage();
+        return jsonResponse({
+          ok: true,
+          before: {
+            heapUsed: Math.round(before.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(before.heapTotal / 1024 / 1024),
+            rss: Math.round(before.rss / 1024 / 1024),
+          },
+          after: {
+            heapUsed: Math.round(after.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(after.heapTotal / 1024 / 1024),
+            rss: Math.round(after.rss / 1024 / 1024),
+          },
+        });
+      }
+
+      // Heap statistics (for debugging memory leaks)
+      if (path === '/heapstats' && req.method === 'GET') {
+        // Run GC first for accurate stats
+        if (typeof Bun !== 'undefined' && Bun.gc) {
+          Bun.gc(true);
+        }
+
+        // Get heap stats from bun:jsc
+        const { heapStats } = await import('bun:jsc');
+        const stats = heapStats();
+        const mem = process.memoryUsage();
+        const memStats = queueManager.getMemoryStats();
+
+        // Get top object types by count
+        const typeCounts = stats.objectTypeCounts as Record<string, number> | undefined;
+        const topTypes = typeCounts
+          ? Object.entries(typeCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 20)
+              .map(([type, count]) => ({ type, count }))
+          : [];
+
+        return jsonResponse({
+          ok: true,
+          memory: {
+            heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+            rss: Math.round(mem.rss / 1024 / 1024),
+          },
+          heap: {
+            objectCount: stats.objectCount,
+            protectedCount: stats.protectedObjectCount,
+            globalCount: stats.globalObjectCount,
+          },
+          collections: memStats,
+          topObjectTypes: topTypes,
+        });
+      }
+
       // Rate limiting (use IP as client ID for HTTP)
       const clientIp =
         req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
@@ -356,6 +418,8 @@ async function routeRequest(
   // Stats endpoint
   if (path === '/stats' && method === 'GET') {
     const stats = ctx.queueManager.getStats();
+    const memStats = ctx.queueManager.getMemoryStats();
+    const mem = process.memoryUsage();
     return jsonResponse(
       {
         ok: true,
@@ -366,6 +430,14 @@ async function routeRequest(
           totalCompleted: Number(stats.totalCompleted),
           totalFailed: Number(stats.totalFailed),
         },
+        memory: {
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+          rss: Math.round(mem.rss / 1024 / 1024),
+          external: Math.round(mem.external / 1024 / 1024),
+          arrayBuffers: Math.round(mem.arrayBuffers / 1024 / 1024),
+        },
+        collections: memStats,
       },
       200,
       corsOrigins

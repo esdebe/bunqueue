@@ -98,7 +98,26 @@ export async function handlePull(
   const timeoutError = validateNumericField(cmd.timeout, 'timeout', { min: 0, max: 60000 });
   if (timeoutError) return resp.error(timeoutError, reqId);
 
+  // If owner is provided, use lock-based pull
+  if (cmd.owner) {
+    const { job, token } = await ctx.queueManager.pullWithLock(
+      cmd.queue,
+      cmd.owner,
+      cmd.timeout,
+      cmd.lockTtl
+    );
+    // Register job with client for connection-based release
+    if (job && ctx.clientId) {
+      ctx.queueManager.registerClientJob(ctx.clientId, job.id);
+    }
+    return resp.pulledJob(job, token, reqId);
+  }
+
+  // Standard pull (no lock, but still track for client release)
   const job = await ctx.queueManager.pull(cmd.queue, cmd.timeout);
+  if (job && ctx.clientId) {
+    ctx.queueManager.registerClientJob(ctx.clientId, job.id);
+  }
   return resp.nullableJob(job, reqId);
 }
 
@@ -115,8 +134,31 @@ export async function handlePullBatch(
   const countError = validateNumericField(cmd.count, 'count', { min: 1, max: 1000 });
   if (countError) return resp.error(countError, reqId);
 
-  // Use optimized batch pull - O(1) lock instead of O(n) locks
+  // If owner is provided, use lock-based pull
+  if (cmd.owner) {
+    const { jobs, tokens } = await ctx.queueManager.pullBatchWithLock(
+      cmd.queue,
+      cmd.count,
+      cmd.owner,
+      cmd.timeout ?? 0,
+      cmd.lockTtl
+    );
+    // Register all jobs with client for connection-based release
+    if (ctx.clientId) {
+      for (const job of jobs) {
+        ctx.queueManager.registerClientJob(ctx.clientId, job.id);
+      }
+    }
+    return resp.pulledJobs(jobs, tokens, reqId);
+  }
+
+  // Standard pull (no locks, but still track for client release)
   const jobs = await ctx.queueManager.pullBatch(cmd.queue, cmd.count, 0);
+  if (ctx.clientId) {
+    for (const job of jobs) {
+      ctx.queueManager.registerClientJob(ctx.clientId, job.id);
+    }
+  }
   return resp.jobs(jobs, reqId);
 }
 
@@ -126,11 +168,18 @@ export async function handleAck(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  await ctx.queueManager.ack(jobId(cmd.id), cmd.result);
-  return resp.ok(undefined, reqId);
+  try {
+    const jid = jobId(cmd.id);
+    await ctx.queueManager.ack(jid, cmd.result, cmd.token);
+    // Unregister job from client tracking
+    ctx.queueManager.unregisterClientJob(ctx.clientId, jid);
+    return resp.ok(undefined, reqId);
+  } catch (err) {
+    return resp.error(err instanceof Error ? err.message : String(err), reqId);
+  }
 }
 
-/** Handle ACKB (batch ack) command - supports optional results */
+/** Handle ACKB (batch ack) command - supports optional results and tokens */
 export async function handleAckBatch(
   cmd: Extract<Command, { cmd: 'ACKB' }>,
   ctx: HandlerContext,
@@ -138,16 +187,29 @@ export async function handleAckBatch(
 ): Promise<Response> {
   const ids = cmd.ids.map((id) => jobId(id));
 
-  // If results provided, use ackBatchWithResults
-  if (cmd.results?.length === cmd.ids.length) {
-    const results = cmd.results;
-    const items = ids.map((id, i) => ({ id, result: results[i] }));
-    await ctx.queueManager.ackBatchWithResults(items);
-  } else {
-    // Use optimized batch ack without results
-    await ctx.queueManager.ackBatch(ids);
+  try {
+    // If results provided, use ackBatchWithResults
+    if (cmd.results?.length === cmd.ids.length) {
+      const results = cmd.results;
+      const tokens = cmd.tokens;
+      const items = ids.map((id, i) => ({
+        id,
+        result: results[i],
+        token: tokens?.[i],
+      }));
+      await ctx.queueManager.ackBatchWithResults(items);
+    } else {
+      // Use optimized batch ack without results
+      await ctx.queueManager.ackBatch(ids, cmd.tokens);
+    }
+    // Unregister all jobs from client tracking
+    for (const id of ids) {
+      ctx.queueManager.unregisterClientJob(ctx.clientId, id);
+    }
+    return resp.ok(undefined, reqId);
+  } catch (err) {
+    return resp.error(err instanceof Error ? err.message : String(err), reqId);
   }
-  return resp.ok(undefined, reqId);
 }
 
 /** Handle FAIL command */
@@ -156,6 +218,13 @@ export async function handleFail(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  await ctx.queueManager.fail(jobId(cmd.id), cmd.error);
-  return resp.ok(undefined, reqId);
+  try {
+    const jid = jobId(cmd.id);
+    await ctx.queueManager.fail(jid, cmd.error, cmd.token);
+    // Unregister job from client tracking
+    ctx.queueManager.unregisterClientJob(ctx.clientId, jid);
+    return resp.ok(undefined, reqId);
+  } catch (err) {
+    return resp.error(err instanceof Error ? err.message : String(err), reqId);
+  }
 }

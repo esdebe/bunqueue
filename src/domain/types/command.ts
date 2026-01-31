@@ -43,6 +43,8 @@ export interface PullCommand extends BaseCommand {
   readonly cmd: 'PULL';
   readonly queue: string;
   readonly timeout?: number;
+  readonly owner?: string; // Client identifier for lock ownership
+  readonly lockTtl?: number; // Lock TTL in ms (default: 30000)
 }
 
 export interface PullBatchCommand extends BaseCommand {
@@ -50,24 +52,29 @@ export interface PullBatchCommand extends BaseCommand {
   readonly queue: string;
   readonly count: number;
   readonly timeout?: number;
+  readonly owner?: string; // Client identifier for lock ownership
+  readonly lockTtl?: number; // Lock TTL in ms (default: 30000)
 }
 
 export interface AckCommand extends BaseCommand {
   readonly cmd: 'ACK';
   readonly id: string;
   readonly result?: unknown;
+  readonly token?: string; // Lock token for ownership verification
 }
 
 export interface AckBatchCommand extends BaseCommand {
   readonly cmd: 'ACKB';
   readonly ids: string[];
   readonly results?: unknown[]; // Optional results for each job (same order as ids)
+  readonly tokens?: string[]; // Lock tokens for each job (same order as ids)
 }
 
 export interface FailCommand extends BaseCommand {
   readonly cmd: 'FAIL';
   readonly id: string;
   readonly error?: string;
+  readonly token?: string; // Lock token for ownership verification
 }
 
 // ============ Query Commands ============
@@ -292,12 +299,14 @@ export interface HeartbeatCommand extends BaseCommand {
 export interface JobHeartbeatCommand extends BaseCommand {
   readonly cmd: 'JobHeartbeat';
   readonly id: string; // Job ID
+  readonly token?: string; // Lock token for ownership verification
 }
 
 /** Batch job heartbeat for multiple jobs */
 export interface JobHeartbeatBatchCommand extends BaseCommand {
   readonly cmd: 'JobHeartbeatB';
   readonly ids: string[]; // Job IDs
+  readonly tokens?: string[]; // Lock tokens for each job (same order as ids)
 }
 
 /** Ping for connection health check */

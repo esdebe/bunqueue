@@ -220,3 +220,63 @@ export function calculateBackoff(job: Job): number {
 export function canRetry(job: Job): boolean {
   return job.attempts < job.maxAttempts;
 }
+
+/** Lock token type (UUID) */
+export type LockToken = string & { readonly __brand: 'LockToken' };
+
+/** Create a LockToken from string */
+export function lockToken(token: string): LockToken {
+  return token as LockToken;
+}
+
+/** Generate a new lock token */
+export function generateLockToken(): LockToken {
+  return Bun.randomUUIDv7() as LockToken;
+}
+
+/** Job lock structure - tracks ownership of job processing */
+export interface JobLock {
+  readonly jobId: JobId;
+  readonly token: LockToken;
+  readonly owner: string; // Client/Worker identifier
+  readonly createdAt: number;
+  expiresAt: number;
+  lastRenewalAt: number;
+  renewalCount: number;
+  readonly ttl: number; // Lock duration in ms
+}
+
+/** Default lock TTL in milliseconds (30 seconds like BullMQ) */
+export const DEFAULT_LOCK_TTL = 30_000;
+
+/** Create a new job lock */
+export function createJobLock(
+  jobId: JobId,
+  owner: string,
+  ttl: number = DEFAULT_LOCK_TTL,
+  now: number = Date.now()
+): JobLock {
+  return {
+    jobId,
+    token: generateLockToken(),
+    owner,
+    createdAt: now,
+    expiresAt: now + ttl,
+    lastRenewalAt: now,
+    renewalCount: 0,
+    ttl,
+  };
+}
+
+/** Check if lock is expired */
+export function isLockExpired(lock: JobLock, now: number = Date.now()): boolean {
+  return now >= lock.expiresAt;
+}
+
+/** Renew a lock, extending its expiration */
+export function renewLock(lock: JobLock, newTtl?: number, now: number = Date.now()): void {
+  const ttl = newTtl ?? lock.ttl;
+  lock.expiresAt = now + ttl;
+  lock.lastRenewalAt = now;
+  lock.renewalCount++;
+}

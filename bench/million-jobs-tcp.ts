@@ -25,6 +25,9 @@ async function runBenchmark() {
     defaultJobOptions: {
       // Very long stall timeout for benchmark (jobs complete instantly, no need for stall detection)
       stallTimeout: 300_000, // 5 minutes
+      // Remove completed jobs immediately to save memory (critical for high-throughput)
+      removeOnComplete: true,
+      removeOnFail: true,
     },
   });
 
@@ -46,6 +49,8 @@ async function runBenchmark() {
       connection: { host: 'localhost', port: 6789, poolSize: 16 },
       batchSize: 100,
       autorun: false,
+      // Disable locks for high-throughput benchmark - stall detection is sufficient
+      useLocks: false,
     }
   );
 

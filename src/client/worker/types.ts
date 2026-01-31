@@ -5,10 +5,11 @@
 
 import type { ConnectionOptions } from '../types';
 
-/** Pending ACK item with result */
+/** Pending ACK item with result and optional lock token */
 export interface PendingAck {
   id: string;
   result: unknown;
+  token?: string; // Lock token for ownership verification
   resolve: () => void;
   reject: (err: Error) => void;
 }
@@ -21,6 +22,7 @@ export interface ExtendedWorkerOptions {
   batchSize: number;
   pollTimeout: number;
   embedded: boolean;
+  useLocks: boolean;
   connection?: ConnectionOptions;
 }
 

@@ -499,6 +499,23 @@ export class Shard {
     return { ...this.stats };
   }
 
+  /** Get internal structure sizes for memory debugging */
+  getInternalSizes(): {
+    delayedJobIds: number;
+    delayedHeap: number;
+    delayedRunAt: number;
+    temporalIndex: number;
+    waiters: number;
+  } {
+    return {
+      delayedJobIds: this.delayedJobIds.size,
+      delayedHeap: this.delayedHeap.size,
+      delayedRunAt: this.delayedRunAt.size,
+      temporalIndex: this.temporalIndex.size,
+      waiters: this.waiters.length,
+    };
+  }
+
   /** Increment queued jobs counter and add to temporal index */
   incrementQueued(
     jobId: JobId,
@@ -641,13 +658,37 @@ export class Shard {
     this.temporalIndex.removeAll((e) => e.queue === queue);
   }
 
-  /** Drain all waiting jobs from queue */
-  drain(queue: string): number {
+  /**
+   * Clean orphaned temporal index entries.
+   * Removes entries for jobs that no longer exist in the queue.
+   * Call periodically to prevent memory leaks.
+   */
+  cleanOrphanedTemporalEntries(): number {
+    if (this.temporalIndex.size === 0) return 0;
+
+    // Build a set of valid job IDs from all queues
+    const validJobIds = new Set<JobId>();
+    for (const queue of this.queues.values()) {
+      for (const job of queue.values()) {
+        validJobIds.add(job.id);
+      }
+    }
+
+    // Remove entries that are not in any queue
+    const beforeSize = this.temporalIndex.size;
+    this.temporalIndex.removeAll((e) => !validJobIds.has(e.jobId));
+    return beforeSize - this.temporalIndex.size;
+  }
+
+  /** Drain all waiting jobs from queue, returns drained job IDs for cleanup */
+  drain(queue: string): { count: number; jobIds: JobId[] } {
     const q = this.queues.get(queue);
-    if (!q) return 0;
+    if (!q) return { count: 0, jobIds: [] };
     const count = q.size;
-    // Remove delayed job tracking for drained jobs
+    const jobIds: JobId[] = [];
+    // Collect job IDs and remove delayed job tracking
     for (const job of q.values()) {
+      jobIds.push(job.id);
       this.delayedJobIds.delete(job.id);
     }
     q.clear();
@@ -656,7 +697,7 @@ export class Shard {
     // Update counters
     this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - count);
     this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs);
-    return count;
+    return { count, jobIds };
   }
 
   /** Obliterate queue completely */

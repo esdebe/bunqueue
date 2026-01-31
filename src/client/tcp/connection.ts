@@ -172,10 +172,13 @@ export class CommandQueue {
     }
   }
 
-  /** Clear current command */
-  clearCurrent(): void {
+  /** Clear current command with optional rejection */
+  clearCurrent(error?: Error): void {
     if (this.currentCommand) {
       clearTimeout(this.currentCommand.timeout);
+      if (error) {
+        this.currentCommand.reject(error);
+      }
       this.currentCommand = null;
     }
   }

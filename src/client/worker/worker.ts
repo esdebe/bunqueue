@@ -32,12 +32,18 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private consecutiveErrors = 0;
 
-  // Heartbeat tracking
+  // Heartbeat tracking with lock tokens (BullMQ-style ownership)
+  // Track ALL pulled jobs (both active and buffered) for heartbeat
   private readonly activeJobIds: Set<string> = new Set();
+  private readonly pulledJobIds: Set<string> = new Set(); // All pulled jobs (for heartbeat)
+  private readonly jobTokens: Map<string, string> = new Map(); // jobId -> lockToken
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
-  // Job buffer for batch pulls
-  private pendingJobs: InternalJob[] = [];
+  // Unique worker ID for lock ownership
+  private readonly workerId: string;
+
+  // Job buffer for batch pulls (with tokens)
+  private pendingJobs: Array<{ job: InternalJob; token: string | null }> = [];
   private pendingJobsHead = 0;
   private processingScheduled = false; // Prevent multiple setImmediate calls
 
@@ -47,6 +53,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.processor = processor;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
 
+    // Generate unique worker ID for lock ownership
+    this.workerId = `worker-${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     const concurrency = opts.concurrency ?? 1;
     this.opts = {
       concurrency,
@@ -55,6 +64,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       batchSize: Math.min(opts.batchSize ?? 10, 1000),
       pollTimeout: Math.min(opts.pollTimeout ?? 0, WORKER_CONSTANTS.MAX_POLL_TIMEOUT),
       embedded: this.embedded,
+      // Lock-based ownership: disable for high-throughput scenarios where stall detection is sufficient
+      useLocks: opts.useLocks ?? true,
     };
 
     this.ackBatcher = new AckBatcher({
@@ -123,13 +134,29 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.heartbeatTimer = null;
     }
 
+    if (!force) {
+      // Wait for buffered jobs to be processed and all active jobs to finish
+      const bufferSize = () => this.pendingJobs.length - this.pendingJobsHead;
+      while (this.activeJobs > 0 || bufferSize() > 0) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
+
+    // Flush any remaining pending acks
     await this.ackBatcher.flush();
+    // Wait for ALL in-flight flushes to complete (critical!)
+    await this.ackBatcher.waitForInFlight();
     this.ackBatcher.stop();
 
-    if (!force) {
-      while (this.activeJobs > 0) await new Promise((r) => setTimeout(r, 50));
-      await new Promise((r) => setTimeout(r, 100));
-    }
+    // Small delay to ensure TCP responses are processed
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Clear tracking sets
+    this.activeJobIds.clear();
+    this.pulledJobIds.clear();
+    this.jobTokens.clear();
+    this.pendingJobs = [];
+    this.pendingJobsHead = 0;
 
     if (this.tcpPool) this.tcpPool.close();
     this.emit('closed');
@@ -140,17 +167,31 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   }
 
   private async sendHeartbeat(): Promise<void> {
-    if (this.activeJobIds.size === 0 || !this.tcp) return;
+    // Send heartbeat for ALL pulled jobs (including buffered ones)
+    // This is critical: when locks are enabled, we need to renew them
+    // even for jobs sitting in the buffer waiting to be processed
+    if (this.pulledJobIds.size === 0 || !this.tcp) return;
 
     try {
       // Always take a fresh snapshot - avoids race with job start/complete
-      const ids = Array.from(this.activeJobIds);
+      const ids = Array.from(this.pulledJobIds);
       if (ids.length === 0) return;
 
-      if (ids.length === 1) {
-        await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0] });
+      if (this.opts.useLocks) {
+        // With locks: include tokens for lock renewal
+        const tokens = ids.map((id) => this.jobTokens.get(id) ?? '');
+        if (ids.length === 1) {
+          await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0], token: tokens[0] || undefined });
+        } else {
+          await this.tcp.send({ cmd: 'JobHeartbeatB', ids, tokens });
+        }
       } else {
-        await this.tcp.send({ cmd: 'JobHeartbeatB', ids });
+        // Without locks: simple heartbeat for stall detection only
+        if (ids.length === 1) {
+          await this.tcp.send({ cmd: 'JobHeartbeat', id: ids[0] });
+        } else {
+          await this.tcp.send({ cmd: 'JobHeartbeatB', ids });
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -174,23 +215,25 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (!this.running || this.closing) return;
 
     try {
-      let job = this.getBufferedJob();
+      let item = this.getBufferedJob();
 
-      if (!job) {
-        const jobs = await this.pullBatch();
+      if (!item) {
+        const items = await this.pullBatch();
         // Re-check closing after async operation (can be modified during await)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (this.closing) return;
-        if (jobs.length > 0) {
-          job = jobs[0];
-          this.pendingJobs = jobs;
+        if (items.length > 0) {
+          // Register ALL pulled jobs for heartbeat tracking immediately
+          this.registerPulledJobs(items);
+          item = items[0];
+          this.pendingJobs = items;
           this.pendingJobsHead = 1;
         }
       }
 
-      if (job) {
+      if (item) {
         this.consecutiveErrors = 0;
-        this.startJob(job);
+        this.startJob(item.job, item.token);
       } else {
         const waitTime = this.opts.pollTimeout > 0 ? 10 : 50;
         this.pollTimer = setTimeout(() => {
@@ -205,18 +248,31 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     }
   }
 
-  private getBufferedJob(): InternalJob | null {
+  /** Register pulled jobs for heartbeat tracking */
+  private registerPulledJobs(items: Array<{ job: InternalJob; token: string | null }>): void {
+    // When locks are enabled: jobs need heartbeats to renew locks
+    // Without locks: still track for stall detection heartbeats
+    for (const pulledItem of items) {
+      const jobIdStr = String(pulledItem.job.id);
+      this.pulledJobIds.add(jobIdStr);
+      if (this.opts.useLocks && pulledItem.token) {
+        this.jobTokens.set(jobIdStr, pulledItem.token);
+      }
+    }
+  }
+
+  private getBufferedJob(): { job: InternalJob; token: string | null } | null {
     if (this.pendingJobsHead >= this.pendingJobs.length) return null;
 
-    const job = this.pendingJobs[this.pendingJobsHead++];
+    const item = this.pendingJobs[this.pendingJobsHead++];
     if (this.pendingJobsHead > 500 && this.pendingJobsHead >= this.pendingJobs.length / 2) {
       this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead);
       this.pendingJobsHead = 0;
     }
-    return job;
+    return item;
   }
 
-  private async pullBatch(): Promise<InternalJob[]> {
+  private async pullBatch(): Promise<Array<{ job: InternalJob; token: string | null }>> {
     const slots = this.opts.concurrency - this.activeJobs;
     const batchSize = Math.min(this.opts.batchSize, slots, 1000);
     if (batchSize <= 0) return [];
@@ -224,39 +280,87 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     return this.embedded ? this.pullEmbedded(batchSize) : this.pullTcp(batchSize);
   }
 
-  private async pullEmbedded(count: number): Promise<InternalJob[]> {
+  private async pullEmbedded(
+    count: number
+  ): Promise<Array<{ job: InternalJob; token: string | null }>> {
     const manager = getSharedManager();
+
+    // Use lock-based pull only when useLocks is enabled
+    if (this.opts.useLocks) {
+      if (count === 1) {
+        const { job, token } = await manager.pullWithLock(this.name, this.workerId, 0);
+        return job ? [{ job, token }] : [];
+      }
+      const { jobs, tokens } = await manager.pullBatchWithLock(this.name, count, this.workerId, 0);
+      return jobs.map((job, i) => ({ job, token: tokens[i] || null }));
+    }
+
+    // No locks - use regular pull
     if (count === 1) {
       const job = await manager.pull(this.name, 0);
-      return job ? [job] : [];
+      return job ? [{ job, token: null }] : [];
     }
-    return manager.pullBatch(this.name, count, 0);
+    const jobs = await manager.pullBatch(this.name, count, 0);
+    return jobs.map((job) => ({ job, token: null }));
   }
 
-  private async pullTcp(count: number): Promise<InternalJob[]> {
+  private async pullTcp(count: number): Promise<Array<{ job: InternalJob; token: string | null }>> {
     if (!this.tcp || this.closing) return [];
 
-    const response = await this.tcp.send({
+    // Build pull command - only request locks if useLocks is enabled
+    const cmd: Record<string, unknown> = {
       cmd: count === 1 ? 'PULL' : 'PULLB',
       queue: this.name,
       timeout: this.opts.pollTimeout,
       count,
-    });
+    };
+
+    // Only request lock ownership when useLocks is enabled
+    if (this.opts.useLocks) {
+      cmd.owner = this.workerId;
+    }
+
+    const response = await this.tcp.send(cmd);
 
     if (!response.ok) return [];
 
-    if (count === 1 && response.job) {
-      return [parseJobFromResponse(response.job as Record<string, unknown>, this.name)];
+    if (count === 1) {
+      const job = response.job as Record<string, unknown> | null | undefined;
+      // Only expect token if locks are enabled
+      const token = this.opts.useLocks
+        ? ((response.token as string | null | undefined) ?? null)
+        : null;
+      if (job) {
+        return [{ job: parseJobFromResponse(job, this.name), token }];
+      }
+      return [];
     }
 
     const jobs = response.jobs as Array<Record<string, unknown>> | undefined;
-    return jobs?.map((j) => parseJobFromResponse(j, this.name)) ?? [];
+    // Only expect tokens if locks are enabled
+    const tokens = this.opts.useLocks ? ((response.tokens as string[] | undefined) ?? []) : [];
+    return (
+      jobs?.map((j, i) => ({
+        job: parseJobFromResponse(j, this.name),
+        token: tokens[i] || null,
+      })) ?? []
+    );
   }
 
-  private startJob(job: InternalJob): void {
+  private startJob(job: InternalJob, token: string | null): void {
     this.activeJobs++;
     const jobIdStr = String(job.id);
     this.activeJobIds.add(jobIdStr);
+
+    // Token management only when locks are enabled
+    if (this.opts.useLocks && token && !this.jobTokens.has(jobIdStr)) {
+      this.jobTokens.set(jobIdStr, token);
+    }
+    // Ensure job is in pulledJobIds for heartbeat (should already be there from pullBatch)
+    this.pulledJobIds.add(jobIdStr);
+
+    // Only pass token if locks are enabled
+    const tokenForProcess = this.opts.useLocks ? token : undefined;
 
     void processJob(job, {
       name: this.name,
@@ -265,9 +369,14 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       tcp: this.tcp,
       ackBatcher: this.ackBatcher,
       emitter: this,
+      token: tokenForProcess, // Pass token for ACK/FAIL verification (only when locks enabled)
     }).finally(() => {
       this.activeJobs--;
       this.activeJobIds.delete(jobIdStr);
+      this.pulledJobIds.delete(jobIdStr); // Remove from heartbeat tracking
+      if (this.opts.useLocks) {
+        this.jobTokens.delete(jobIdStr); // Clean up token
+      }
       if (this.running && !this.closing) this.poll();
     });
 

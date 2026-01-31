@@ -143,7 +143,8 @@ export class TcpClient extends EventEmitter {
     this.connecting = false;
     this.socket = null;
     this.health.stopPing();
-    this.commands.clearCurrent();
+    // Reject current in-flight command so it doesn't hang forever
+    this.commands.clearCurrent(new Error('Connection lost'));
 
     if (wasConnected) {
       this.emit('disconnected');

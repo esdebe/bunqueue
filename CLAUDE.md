@@ -656,3 +656,138 @@ bun build --compile --minify src/main.ts --outfile bunqueue
 docker build -t bunqueue .
 docker run -p 6789:6789 -p 6790:6790 bunqueue
 ```
+
+## Memory Debugging in Bun
+
+### Quick Tools
+
+| Tool | Description |
+|------|-------------|
+| `Bun.gc(true)` | Force synchronous garbage collection |
+| `Bun.gc(false)` | Force asynchronous garbage collection |
+| `process.memoryUsage()` | Get heap/RSS memory stats |
+| `heapStats()` from `bun:jsc` | Detailed object type breakdown |
+| `generateHeapSnapshot()` | Create V8-compatible heap snapshot |
+
+### Profiling Flags
+
+```bash
+# CPU profiling
+bun --cpu-prof script.ts        # Chrome DevTools .cpuprofile
+bun --cpu-prof-md script.ts     # Markdown output (grep-friendly)
+
+# Heap profiling
+bun --heap-prof script.ts       # V8 .heapsnapshot file
+bun --heap-prof-md script.ts    # Markdown heap analysis
+
+# Native memory (mimalloc stats)
+MIMALLOC_SHOW_STATS=1 bun script.ts
+```
+
+### Using heapStats() for Object Breakdown
+
+```typescript
+import { heapStats } from "bun:jsc";
+
+function analyzeHeap() {
+  // Force GC first for accurate stats
+  Bun.gc(true);
+
+  const stats = heapStats();
+  console.log("Object count:", stats.objectCount);
+  console.log("Protected count:", stats.protectedObjectCount);
+
+  // Top object types by count
+  const types = Object.entries(stats.objectTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15);
+
+  console.log("\nTop object types:");
+  for (const [type, count] of types) {
+    console.log(`  ${type}: ${count.toLocaleString()}`);
+  }
+}
+```
+
+### HTTP Endpoints for Live Debugging
+
+bunqueue exposes debug endpoints:
+
+```bash
+# Force GC and show memory before/after
+curl -X POST http://localhost:6790/gc
+
+# Get detailed heap stats with object breakdown
+curl http://localhost:6790/heapstats
+
+# Health check with memory info
+curl http://localhost:6790/health
+```
+
+### Comparing Heap Snapshots
+
+```typescript
+import { generateHeapSnapshot } from "bun";
+
+// Take snapshot before operation
+const snap1 = generateHeapSnapshot();
+Bun.write("before.heapsnapshot", JSON.stringify(snap1));
+
+// ... run operation ...
+
+// Take snapshot after
+Bun.gc(true); // Force GC first
+const snap2 = generateHeapSnapshot();
+Bun.write("after.heapsnapshot", JSON.stringify(snap2));
+
+// Compare in Safari DevTools or Chrome DevTools Memory tab
+```
+
+### Key Memory Behaviors
+
+1. **RSS never decreases** - V8/JSC keeps memory pages for reuse
+2. **heapUsed vs objectCount** - High object count with low heapUsed means lightweight structures (normal)
+3. **After GC** - If heapUsed drops but objectCount stays high, objects are "shapes" kept for optimization
+4. **True leak** - heapUsed stays high AND collections show 0 entries
+
+### Identifying Leaks
+
+```typescript
+// Check bunqueue internal collections
+const memStats = queueManager.getMemoryStats();
+console.log({
+  jobIndex: memStats.jobIndex,        // Should be 0 when idle
+  completedJobs: memStats.completedJobs,
+  processingTotal: memStats.processingTotal,
+  queuedTotal: memStats.queuedTotal,
+  temporalIndexTotal: memStats.temporalIndexTotal, // Check auxiliary structures!
+});
+
+// If all are 0 but heapUsed is high → V8 behavior (normal)
+// If counts are high → actual leak in application code
+```
+
+### Case Study: temporalIndex Leak (Fixed in v1.9.2)
+
+**Symptoms:**
+- After 1M jobs, `objectCount` grew to 5.5M objects
+- `heapUsed` was 264MB even with all main collections at 0
+- Top retained types: Object (2.1M), Array (1.1M), string (1M)
+
+**Root Cause:**
+The `temporalIndex` (SkipList used for `cleanQueue` range queries) was never cleaned when jobs completed with `removeOnComplete: true`. Each job added an entry on PUSH but it was only removed by explicit `cleanQueue` or `drain` operations.
+
+**Diagnosis:**
+```bash
+# Check internal structures via /stats endpoint
+curl -s http://localhost:6790/stats | jq '.collections'
+# Look for non-zero temporalIndexTotal or delayedHeapTotal
+```
+
+**Fix:**
+Added `cleanOrphanedTemporalEntries()` method to Shard that runs during periodic cleanup. It removes temporalIndex entries for jobs that no longer exist in any queue.
+
+**Result:**
+- After fix: `heapUsed` dropped to ~6MB after 3M jobs processed
+- `objectCount` stable at ~14K (vs 5.5M before)
+- Memory properly released after each benchmark run

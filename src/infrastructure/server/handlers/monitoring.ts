@@ -57,7 +57,7 @@ export function handleHeartbeat(
   return resp.error('Worker not found', reqId);
 }
 
-// ============ Job Heartbeat (for stall detection) ============
+// ============ Job Heartbeat (for stall detection & lock renewal) ============
 
 export function handleJobHeartbeat(
   cmd: JobHeartbeatCommand,
@@ -65,11 +65,12 @@ export function handleJobHeartbeat(
   reqId?: string
 ): Response {
   const jid = jobId(cmd.id);
-  const success = ctx.queueManager.jobHeartbeat(jid);
+  // Pass token to renew lock if provided
+  const success = ctx.queueManager.jobHeartbeat(jid, cmd.token);
   if (success) {
     return resp.data({ ok: true }, reqId);
   }
-  return resp.error('Job not found or not active', reqId);
+  return resp.error('Job not found or not active (or invalid token)', reqId);
 }
 
 export function handleJobHeartbeatBatch(
@@ -78,7 +79,8 @@ export function handleJobHeartbeatBatch(
   reqId?: string
 ): Response {
   const ids = cmd.ids.map((id) => jobId(id));
-  const count = ctx.queueManager.jobHeartbeatBatch(ids);
+  // Pass tokens to renew locks if provided
+  const count = ctx.queueManager.jobHeartbeatBatch(ids, cmd.tokens);
   return resp.data({ ok: true, count }, reqId);
 }
 

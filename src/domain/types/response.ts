@@ -35,6 +35,20 @@ export interface NullableJobResponse extends BaseResponse {
   readonly job: Job | null;
 }
 
+/** Pulled job response (includes lock token for ownership) */
+export interface PulledJobResponse extends BaseResponse {
+  readonly ok: true;
+  readonly job: Job | null;
+  readonly token: string | null; // Lock token for job ownership
+}
+
+/** Pulled jobs batch response (includes lock tokens) */
+export interface PulledJobsResponse extends BaseResponse {
+  readonly ok: true;
+  readonly jobs: Job[];
+  readonly tokens: string[]; // Lock tokens for each job (same order)
+}
+
 /** Multiple jobs response */
 export interface JobsResponse extends BaseResponse {
   readonly ok: true;
@@ -167,6 +181,8 @@ export type Response =
   | BatchResponse
   | JobResponse
   | NullableJobResponse
+  | PulledJobResponse
+  | PulledJobsResponse
   | JobsResponse
   | StateResponse
   | ResultResponse
@@ -211,6 +227,24 @@ export function nullableJob(j: Job | null, reqId?: string): NullableJobResponse 
   return {
     ok: true,
     job: j,
+    reqId,
+  };
+}
+
+export function pulledJob(j: Job | null, token: string | null, reqId?: string): PulledJobResponse {
+  return {
+    ok: true,
+    job: j,
+    token,
+    reqId,
+  };
+}
+
+export function pulledJobs(list: Job[], tokens: string[], reqId?: string): PulledJobsResponse {
+  return {
+    ok: true,
+    jobs: list,
+    tokens,
     reqId,
   };
 }

@@ -79,6 +79,13 @@ export interface WorkerOptions {
   batchSize?: number;
   /** Long poll timeout in ms when queue is empty (default: 0 = no wait, max: 30000) */
   pollTimeout?: number;
+  /**
+   * Use lock-based job ownership (BullMQ-style).
+   * When enabled, each pulled job gets a lock that must be renewed via heartbeat.
+   * Disable for high-throughput scenarios where stall detection is sufficient.
+   * Default: true
+   */
+  useLocks?: boolean;
 }
 
 /** Stall configuration for a queue */

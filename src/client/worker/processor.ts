@@ -20,6 +20,7 @@ export interface ProcessorConfig<T, R> {
   tcp: TcpConnection | null;
   ackBatcher: AckBatcher;
   emitter: EventEmitter;
+  token?: string | null; // Lock token for ownership verification
 }
 
 /**
@@ -29,7 +30,7 @@ export async function processJob<T, R>(
   internalJob: InternalJob,
   config: ProcessorConfig<T, R>
 ): Promise<void> {
-  const { processor, embedded, tcp, ackBatcher, emitter } = config;
+  const { processor, embedded, tcp, ackBatcher, emitter, token } = config;
   const jobData = internalJob.data as { name?: string } | null;
   const jobName = jobData?.name ?? 'default';
   const jobIdStr = String(internalJob.id);
@@ -48,15 +49,17 @@ export async function processJob<T, R>(
 
     if (embedded) {
       const manager = getSharedManager();
-      await manager.ack(internalJob.id, result);
+      // Pass token for lock verification
+      await manager.ack(internalJob.id, result, token ?? undefined);
     } else {
-      ackBatcher.queue(jobIdStr, result);
+      // Queue with token for batch ACK
+      ackBatcher.queue(jobIdStr, result, token ?? undefined);
     }
 
     (job as { returnvalue?: unknown }).returnvalue = result;
     emitter.emit('completed', job, result);
   } catch (error) {
-    await handleJobFailure(internalJob, error, config, job, jobIdStr);
+    await handleJobFailure(internalJob, error, config, { job, jobIdStr, token });
   }
 }
 
@@ -87,22 +90,35 @@ function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
   };
 }
 
+interface FailureContext<T> {
+  job: Job<T>;
+  jobIdStr: string;
+  token?: string | null;
+}
+
 async function handleJobFailure<T, R>(
   internalJob: InternalJob,
   error: unknown,
   config: ProcessorConfig<T, R>,
-  job: Job<T>,
-  jobIdStr: string
+  context: FailureContext<T>
 ): Promise<void> {
   const { embedded, tcp, emitter } = config;
+  const { job, jobIdStr, token } = context;
   const err = error instanceof Error ? error : new Error(String(error));
 
   try {
     if (embedded) {
       const manager = getSharedManager();
-      await manager.fail(internalJob.id, err.message);
+      // Pass token for lock verification
+      await manager.fail(internalJob.id, err.message, token ?? undefined);
     } else if (tcp) {
-      await tcp.send({ cmd: 'FAIL', id: internalJob.id, error: err.message });
+      // Include token for lock verification
+      await tcp.send({
+        cmd: 'FAIL',
+        id: internalJob.id,
+        error: err.message,
+        token: token ?? undefined,
+      });
     }
   } catch (failError) {
     const wrappedError = failError instanceof Error ? failError : new Error(String(failError));

@@ -173,7 +173,9 @@ function startServer(): void {
   // Print stats periodically
   const statsInterval = setInterval(() => {
     const stats = queueManager.getStats();
+    const memStats = queueManager.getMemoryStats();
     const workerStats = queueManager.workerManager.getStats();
+    const mem = process.memoryUsage();
     statsLog.info('Queue statistics', {
       waiting: stats.waiting,
       active: stats.active,
@@ -184,6 +186,12 @@ function startServer(): void {
       ws: httpServer.getWsClientCount(),
       sse: httpServer.getSseClientCount(),
       workers: `${workerStats.active}/${workerStats.total}`,
+      mem: `${Math.round(mem.heapUsed / 1024 / 1024)}MB/${Math.round(mem.heapTotal / 1024 / 1024)}MB`,
+      rss: `${Math.round(mem.rss / 1024 / 1024)}MB`,
+      // Internal collection sizes (for memory debugging)
+      idx: memStats.jobIndex,
+      locks: memStats.jobLocks,
+      clients: memStats.clientJobsTotal,
     });
   }, 30_000);
 }

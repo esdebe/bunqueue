@@ -9,4 +9,6 @@ export interface HandlerContext {
   queueManager: QueueManager;
   authTokens: Set<string>;
   authenticated: boolean;
+  /** Client ID for job ownership tracking */
+  clientId?: string;
 }

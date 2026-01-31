@@ -34,7 +34,12 @@ export function isQueuePaused(queue: string, ctx: QueueControlContext): boolean 
 /** Drain all waiting jobs from queue */
 export function drainQueue(queue: string, ctx: QueueControlContext): number {
   const idx = shardIndex(queue);
-  return ctx.shards[idx].drain(queue);
+  const { count, jobIds } = ctx.shards[idx].drain(queue);
+  // Clean up jobIndex for all drained jobs
+  for (const jobId of jobIds) {
+    ctx.jobIndex.delete(jobId);
+  }
+  return count;
 }
 
 /** Remove all queue data */

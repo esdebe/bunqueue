@@ -61,6 +61,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
           queueManager,
           authTokens,
           authenticated: authTokens.size === 0, // Auto-auth if no tokens
+          clientId, // For job ownership tracking
         };
 
         socket.data = {
@@ -106,7 +107,14 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         const clientId = socket.data.state.clientId;
         connections.delete(clientId);
         getRateLimiter().removeClient(clientId);
-        tcpLog.info('Client disconnected', { clientId });
+
+        // Release all jobs owned by this client back to queue
+        const released = queueManager.releaseClientJobs(clientId);
+        if (released > 0) {
+          tcpLog.info('Client disconnected, released jobs', { clientId, released });
+        } else {
+          tcpLog.info('Client disconnected', { clientId });
+        }
       },
 
       error(_socket, error) {

@@ -12,7 +12,12 @@ export interface AckBatcherConfig {
   batchSize: number;
   interval: number;
   embedded: boolean;
+  maxRetries?: number;
+  retryDelayMs?: number;
 }
+
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_DELAY_MS = 100;
 
 /**
  * Batches ACK operations for efficient processing
@@ -22,6 +27,9 @@ export class AckBatcher {
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly config: AckBatcherConfig;
   private tcp: TcpConnection | null = null;
+  private stopped = false;
+  // Track in-flight flush operations to ensure all complete before close
+  private readonly inFlightFlushes: Set<Promise<void>> = new Set();
 
   constructor(config: AckBatcherConfig) {
     this.config = config;
@@ -32,26 +40,32 @@ export class AckBatcher {
     this.tcp = tcp;
   }
 
-  /** Queue ACK for batch processing */
-  queue(id: string, result: unknown): void {
+  /** Queue ACK for batch processing (with optional lock token) */
+  queue(id: string, result: unknown, token?: string): void {
     this.pendingAcks.push({
       id,
       result,
+      token,
       resolve: () => {},
       reject: () => {},
     });
 
     if (this.pendingAcks.length >= this.config.batchSize) {
-      void this.flush();
+      // Track in-flight flush
+      const flushPromise = this.flush();
+      this.inFlightFlushes.add(flushPromise);
+      void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
     } else {
       this.ackTimer ??= setTimeout(() => {
         this.ackTimer = null;
-        void this.flush();
+        const flushPromise = this.flush();
+        this.inFlightFlushes.add(flushPromise);
+        void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
       }, this.config.interval);
     }
   }
 
-  /** Flush pending ACKs */
+  /** Flush pending ACKs with retry logic */
   async flush(): Promise<void> {
     if (this.pendingAcks.length === 0) return;
 
@@ -62,37 +76,75 @@ export class AckBatcher {
       this.ackTimer = null;
     }
 
-    try {
-      if (this.config.embedded) {
-        const manager = getSharedManager();
-        const items = batch.map((a) => ({ id: jobId(a.id), result: a.result }));
-        await manager.ackBatchWithResults(items);
-      } else if (this.tcp) {
-        const response = await this.tcp.send({
-          cmd: 'ACKB',
-          ids: batch.map((a) => a.id),
-          results: batch.map((a) => a.result),
-        });
+    await this.sendBatchWithRetry(batch);
+  }
 
-        if (!response.ok) {
-          throw new Error((response.error as string | undefined) ?? 'Batch ACK failed');
+  /** Send batch with exponential backoff retry */
+  private async sendBatchWithRetry(batch: PendingAck[]): Promise<void> {
+    const maxRetries = this.config.maxRetries ?? DEFAULT_MAX_RETRIES;
+    const baseDelay = this.config.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (this.stopped) {
+        // If stopped, don't retry - just fail remaining
+        const error = new Error('AckBatcher stopped');
+        for (const ack of batch) {
+          ack.reject(error);
+        }
+        return;
+      }
+
+      try {
+        if (this.config.embedded) {
+          const manager = getSharedManager();
+          // Include tokens for lock verification
+          const items = batch.map((a) => ({ id: jobId(a.id), result: a.result, token: a.token }));
+          await manager.ackBatchWithResults(items);
+        } else if (this.tcp) {
+          // Include tokens for lock verification
+          const response = await this.tcp.send({
+            cmd: 'ACKB',
+            ids: batch.map((a) => a.id),
+            results: batch.map((a) => a.result),
+            tokens: batch.map((a) => a.token ?? ''),
+          });
+
+          if (!response.ok) {
+            throw new Error((response.error as string | undefined) ?? 'Batch ACK failed');
+          }
+        }
+
+        // Success
+        for (const ack of batch) {
+          ack.resolve();
+        }
+        return;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+
+        if (attempt < maxRetries) {
+          // Exponential backoff: 100ms, 200ms, 400ms
+          const delay = baseDelay * Math.pow(2, attempt);
+          await new Promise((r) => setTimeout(r, delay));
         }
       }
+    }
 
-      for (const ack of batch) {
-        ack.resolve();
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      console.error('[AckBatcher] Flush failed:', error.message, `(${batch.length} acks lost)`);
-      for (const ack of batch) {
-        ack.reject(error);
-      }
+    // All retries exhausted
+    console.error(
+      `[AckBatcher] Flush failed after ${maxRetries + 1} attempts:`,
+      lastError?.message,
+      `(${batch.length} acks lost)`
+    );
+    for (const ack of batch) {
+      ack.reject(lastError ?? new Error('Unknown error'));
     }
   }
 
   /** Stop and cleanup - clears pending acks without processing */
   stop(): void {
+    this.stopped = true;
     if (this.ackTimer) {
       clearTimeout(this.ackTimer);
       this.ackTimer = null;
@@ -104,5 +156,11 @@ export class AckBatcher {
   /** Check if there are pending acks */
   hasPending(): boolean {
     return this.pendingAcks.length > 0;
+  }
+
+  /** Wait for all in-flight flush operations to complete */
+  async waitForInFlight(): Promise<void> {
+    if (this.inFlightFlushes.size === 0) return;
+    await Promise.all(this.inFlightFlushes);
   }
 }
