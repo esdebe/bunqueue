@@ -38,25 +38,26 @@ export async function processPendingDependencies(ctx: BackgroundContext): Promis
   }
 
   // Process each shard in parallel
+  // Lock acquired BEFORE reading waitingDeps to prevent TOCTOU race
   await Promise.all(
     Array.from(jobsToCheckByShard.entries()).map(async ([i, jobIdsToCheck]) => {
-      const shard = ctx.shards[i];
-      const jobsToPromote: Job[] = [];
+      await withWriteLock(ctx.shardLocks[i], () => {
+        const shard = ctx.shards[i];
+        const jobsToPromote: Job[] = [];
 
-      // Check which jobs have all dependencies satisfied
-      for (const jobId of jobIdsToCheck) {
-        const job = shard.waitingDeps.get(jobId);
-        if (job?.dependsOn.every((dep) => ctx.completedJobs.has(dep))) {
-          jobsToPromote.push(job);
+        // Check which jobs have all dependencies satisfied (inside lock)
+        for (const jobId of jobIdsToCheck) {
+          const job = shard.waitingDeps.get(jobId);
+          if (job?.dependsOn.every((dep) => ctx.completedJobs.has(dep))) {
+            jobsToPromote.push(job);
+          }
         }
-      }
 
-      // Promote jobs with all dependencies satisfied
-      if (jobsToPromote.length > 0) {
-        await withWriteLock(ctx.shardLocks[i], () => {
+        // Promote jobs with all dependencies satisfied
+        if (jobsToPromote.length > 0) {
           promoteJobsToQueue(jobsToPromote, shard, ctx, i);
-        });
-      }
+        }
+      });
     })
   );
 }

@@ -92,9 +92,14 @@ export class BatchInsertManager {
   }
 }
 
-/** Write buffer for batching inserts */
+/** Write buffer for batching inserts with double-buffering for atomic swap */
 export class WriteBuffer {
-  private buffer: Job[] = [];
+  /** Active buffer for new jobs */
+  private activeBuffer: Job[] = [];
+  /** Flush buffer being written to disk */
+  private flushBuffer: Job[] = [];
+  /** Lock to prevent concurrent flushes */
+  private flushing = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly batchManager: BatchInsertManager;
   private readonly bufferSize: number;
@@ -122,8 +127,8 @@ export class WriteBuffer {
 
   /** Add job to buffer */
   add(job: Job): void {
-    this.buffer.push(job);
-    if (this.buffer.length >= this.bufferSize) {
+    this.activeBuffer.push(job);
+    if (this.activeBuffer.length >= this.bufferSize) {
       this.flush();
     }
   }
@@ -131,34 +136,46 @@ export class WriteBuffer {
   /** Add multiple jobs to buffer */
   addBatch(jobs: Job[]): void {
     for (const job of jobs) {
-      this.buffer.push(job);
+      this.activeBuffer.push(job);
     }
-    if (this.buffer.length >= this.bufferSize) {
+    if (this.activeBuffer.length >= this.bufferSize) {
       this.flush();
     }
   }
 
-  /** Flush buffer to disk. Returns number of jobs flushed. */
+  /** Flush buffer to disk using double-buffering. Returns number of jobs flushed. */
   flush(): number {
-    if (this.buffer.length === 0) return 0;
+    // Prevent concurrent flushes
+    if (this.flushing) return 0;
+    if (this.activeBuffer.length === 0) return 0;
 
-    const jobs = this.buffer;
-    this.buffer = [];
+    this.flushing = true;
+
+    // Atomic swap: move active to flush buffer
+    this.flushBuffer = this.activeBuffer;
+    this.activeBuffer = [];
+
+    const jobCount = this.flushBuffer.length;
 
     try {
-      this.batchManager.insertJobsBatch(jobs);
-      return jobs.length;
+      this.batchManager.insertJobsBatch(this.flushBuffer);
+      this.flushBuffer = []; // Clear after successful write
+      return jobCount;
     } catch (err) {
-      // Re-add jobs to buffer on failure so they're not lost
-      this.buffer = jobs.concat(this.buffer);
-      this.onError(err instanceof Error ? err : new Error(String(err)), jobs.length);
+      // On failure, prepend failed jobs back to active buffer
+      // This preserves order: failed jobs first, then new jobs
+      this.activeBuffer = this.flushBuffer.concat(this.activeBuffer);
+      this.flushBuffer = [];
+      this.onError(err instanceof Error ? err : new Error(String(err)), jobCount);
       throw err;
+    } finally {
+      this.flushing = false;
     }
   }
 
-  /** Get pending job count */
+  /** Get pending job count (includes both buffers) */
   get pendingCount(): number {
-    return this.buffer.length;
+    return this.activeBuffer.length + this.flushBuffer.length;
   }
 
   /** Stop auto-flush timer */

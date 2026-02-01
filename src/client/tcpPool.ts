@@ -201,11 +201,15 @@ export class TcpConnectionPool {
 /** Shared pools by host:port key */
 const sharedPools = new Map<string, TcpConnectionPool>();
 
-/** Get pool key from options */
+/** Get pool key from options (includes all pool-differentiating params) */
 function getPoolKey(options?: PoolOptions): string {
   const host = options?.host ?? 'localhost';
   const port = options?.port ?? 6789;
-  return `${host}:${port}`;
+  const poolSize = options?.poolSize ?? 4;
+  const token = options?.token ?? '';
+  // Include poolSize and token hash to prevent sharing pools with different configs
+  const tokenHash = token ? String(Number(Bun.hash(token)) & 0xffff) : '0';
+  return `${host}:${port}:${poolSize}:${tokenHash}`;
 }
 
 /** Get or create shared connection pool */

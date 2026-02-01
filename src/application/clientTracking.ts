@@ -94,18 +94,31 @@ export async function releaseClientJobs(clientId: string, ctx: LockContext): Pro
   const now = Date.now();
 
   // Phase 3: Process each processing shard with proper locking
+  // Lock order: shardLocks BEFORE processingLocks (per lock hierarchy in CLAUDE.md)
   for (const [procIdx, items] of byProcShard) {
-    await withWriteLock(ctx.processingLocks[procIdx], async () => {
-      for (const { jobId, queueShardIdx } of items) {
-        const job = ctx.processingShards[procIdx].get(jobId);
-        if (!job) continue;
-
-        // Acquire shard lock for queue modifications
-        await withWriteLock(ctx.shardLocks[queueShardIdx], () => {
-          released += releaseJobToQueue({ jobId, job, procIdx, queueShardIdx, ctx, now });
-        });
+    // Group items by queue shard to minimize lock acquisitions
+    const byQueueShard = new Map<number, typeof items>();
+    for (const item of items) {
+      let list = byQueueShard.get(item.queueShardIdx);
+      if (!list) {
+        list = [];
+        byQueueShard.set(item.queueShardIdx, list);
       }
-    });
+      list.push(item);
+    }
+
+    // Acquire shard locks first, then processing lock
+    for (const [queueShardIdx, shardItems] of byQueueShard) {
+      await withWriteLock(ctx.shardLocks[queueShardIdx], async () => {
+        await withWriteLock(ctx.processingLocks[procIdx], () => {
+          for (const { jobId } of shardItems) {
+            const job = ctx.processingShards[procIdx].get(jobId);
+            if (!job) continue;
+            released += releaseJobToQueue({ jobId, job, procIdx, queueShardIdx, ctx, now });
+          }
+        });
+      });
+    }
   }
 
   // Clear client tracking

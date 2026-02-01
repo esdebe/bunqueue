@@ -84,15 +84,17 @@ async function handleStalledJob(
   const idx = shardIndex(job.queue);
   const procIdx = processingShardIndex(job.id);
 
-  // Acquire processing lock first, then shard lock
+  // Lock order: shardLocks BEFORE processingLocks (per lock hierarchy in CLAUDE.md)
   // Broadcast events AFTER verifying job is still stalled to avoid false positives
-  await withWriteLock(ctx.processingLocks[procIdx], async () => {
-    // Verify job is still in processing (might have been handled already)
-    if (!ctx.processingShards[procIdx].has(job.id)) {
-      return; // Job already completed, don't broadcast stalled event
-    }
+  let handled = false;
 
-    await withWriteLock(ctx.shardLocks[idx], () => {
+  await withWriteLock(ctx.shardLocks[idx], async () => {
+    await withWriteLock(ctx.processingLocks[procIdx], () => {
+      // Verify job is still in processing (might have been handled already)
+      if (!ctx.processingShards[procIdx].has(job.id)) {
+        return; // Job already completed, don't broadcast stalled event
+      }
+
       const shard = ctx.shards[idx];
 
       if (action === StallAction.MoveToDlq) {
@@ -100,9 +102,13 @@ async function handleStalledJob(
       } else {
         retryStalliedJob(job, ctx, shard, procIdx, idx);
       }
-    });
 
-    // Broadcast events AFTER confirming job is actually stalled and handled
+      handled = true;
+    });
+  });
+
+  // Broadcast events AFTER confirming job is actually stalled and handled
+  if (handled) {
     ctx.eventsManager.broadcast({
       eventType: EventType.Stalled,
       queue: job.queue,
@@ -113,7 +119,7 @@ async function handleStalledJob(
     void ctx.webhookManager.trigger('stalled' as WebhookEvent, String(job.id), job.queue, {
       data: { stallCount: job.stallCount + 1, action },
     });
-  });
+  }
 }
 
 /** Move stalled job to DLQ */

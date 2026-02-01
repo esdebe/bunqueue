@@ -215,13 +215,7 @@ export class CronScheduler {
       }
 
       try {
-        // Push the job
-        await this.pushJob(cron.queue, {
-          data: cron.data,
-          priority: cron.priority,
-        });
-
-        // Calculate new state (but don't apply yet)
+        // Calculate new state BEFORE pushing job
         const newExecutions = cron.executions + 1;
         const executionTime = Date.now();
         let newNextRun: number;
@@ -234,29 +228,30 @@ export class CronScheduler {
           newNextRun = executionTime;
         }
 
-        // Persist state to database first
+        // PERSIST STATE FIRST (before pushing job to prevent duplicates)
         if (this.persistCron) {
           try {
             this.persistCron(cron.name, newExecutions, newNextRun);
-            // Only update in-memory state after successful persist
-            cron.executions = newExecutions;
-            cron.nextRun = newNextRun;
           } catch (persistErr) {
-            // Log but don't update in-memory state
-            // Next tick will retry with same execution count
-            cronLog.error('Failed to persist cron state', {
+            // Persist failed - do NOT push job, retry on next tick
+            cronLog.error('Failed to persist cron state, skipping job push', {
               name: cron.name,
               error: String(persistErr),
             });
-            // Re-insert with original state to retry on next tick
             toReinsert.push(entry);
             continue;
           }
-        } else {
-          // No persistence callback, just update in-memory
-          cron.executions = newExecutions;
-          cron.nextRun = newNextRun;
         }
+
+        // Update in-memory state AFTER successful persist
+        cron.executions = newExecutions;
+        cron.nextRun = newNextRun;
+
+        // NOW push the job (state already persisted, safe from duplicates)
+        await this.pushJob(cron.queue, {
+          data: cron.data,
+          priority: cron.priority,
+        });
 
         // Re-insert with same generation (not stale)
         toReinsert.push(entry);
@@ -267,8 +262,13 @@ export class CronScheduler {
           nextRun: new Date(cron.nextRun).toISOString(),
         });
       } catch (err) {
-        cronLog.error('Failed to execute job', { name: cron.name, error: String(err) });
-        // Re-insert even on failure to retry next tick
+        // Push failed but state was already persisted
+        // Job is lost but cron state is consistent - no duplicates on retry
+        cronLog.error('Failed to push cron job (state already persisted)', {
+          name: cron.name,
+          error: String(err),
+        });
+        // Re-insert to continue scheduling (next execution will work)
         toReinsert.push(entry);
       }
     }

@@ -151,6 +151,8 @@ export class Queue<T = unknown> {
         removeOnComplete: m.removeOnComplete,
         removeOnFail: m.removeOnFail,
         stallTimeout: m.stallTimeout,
+        repeat: m.repeat,
+        durable: m.durable,
       };
     });
 
