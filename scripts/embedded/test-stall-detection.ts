@@ -4,6 +4,9 @@
  * Tests stall config, heartbeat-based stall detection, and recovery
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 
 const QUEUE_NAME = 'test-stall-detection';
@@ -261,9 +264,6 @@ async function main() {
       passed++;
     } else if (jobCompleted) {
       console.log(`   ✅ Job completed (DLQ entries: ${dlq.length} - may be from timing)`);
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
       passed++;
     } else {
       console.log(`   ❌ Job did not complete: completed=${jobCompleted}, DLQ=${dlq.length}`);

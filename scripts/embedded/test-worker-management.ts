@@ -4,10 +4,10 @@
  * Tests: RegisterWorker, ListWorkers, UnregisterWorker, Heartbeat tracking
  */
 
-import { getSharedManager, shutdownManager } from '../../src/client/manager';
-
-// Force embedded mode
+// Force embedded mode BEFORE imports
 process.env.BUNQUEUE_EMBEDDED = '1';
+
+import { getSharedManager, shutdownManager } from '../../src/client/manager';
 
 async function main() {
   console.log('=== Test Worker Management (Embedded) ===\n');

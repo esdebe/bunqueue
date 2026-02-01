@@ -3,10 +3,10 @@
  * Test QueueGroup: Namespace isolation for queues
  */
 
-import { Queue, Worker, QueueGroup } from '../../src/client';
-
-// Force embedded mode
+// Force embedded mode BEFORE imports
 process.env.BUNQUEUE_EMBEDDED = '1';
+
+import { Queue, Worker, QueueGroup } from '../../src/client';
 
 // Use timestamp-based unique prefixes to avoid state persistence between runs
 const testId = Date.now().toString(36);

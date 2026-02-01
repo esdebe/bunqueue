@@ -3,12 +3,12 @@
  * Test Unique Jobs / Deduplication
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 
 const QUEUE_NAME = 'test-unique';
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
 
 async function main() {
   console.log('=== Test Unique Jobs / Deduplication ===\n');

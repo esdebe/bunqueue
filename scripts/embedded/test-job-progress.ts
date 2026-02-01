@@ -3,10 +3,10 @@
  * Test Job Progress and Logs
  */
 
-import { Queue, Worker, QueueEvents } from '../../src/client';
-
-// Force embedded mode
+// Force embedded mode BEFORE imports
 process.env.BUNQUEUE_EMBEDDED = '1';
+
+import { Queue, Worker, QueueEvents } from '../../src/client';
 
 const QUEUE_NAME = 'test-progress';
 

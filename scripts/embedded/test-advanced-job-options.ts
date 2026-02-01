@@ -3,11 +3,11 @@
  * Test Advanced Job Options: timeout, ttl, tags, groupId, lifo, removeOnComplete + removeOnFail
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 import { getSharedManager } from '../../src/client/manager';
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
 
 const QUEUE_NAME = 'test-advanced-opts';
 

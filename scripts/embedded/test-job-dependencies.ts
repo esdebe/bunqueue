@@ -3,10 +3,10 @@
  * Test Job Dependencies: parent-child, dependsOn
  */
 
-import { Queue, Worker, FlowProducer } from '../../src/client';
-
-// Force embedded mode
+// Force embedded mode BEFORE imports
 process.env.BUNQUEUE_EMBEDDED = '1';
+
+import { Queue, Worker, FlowProducer } from '../../src/client';
 
 const QUEUE_NAME = 'test-dependencies';
 

@@ -4,13 +4,13 @@
  * Promote, MoveToDelayed, Discard, Update, ChangePriority, Cancel
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 import { getSharedManager } from '../../src/client/manager';
 
 const QUEUE_NAME = 'test-job-management';
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
 
 async function main() {
   console.log('=== Test Job Management (Embedded) ===\n');

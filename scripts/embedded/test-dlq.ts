@@ -3,6 +3,9 @@
  * Test Dead Letter Queue (DLQ): failed jobs, retry, purge
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 
 const QUEUE_NAME = 'test-dlq';
@@ -86,9 +89,6 @@ async function main() {
   }
 
   // Test 4: Retry from DLQ
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
   console.log('\n4. Testing RETRY DLQ...');
   try {
     // First add a job that will fail

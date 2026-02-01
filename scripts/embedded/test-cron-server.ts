@@ -4,6 +4,9 @@
  * Tests the CronScheduler via getSharedManager()
  */
 
+// Force embedded mode BEFORE imports
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 import { Queue, Worker } from '../../src/client';
 import { getSharedManager, shutdownManager } from '../../src/client/manager';
 
@@ -20,9 +23,6 @@ async function main() {
   // Clean up
   queue.obliterate();
   // Remove any existing crons from previous test runs
-
-// Force embedded mode
-process.env.BUNQUEUE_EMBEDDED = '1';
   for (const cron of manager.listCrons()) {
     manager.removeCron(cron.name);
   }

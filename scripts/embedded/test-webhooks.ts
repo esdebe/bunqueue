@@ -5,10 +5,10 @@
  * so we only test registration/listing/removal via the WebhookManager.
  */
 
-import { getSharedManager } from '../../src/client/manager';
-
-// Force embedded mode
+// Force embedded mode BEFORE imports
 process.env.BUNQUEUE_EMBEDDED = '1';
+
+import { getSharedManager } from '../../src/client/manager';
 
 async function main() {
   console.log('=== Test Webhooks (Embedded) ===\n');
