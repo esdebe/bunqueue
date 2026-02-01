@@ -230,6 +230,12 @@ export function recover(ctx: BackgroundContext): void {
     const shard = ctx.shards[idx];
     shard.getQueue(job.queue).push(job);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+    // Restore customId mapping for deduplication (fixes idempotency on restart)
+    if (job.customId) {
+      ctx.customIdMap.set(job.customId, job.id);
+    }
+
     const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
     ctx.registerQueueName(job.queue);
