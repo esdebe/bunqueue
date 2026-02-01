@@ -217,6 +217,37 @@ export interface Job<T = unknown> {
    * @throws Error if job fails or times out
    */
   waitUntilFinished(queueEvents: unknown, ttl?: number): Promise<unknown>;
+
+  // BullMQ v5 additional methods
+  /**
+   * Discard this job - marks it to not be processed further.
+   * The job will be moved to failed state with a "discarded" reason.
+   */
+  discard(): void;
+  /**
+   * Get return values of failed children jobs.
+   * @returns Record where keys are job keys (queueName:jobId) and values are failure reasons
+   */
+  getFailedChildrenValues(): Promise<Record<string, string>>;
+  /**
+   * Get child job failures that were explicitly ignored (via ignoreDependencyOnFailure).
+   * @returns Record where keys are job keys and values are failure reasons
+   */
+  getIgnoredChildrenFailures(): Promise<Record<string, string>>;
+  /**
+   * Remove this job's dependency relationship with its parent.
+   * @returns true if dependency was removed
+   */
+  removeChildDependency(): Promise<boolean>;
+  /**
+   * Remove the deduplication key associated with this job.
+   * @returns true if key was removed
+   */
+  removeDeduplicationKey(): Promise<boolean>;
+  /**
+   * Remove all unprocessed child jobs of this job.
+   */
+  removeUnprocessedChildren(): Promise<void>;
 }
 
 /** Parent job reference for flow dependencies */
@@ -249,6 +280,10 @@ export interface DeduplicationOptions {
   id: string;
   /** TTL in milliseconds for the deduplication key */
   ttl?: number;
+  /** Extend TTL when duplicate job arrives (for debounce mode) */
+  extend?: boolean;
+  /** Replace job data when duplicate arrives while in delayed state */
+  replace?: boolean;
 }
 
 /** Debounce options (BullMQ v5 compatible) */
@@ -333,6 +368,12 @@ export interface JobOptions {
   failParentOnFailure?: boolean;
   /** Remove dependency relationship if this job fails */
   removeDependencyOnFailure?: boolean;
+  /** Continue parent processing even if this child fails */
+  continueParentOnFailure?: boolean;
+  /** Move job to parent's failed dependencies instead of blocking parent */
+  ignoreDependencyOnFailure?: boolean;
+  /** Job creation timestamp (default: Date.now()) */
+  timestamp?: number;
   /** Deduplication configuration */
   deduplication?: DeduplicationOptions;
   /** Debounce configuration */
@@ -543,6 +584,13 @@ export interface CreatePublicJobOptions {
     opts?: { child?: { id: string; queue: string } }
   ) => Promise<boolean>;
   waitUntilFinished?: (id: string, queueEvents: unknown, ttl?: number) => Promise<unknown>;
+  // BullMQ v5 additional method callbacks
+  discard?: (id: string) => void;
+  getFailedChildrenValues?: (id: string) => Promise<Record<string, string>>;
+  getIgnoredChildrenFailures?: (id: string) => Promise<Record<string, string>>;
+  removeChildDependency?: (id: string) => Promise<boolean>;
+  removeDeduplicationKey?: (id: string) => Promise<boolean>;
+  removeUnprocessedChildren?: (id: string) => Promise<void>;
   // Additional job metadata
   token?: string;
   processedBy?: string;
@@ -685,6 +733,12 @@ export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
     moveToDelayed,
     moveToWaitingChildren,
     waitUntilFinished,
+    discard,
+    getFailedChildrenValues,
+    getIgnoredChildrenFailures,
+    removeChildDependency,
+    removeDeduplicationKey,
+    removeUnprocessedChildren,
     token,
     processedBy,
     stacktrace,
@@ -831,6 +885,21 @@ export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
         : Promise.resolve(false),
     waitUntilFinished: (queueEvents: unknown, ttl?: number) =>
       waitUntilFinished ? waitUntilFinished(id, queueEvents, ttl) : Promise.resolve(undefined),
+
+    // BullMQ v5 additional methods
+    discard: () => {
+      if (discard) discard(id);
+    },
+    getFailedChildrenValues: () =>
+      getFailedChildrenValues ? getFailedChildrenValues(id) : Promise.resolve({}),
+    getIgnoredChildrenFailures: () =>
+      getIgnoredChildrenFailures ? getIgnoredChildrenFailures(id) : Promise.resolve({}),
+    removeChildDependency: () =>
+      removeChildDependency ? removeChildDependency(id) : Promise.resolve(false),
+    removeDeduplicationKey: () =>
+      removeDeduplicationKey ? removeDeduplicationKey(id) : Promise.resolve(false),
+    removeUnprocessedChildren: () =>
+      removeUnprocessedChildren ? removeUnprocessedChildren(id) : Promise.resolve(),
   };
 
   return publicJob;
@@ -864,6 +933,13 @@ export interface ToPublicJobOptions {
     opts?: { child?: { id: string; queue: string } }
   ) => Promise<boolean>;
   waitUntilFinished?: (id: string, queueEvents: unknown, ttl?: number) => Promise<unknown>;
+  // BullMQ v5 additional method callbacks
+  discard?: (id: string) => void;
+  getFailedChildrenValues?: (id: string) => Promise<Record<string, string>>;
+  getIgnoredChildrenFailures?: (id: string) => Promise<Record<string, string>>;
+  removeChildDependency?: (id: string) => Promise<boolean>;
+  removeDeduplicationKey?: (id: string) => Promise<boolean>;
+  removeUnprocessedChildren?: (id: string) => Promise<void>;
   // Additional job metadata
   stacktrace?: string[] | null;
 }
@@ -891,6 +967,12 @@ export function toPublicJob<T>(opts: ToPublicJobOptions): Job<T> {
     moveToDelayed,
     moveToWaitingChildren,
     waitUntilFinished,
+    discard,
+    getFailedChildrenValues,
+    getIgnoredChildrenFailures,
+    removeChildDependency,
+    removeDeduplicationKey,
+    removeUnprocessedChildren,
     stacktrace,
   } = opts;
   const id = String(job.id);
@@ -1034,6 +1116,21 @@ export function toPublicJob<T>(opts: ToPublicJobOptions): Job<T> {
         : Promise.resolve(false),
     waitUntilFinished: (queueEvents: unknown, ttl?: number) =>
       waitUntilFinished ? waitUntilFinished(id, queueEvents, ttl) : Promise.resolve(undefined),
+
+    // BullMQ v5 additional methods
+    discard: () => {
+      if (discard) discard(id);
+    },
+    getFailedChildrenValues: () =>
+      getFailedChildrenValues ? getFailedChildrenValues(id) : Promise.resolve({}),
+    getIgnoredChildrenFailures: () =>
+      getIgnoredChildrenFailures ? getIgnoredChildrenFailures(id) : Promise.resolve({}),
+    removeChildDependency: () =>
+      removeChildDependency ? removeChildDependency(id) : Promise.resolve(false),
+    removeDeduplicationKey: () =>
+      removeDeduplicationKey ? removeDeduplicationKey(id) : Promise.resolve(false),
+    removeUnprocessedChildren: () =>
+      removeUnprocessedChildren ? removeUnprocessedChildren(id) : Promise.resolve(),
   };
 
   return publicJob;

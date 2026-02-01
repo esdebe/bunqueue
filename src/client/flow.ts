@@ -587,6 +587,13 @@ export class FlowProducer {
       moveToDelayed: () => Promise.resolve(),
       moveToWaitingChildren: () => Promise.resolve(false),
       waitUntilFinished: () => Promise.resolve(undefined),
+      // BullMQ v5 additional methods
+      discard: () => {},
+      getFailedChildrenValues: () => Promise.resolve({}),
+      getIgnoredChildrenFailures: () => Promise.resolve({}),
+      removeChildDependency: () => Promise.resolve(false),
+      removeDeduplicationKey: () => Promise.resolve(false),
+      removeUnprocessedChildren: () => Promise.resolve(),
     };
   }
 

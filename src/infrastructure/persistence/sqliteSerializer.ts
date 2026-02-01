@@ -75,7 +75,11 @@ export function rowToJob(row: DbJob): Job {
     sizeLimit: null,
     failParentOnFailure: false,
     removeDependencyOnFailure: false,
+    continueParentOnFailure: false,
+    ignoreDependencyOnFailure: false,
     deduplicationTtl: null,
+    deduplicationExtend: false,
+    deduplicationReplace: false,
     debounceId: null,
     debounceTtl: null,
   };

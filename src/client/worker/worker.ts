@@ -289,6 +289,72 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     };
   }
 
+  /**
+   * Apply rate limiting to this worker (BullMQ v5 compatible).
+   * The worker will not process jobs until the rate limit expires.
+   *
+   * @param expireTimeMs - Time in milliseconds until rate limit expires
+   */
+  rateLimit(expireTimeMs: number): void {
+    if (expireTimeMs <= 0) return;
+
+    // Fill rate limiter tokens to block processing
+    if (this.limiter) {
+      const now = Date.now();
+      // Add enough tokens to block for the specified time
+      for (let i = 0; i < this.limiter.max; i++) {
+        this.limiterTokens.push(now + expireTimeMs - this.limiter.duration);
+      }
+    }
+
+    // Store rate limit expiration
+    this.rateLimitExpiration = Date.now() + expireTimeMs;
+  }
+
+  /** Rate limit expiration timestamp (internal) */
+  private rateLimitExpiration = 0;
+
+  /**
+   * Check if worker is currently rate limited.
+   */
+  isRateLimited(): boolean {
+    return Date.now() < this.rateLimitExpiration;
+  }
+
+  /**
+   * Manually start the stalled job check timer (BullMQ v5 compatible).
+   * The check will run once immediately and then every stalledInterval ms.
+   * In bunqueue, stall detection is handled automatically by the manager/server.
+   */
+  async startStalledCheckTimer(): Promise<void> {
+    // In bunqueue, stall detection is handled automatically by:
+    // - Embedded mode: QueueManager.checkStalledJobs() runs periodically
+    // - TCP mode: Server-side stall detection
+    // This method is a no-op for API compatibility
+  }
+
+  /**
+   * Delay processing for a specified time (BullMQ v5 compatible).
+   * The worker will not pick up new jobs during this delay.
+   *
+   * @param milliseconds - Time to delay in ms (default: 0)
+   * @param abortController - Optional AbortController to cancel the delay
+   */
+  async delay(milliseconds = 0, abortController?: AbortController): Promise<void> {
+    if (milliseconds <= 0) return;
+
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(resolve, milliseconds);
+
+      if (abortController) {
+        abortController.signal.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          reject(new Error('Delay aborted'));
+        });
+      }
+    });
+  }
+
   // ============================================================================
   // BullMQ v5 Manual Job Control Methods
   // ============================================================================

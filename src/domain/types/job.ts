@@ -126,8 +126,16 @@ export interface Job {
   readonly failParentOnFailure: boolean;
   /** Remove dependency relationship if this job fails */
   readonly removeDependencyOnFailure: boolean;
+  /** Continue parent processing even if this child fails */
+  readonly continueParentOnFailure: boolean;
+  /** Move job to parent's failed dependencies instead of blocking parent */
+  readonly ignoreDependencyOnFailure: boolean;
   /** Deduplication TTL in milliseconds */
   readonly deduplicationTtl: number | null;
+  /** Extend deduplication TTL on duplicate */
+  readonly deduplicationExtend: boolean;
+  /** Replace job data on duplicate while in delayed state */
+  readonly deduplicationReplace: boolean;
   /** Debounce ID */
   readonly debounceId: string | null;
   /** Debounce TTL in milliseconds */
@@ -201,10 +209,16 @@ export interface JobInput {
   failParentOnFailure?: boolean;
   /** Remove dependency relationship if this job fails */
   removeDependencyOnFailure?: boolean;
+  /** Continue parent processing even if this child fails */
+  continueParentOnFailure?: boolean;
+  /** Move job to parent's failed dependencies instead of blocking parent */
+  ignoreDependencyOnFailure?: boolean;
   /** Debounce ID */
   debounceId?: string;
   /** Debounce TTL in milliseconds */
   debounceTtl?: number;
+  /** Job creation timestamp (default: Date.now()) */
+  timestamp?: number;
 }
 
 /** Job creation defaults */
@@ -294,7 +308,11 @@ function parseBullMQV5Options(input: JobInput): {
   sizeLimit: number | null;
   failParentOnFailure: boolean;
   removeDependencyOnFailure: boolean;
+  continueParentOnFailure: boolean;
+  ignoreDependencyOnFailure: boolean;
   deduplicationTtl: number | null;
+  deduplicationExtend: boolean;
+  deduplicationReplace: boolean;
   debounceId: string | null;
   debounceTtl: number | null;
 } {
@@ -304,7 +322,11 @@ function parseBullMQV5Options(input: JobInput): {
     sizeLimit: input.sizeLimit ?? null,
     failParentOnFailure: input.failParentOnFailure ?? false,
     removeDependencyOnFailure: input.removeDependencyOnFailure ?? false,
+    continueParentOnFailure: input.continueParentOnFailure ?? false,
+    ignoreDependencyOnFailure: input.ignoreDependencyOnFailure ?? false,
     deduplicationTtl: input.dedup?.ttl ?? null,
+    deduplicationExtend: input.dedup?.extend ?? false,
+    deduplicationReplace: input.dedup?.replace ?? false,
     debounceId: input.debounceId ?? null,
     debounceTtl: input.debounceTtl ?? null,
   };
@@ -321,13 +343,14 @@ export function createJob(
   const coreOpts = parseCoreOptions(input);
   const optionalFields = parseOptionalFields(input);
   const v5Opts = parseBullMQV5Options(input);
+  const createdAt = input.timestamp ?? now;
 
   return {
     id,
     queue,
     data: input.data,
-    createdAt: now,
-    runAt: now + (input.delay ?? 0),
+    createdAt,
+    runAt: createdAt + (input.delay ?? 0),
     startedAt: null,
     completedAt: null,
     attempts: 0,
@@ -340,7 +363,7 @@ export function createJob(
     progress: 0,
     progressMessage: null,
     repeat: parseRepeatConfig(input.repeat),
-    lastHeartbeat: now,
+    lastHeartbeat: createdAt,
     stallCount: 0,
     ...coreOpts,
     ...optionalFields,
