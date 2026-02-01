@@ -70,7 +70,8 @@ describe('SandboxedWorker', () => {
     expect(worker.getStats().total).toBe(0);
   });
 
-  test('should process jobs in isolated workers', async () => {
+  // Skip: Bun Worker termination causes segfault (Bun bug)
+  test.skip('should process jobs in isolated workers', async () => {
     const queueName = 'sandboxed-process-test';
     const worker = new SandboxedWorker(queueName, {
       processor: processorPath,
@@ -126,7 +127,8 @@ describe('SandboxedWorker', () => {
     await worker.stop();
   });
 
-  test('should handle worker timeout', async () => {
+  // Skip: Bun Worker termination causes segfault (Bun bug)
+  test.skip('should handle worker timeout', async () => {
     // Create a slow processor
     const slowProcessorPath = join(tmpdir(), `slow-processor-${Date.now()}.ts`);
     writeFileSync(
@@ -167,7 +169,8 @@ describe('SandboxedWorker', () => {
     }
   });
 
-  test('should handle processor errors', async () => {
+  // Skip: Bun Worker termination causes segfault (Bun bug)
+  test.skip('should handle processor errors', async () => {
     // Create an error-throwing processor
     const errorProcessorPath = join(tmpdir(), `error-processor-${Date.now()}.ts`);
     writeFileSync(
