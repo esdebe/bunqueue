@@ -289,6 +289,157 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     };
   }
 
+  // ============================================================================
+  // BullMQ v5 Manual Job Control Methods
+  // ============================================================================
+
+  /**
+   * Get the next job from the queue (BullMQ v5 compatible).
+   * This is for manual job processing - typically you'd use the processor callback instead.
+   *
+   * @param token - Lock token for job ownership
+   * @param opts - Options (currently unused, for API compatibility)
+   * @returns The next job or undefined if queue is empty
+   */
+  async getNextJob(token?: string, _opts?: { block?: boolean }): Promise<InternalJob | undefined> {
+    if (this.closed) return undefined;
+
+    if (this.embedded) {
+      const manager = getSharedManager();
+      if (this.opts.useLocks) {
+        const { job, token: lockToken } = await manager.pullWithLock(this.name, this.workerId, 0);
+        if (job && lockToken) {
+          const jobIdStr = String(job.id);
+          this.pulledJobIds.add(jobIdStr);
+          this.jobTokens.set(jobIdStr, lockToken);
+        }
+        return job ?? undefined;
+      }
+      const job = await manager.pull(this.name, 0);
+      if (job) {
+        this.pulledJobIds.add(String(job.id));
+      }
+      return job ?? undefined;
+    }
+
+    // TCP mode
+    if (!this.tcp) return undefined;
+
+    const cmd: Record<string, unknown> = {
+      cmd: 'PULL',
+      queue: this.name,
+      timeout: 0,
+    };
+    if (this.opts.useLocks) {
+      cmd.owner = this.workerId;
+      if (token) cmd.token = token;
+    }
+
+    const response = await this.tcp.send(cmd);
+    if (!response.ok || !response.job) return undefined;
+
+    const job = parseJobFromResponse(response.job as Record<string, unknown>, this.name);
+    const jobIdStr = String(job.id);
+    this.pulledJobIds.add(jobIdStr);
+
+    if (this.opts.useLocks && response.token) {
+      this.jobTokens.set(jobIdStr, response.token as string);
+    }
+
+    return job;
+  }
+
+  /**
+   * Manually process a job (BullMQ v5 compatible).
+   * This is for advanced use cases where you need manual control over job processing.
+   *
+   * @param job - The job to process
+   * @param token - Lock token for job ownership
+   * @param fetchNextCallback - Optional callback to fetch next job after completion
+   * @returns The processed job or void
+   */
+  async processJobManually(
+    job: InternalJob,
+    token?: string,
+    fetchNextCallback?: () => Promise<InternalJob | undefined>
+  ): Promise<InternalJob | undefined> {
+    if (this.closed) return undefined;
+
+    const jobIdStr = String(job.id);
+    this.activeJobs++;
+    this.activeJobIds.add(jobIdStr);
+    this.pulledJobIds.add(jobIdStr);
+
+    if (this.opts.useLocks && token) {
+      this.jobTokens.set(jobIdStr, token);
+    }
+
+    try {
+      await processJob(job, {
+        name: this.name,
+        processor: this.processor,
+        embedded: this.embedded,
+        tcp: this.tcp,
+        ackBatcher: this.ackBatcher,
+        emitter: this,
+        token: this.opts.useLocks ? token : undefined,
+      });
+
+      // Fetch next job if callback provided
+      if (fetchNextCallback) {
+        return await fetchNextCallback();
+      }
+    } finally {
+      this.activeJobs--;
+      this.activeJobIds.delete(jobIdStr);
+      this.pulledJobIds.delete(jobIdStr);
+      this.cancelledJobs.delete(jobIdStr);
+      if (this.opts.useLocks) {
+        this.jobTokens.delete(jobIdStr);
+      }
+      this.recordJobForLimiter();
+    }
+  }
+
+  /**
+   * Extend locks on multiple jobs (BullMQ v5 compatible).
+   * Used to prevent jobs from being considered stalled during long processing.
+   *
+   * @param jobIds - Array of job IDs to extend locks for
+   * @param tokens - Array of lock tokens corresponding to each job
+   * @param duration - Duration in milliseconds to extend the lock
+   * @returns Number of locks successfully extended
+   */
+  async extendJobLocks(jobIds: string[], tokens: string[], duration: number): Promise<number> {
+    if (this.closed || jobIds.length === 0) return 0;
+    if (jobIds.length !== tokens.length) {
+      throw new Error('jobIds and tokens arrays must have the same length');
+    }
+
+    if (this.embedded) {
+      const manager = getSharedManager();
+      let extended = 0;
+      for (let i = 0; i < jobIds.length; i++) {
+        const success = await manager.extendLock(jobIds[i], tokens[i], duration);
+        if (success) extended++;
+      }
+      return extended;
+    }
+
+    // TCP mode
+    if (!this.tcp) return 0;
+
+    const response = await this.tcp.send({
+      cmd: 'ExtendLocks',
+      ids: jobIds,
+      tokens,
+      duration,
+    });
+
+    const extended = response.extended as number | undefined;
+    return extended ?? 0;
+  }
+
   /** Close worker gracefully */
   async close(force = false): Promise<void> {
     if (this.closed) return;

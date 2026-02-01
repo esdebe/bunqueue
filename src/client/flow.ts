@@ -6,6 +6,7 @@
 import { getSharedManager } from './manager';
 import { TcpConnectionPool, getSharedPool, releaseSharedPool } from './tcpPool';
 import { jobId } from '../domain/types/job';
+import type { Job as DomainJob } from '../domain/types/job';
 import type { JobOptions, ConnectionOptions, Job } from './types';
 
 const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
@@ -68,6 +69,20 @@ export interface JobNode<T = unknown> {
   job: Job<T>;
   /** Child nodes (if any) */
   children?: JobNode[];
+}
+
+/**
+ * Options for getFlow method (BullMQ v5 compatible).
+ */
+export interface GetFlowOpts {
+  /** Job ID to get the flow for */
+  id: string;
+  /** Queue name where the job is located */
+  queueName: string;
+  /** Maximum depth to traverse (default: unlimited) */
+  depth?: number;
+  /** Maximum number of children to fetch per level (default: unlimited) */
+  maxChildren?: number;
 }
 
 /**
@@ -197,6 +212,177 @@ export class FlowProducer {
       results.push(await this.add(flow));
     }
     return results;
+  }
+
+  /**
+   * Get a flow tree starting from a job (BullMQ v5 compatible).
+   *
+   * Retrieves the job and all its children recursively, building a JobNode tree.
+   *
+   * @example
+   * ```typescript
+   * const flow = new FlowProducer();
+   *
+   * // Get a previously created flow
+   * const node = await flow.getFlow({
+   *   id: 'job-id',
+   *   queueName: 'my-queue',
+   * });
+   *
+   * if (node) {
+   *   console.log('Parent:', node.job.name);
+   *   console.log('Children:', node.children?.length ?? 0);
+   * }
+   * ```
+   */
+  async getFlow<T = unknown>(opts: GetFlowOpts): Promise<JobNode<T> | null> {
+    const { id, queueName, depth, maxChildren } = opts;
+
+    if (this.embedded) {
+      return this.getFlowEmbedded<T>(id, queueName, depth ?? Infinity, maxChildren);
+    }
+
+    return this.getFlowTcp<T>(id, queueName, depth ?? Infinity, maxChildren);
+  }
+
+  /** Get flow in embedded mode */
+  private async getFlowEmbedded<T>(
+    id: string,
+    queueName: string,
+    depth: number,
+    maxChildren?: number
+  ): Promise<JobNode<T> | null> {
+    const manager = getSharedManager();
+    const job = await manager.getJob(jobId(id));
+
+    if (job?.queue !== queueName) {
+      return null;
+    }
+
+    return this.buildJobNode<T>(job, depth, maxChildren);
+  }
+
+  /** Get flow in TCP mode */
+  private async getFlowTcp<T>(
+    id: string,
+    queueName: string,
+    depth: number,
+    maxChildren?: number
+  ): Promise<JobNode<T> | null> {
+    if (!this.tcp) throw new Error('TCP connection not initialized');
+
+    const response = await this.tcp.send({
+      cmd: 'GetJob',
+      id,
+    });
+
+    if (!response.ok || !response.job) {
+      return null;
+    }
+
+    const jobData = response.job as Record<string, unknown>;
+    if (jobData.queue !== queueName) {
+      return null;
+    }
+
+    // Build job node from TCP response
+    return this.buildJobNodeFromTcp<T>(jobData, depth, maxChildren);
+  }
+
+  /** Build JobNode recursively from internal job */
+  private async buildJobNode<T>(
+    job: DomainJob,
+    depth: number,
+    maxChildren?: number
+  ): Promise<JobNode<T>> {
+    const data = job.data as Record<string, unknown>;
+    const nameValue = data.name;
+    const name = typeof nameValue === 'string' ? nameValue : 'default';
+    const userData = this.extractUserDataFromInternal(data) as T;
+
+    const jobObj = this.createJobObject<T>(String(job.id), name, userData, job.queue);
+
+    // If depth exhausted or no children, return without children
+    if (depth <= 0 || job.childrenIds.length === 0) {
+      return { job: jobObj };
+    }
+
+    // Fetch children recursively
+    const manager = getSharedManager();
+    const childNodes: JobNode<T>[] = [];
+    const childrenToFetch = maxChildren ? job.childrenIds.slice(0, maxChildren) : job.childrenIds;
+
+    for (const childId of childrenToFetch) {
+      const childJob = await manager.getJob(childId);
+      if (childJob) {
+        const childNode = await this.buildJobNode<T>(childJob, depth - 1, maxChildren);
+        childNodes.push(childNode);
+      }
+    }
+
+    return {
+      job: jobObj,
+      children: childNodes.length > 0 ? childNodes : undefined,
+    };
+  }
+
+  /** Build JobNode from TCP response */
+  private async buildJobNodeFromTcp<T>(
+    jobData: Record<string, unknown>,
+    depth: number,
+    maxChildren?: number
+  ): Promise<JobNode<T>> {
+    const id = String(jobData.id);
+    const queueName = String(jobData.queue);
+    const data = jobData.data as Record<string, unknown> | null;
+    const nameValue = data?.name;
+    const name = typeof nameValue === 'string' ? nameValue : 'default';
+    const userData = this.extractUserDataFromInternal(data ?? {}) as T;
+    const rawChildrenIds = data?.__childrenIds;
+    const childrenIds = Array.isArray(rawChildrenIds) ? (rawChildrenIds as string[]) : [];
+
+    const jobObj = this.createJobObject<T>(id, name, userData, queueName);
+
+    // If depth exhausted or no children, return without children
+    if (depth <= 0 || childrenIds.length === 0) {
+      return { job: jobObj };
+    }
+
+    // Fetch children recursively via TCP
+    if (!this.tcp) {
+      return { job: jobObj };
+    }
+
+    const childNodes: JobNode<T>[] = [];
+    const childrenToFetch = maxChildren ? childrenIds.slice(0, maxChildren) : childrenIds;
+
+    for (const childId of childrenToFetch) {
+      const response = await this.tcp.send({ cmd: 'GetJob', id: childId });
+      if (response.ok && response.job) {
+        const childNode = await this.buildJobNodeFromTcp<T>(
+          response.job as Record<string, unknown>,
+          depth - 1,
+          maxChildren
+        );
+        childNodes.push(childNode);
+      }
+    }
+
+    return {
+      job: jobObj,
+      children: childNodes.length > 0 ? childNodes : undefined,
+    };
+  }
+
+  /** Extract user data (remove internal fields) */
+  private extractUserDataFromInternal(data: Record<string, unknown>): unknown {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (!key.startsWith('__') && key !== 'name') {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   /**

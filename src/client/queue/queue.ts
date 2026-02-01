@@ -1496,13 +1496,13 @@ export class Queue<T = unknown> {
   }
 
   /** Extend job lock */
-  async extendJobLock(id: string, _token: string, duration: number): Promise<number> {
+  async extendJobLock(id: string, token: string, duration: number): Promise<number> {
     if (this.embedded) {
       const manager = getSharedManager();
-      const extended = await manager.extendLock(jobId(id), duration);
+      const extended = await manager.extendLock(jobId(id), token || null, duration);
       return extended ? duration : 0;
     } else {
-      const response = await this.tcp.send({ cmd: 'ExtendLock', id, duration });
+      const response = await this.tcp.send({ cmd: 'ExtendLock', id, token, duration });
       return response.ok ? duration : 0;
     }
   }

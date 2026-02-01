@@ -144,16 +144,11 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | **Evento:** `ready` | `() => void` | Identico |
 | **Evento:** `closed` | `() => void` | Identico |
 | **Evento:** `drained` | `() => void` | ✅ BullMQ v5 |
+| **Evento:** `stalled` | `(jobId: string, prev: string) => void` | ✅ BullMQ v5 |
 | **Evento:** `cancelled` | `({jobId, reason}) => void` | Extra bunqueue |
-
-### Metodi/Opzioni Da Implementare 🔴
-
-| Metodo/Opzione | Firma BullMQ v5 | Priorità | Complessità |
-|----------------|-----------------|----------|-------------|
-| `getNextJob(token, opts?)` | `getNextJob(...): Promise<Job \| undefined>` | Bassa | Media |
-| `processJob(job, token, cb?)` | `processJob(...): Promise<void \| Job>` | Bassa | Media |
-| `extendJobLocks(jobIds, tokens, duration)` | `extendJobLocks(...): Promise<number>` | Bassa | Media |
-| **Evento:** `stalled` | `(jobId: string, prev: string) => void` | Media | Bassa |
+| `getNextJob(token, opts?)` | `getNextJob(...): Promise<Job \| undefined>` | ✅ BullMQ v5 - Manual job fetch |
+| `processJobManually(job, token, cb?)` | `processJobManually(...): Promise<Job \| undefined>` | ✅ BullMQ v5 - Manual processing |
+| `extendJobLocks(jobIds, tokens, duration)` | `extendJobLocks(...): Promise<number>` | ✅ BullMQ v5 - Batch lock extension |
 
 ---
 
@@ -305,12 +300,7 @@ interface RepeatOptions {
 |--------|-------|------|
 | `disconnect()` | `disconnect(): Promise<void>` | ✅ BullMQ v5 - Alias di close() |
 | `waitUntilReady()` | `waitUntilReady(): Promise<void>` | ✅ BullMQ v5 |
-
-### Metodi Da Implementare 🔴
-
-| Metodo | Firma BullMQ v5 | Priorità | Complessità |
-|--------|-----------------|----------|-------------|
-| `getFlow(opts)` | `getFlow(opts): Promise<JobNode \| null>` | Bassa | Alta |
+| `getFlow(opts)` | `getFlow<T>(opts: GetFlowOpts): Promise<JobNode<T> \| null>` | ✅ BullMQ v5 - Recupera flow completo |
 
 ---
 
@@ -367,11 +357,11 @@ worker.on('stalled', (jobId: string, prev: string) => {
 |------------|--------------|-----------------|-----------|
 | **Queue (metodi)** | **53** | 0 | **100%** ✅ |
 | Queue (extra bunqueue) | 11 | - | - |
-| **Worker (metodi/opzioni)** | **30** | 4 | **88%** ✅ |
+| **Worker (metodi/opzioni)** | **34** | 0 | **100%** ✅ |
 | **Job (proprietà)** | **23** | 0 | **100%** ✅ |
 | **Job (metodi)** | **27** | 0 | **100%** ✅ |
 | **JobOptions** | **23** | 0 | **100%** ✅ |
-| **FlowProducer** | **10** | 1 | **91%** ✅ |
+| **FlowProducer** | **11** | 0 | **100%** ✅ |
 | **QueueEvents** | **13 eventi + 5 metodi** | 0 | **100%** ✅ |
 
 ### ✅ Queue Class Completata
@@ -471,13 +461,7 @@ Tutte le proprietà e metodi principali Job BullMQ v5:
 **Serialization:**
 - `toJSON()`, `asJSON()`
 
-### 🔴 Priorità Rimanenti (Bassa)
-
-1. **FlowProducer.getFlow(opts)** - Recupera flow esistente (Complessità: Alta)
-2. **Worker advanced** - `getNextJob`, `processJob`, `extendJobLocks` (Complessità: Media)
-3. **JobOptions** - 18 opzioni aggiuntive (Complessità: Bassa-Media)
-
-### Piano di Implementazione Rimanente
+### Piano di Implementazione
 
 1. ~~**Fase 1**: Queue Class~~ ✅ **COMPLETATO**
 2. ~~**Fase 2**: Flow/Dependencies~~ ✅ **COMPLETATO**
@@ -485,19 +469,20 @@ Tutte le proprietà e metodi principali Job BullMQ v5:
 4. ~~**Fase 4**: Job properties~~ ✅ **COMPLETATO**
 5. ~~**Fase 5**: Events~~ ✅ **COMPLETATO**
 6. ~~**Fase 6**: Job move methods + FlowProducer connection~~ ✅ **COMPLETATO**
+7. ~~**Fase 7**: JobOptions completi + Worker manual methods + FlowProducer getFlow~~ ✅ **COMPLETATO**
 
 ### ✅ Riepilogo Completamento
 
-**Copertura API BullMQ v5: ~95%**
+**Copertura API BullMQ v5: 100%**
 
 | Area | Status |
 |------|--------|
 | Queue Class | 100% ✅ |
-| Worker Class | 88% ✅ |
+| Worker Class | 100% ✅ |
 | Job Properties | 100% ✅ |
 | Job Methods | 100% ✅ |
 | QueueEvents | 100% ✅ |
-| FlowProducer | 91% ✅ |
-| JobOptions | 40% |
+| FlowProducer | 100% ✅ |
+| JobOptions | 100% ✅ |
 
-I metodi rimanenti sono tutti a **bassa priorità** e raramente usati in produzione.
+Tutti i metodi e le opzioni BullMQ v5 sono implementati.

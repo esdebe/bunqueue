@@ -600,17 +600,23 @@ export class QueueManager {
     return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
   }
 
-  async extendLock(jobId: JobId, duration: number): Promise<boolean> {
-    const lockInfo = lockMgr.getLockInfo(jobId, this.contextFactory.getLockContext());
+  async extendLock(
+    jobId: JobId | string,
+    token: string | null,
+    duration: number
+  ): Promise<boolean> {
+    const jid = typeof jobId === 'string' ? (jobId as JobId) : jobId;
+    const ctx = this.contextFactory.getLockContext();
+
+    if (token) {
+      // Use provided token for verification
+      return lockMgr.renewJobLock(jid, token, ctx, duration);
+    }
+
+    // Fall back to looking up the token
+    const lockInfo = lockMgr.getLockInfo(jid, ctx);
     if (lockInfo) {
-      // Renew the lock with a new TTL
-      const renewed = lockMgr.renewJobLock(
-        jobId,
-        lockInfo.token,
-        this.contextFactory.getLockContext(),
-        duration
-      );
-      return renewed;
+      return lockMgr.renewJobLock(jid, lockInfo.token, ctx, duration);
     }
     return false;
   }
