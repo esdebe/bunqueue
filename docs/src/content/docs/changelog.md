@@ -10,6 +10,35 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.0.0] - 2026-02-02
+
+### Added
+- **Complete BullMQ v5 API Compatibility** - Full feature parity with BullMQ v5
+  - **Worker Advanced Methods**
+    - `rateLimit(expireTimeMs)` - Apply rate limiting to worker
+    - `isRateLimited()` - Check if worker is currently rate limited
+    - `startStalledCheckTimer()` - Start stalled job check timer
+    - `delay(ms, abortController?)` - Delay worker processing with optional abort
+  - **Job Advanced Methods**
+    - `discard()` - Mark job as discarded
+    - `getFailedChildrenValues()` - Get failed children job values
+    - `getIgnoredChildrenFailures()` - Get ignored children failures
+    - `removeChildDependency()` - Remove child dependency from parent
+    - `removeDeduplicationKey()` - Remove deduplication key
+    - `removeUnprocessedChildren()` - Remove unprocessed children jobs
+  - **JobOptions**
+    - `continueParentOnFailure` - Continue parent job when child fails
+    - `ignoreDependencyOnFailure` - Ignore dependency on failure
+    - `timestamp` - Custom job timestamp
+  - **DeduplicationOptions**
+    - `extend` - Extend TTL on duplicate
+    - `replace` - Replace existing job on duplicate
+- **Comprehensive Test Coverage** - 27 unit tests + 32 embedded script tests for new features
+
+### Changed
+- Major version bump to 2.0.0 reflecting complete BullMQ v5 compatibility
+- Updated TypeScript types for all new features
+
 ## [1.9.9] - 2026-02-01
 
 ### Added
