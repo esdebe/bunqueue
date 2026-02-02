@@ -224,11 +224,34 @@ function performDlqMaintenance(ctx: BackgroundContext): void {
 export function recover(ctx: BackgroundContext): void {
   if (!ctx.storage) return;
 
+  // Load completed job IDs from SQLite for dependency checking
+  const completedInDb = ctx.storage.loadCompletedJobIds();
+
   const now = Date.now();
   for (const job of ctx.storage.loadPendingJobs()) {
     const idx = shardIndex(job.queue);
     const shard = ctx.shards[idx];
-    shard.getQueue(job.queue).push(job);
+
+    // Check if job has unmet dependencies
+    // Check both in-memory completedJobs AND SQLite job_results table
+    const hasDependencies = job.dependsOn && job.dependsOn.length > 0;
+    const needsWaitingDeps =
+      hasDependencies &&
+      !job.dependsOn.every((depId) => ctx.completedJobs.has(depId) || completedInDb.has(depId));
+
+    if (needsWaitingDeps) {
+      // Job is waiting for dependencies - don't add to main queue
+      shard.waitingDeps.set(job.id, job);
+      shard.registerDependencies(job.id, job.dependsOn);
+      // Note: don't call incrementQueued for waitingDeps jobs (matches push.ts behavior)
+    } else {
+      // Job is ready to process
+      shard.getQueue(job.queue).push(job);
+      // Update running counters for O(1) stats and temporal index
+      const isDelayed = job.runAt > now;
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+    }
+
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
 
     // Restore customId mapping for deduplication (fixes idempotency on restart)
@@ -236,8 +259,16 @@ export function recover(ctx: BackgroundContext): void {
       ctx.customIdMap.set(job.customId, job.id);
     }
 
-    const isDelayed = job.runAt > now;
-    shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+    // Restore uniqueKey mapping for TTL-based deduplication
+    if (job.uniqueKey) {
+      shard.registerUniqueKeyWithTtl(
+        job.queue,
+        job.uniqueKey,
+        job.id,
+        job.deduplicationTtl ?? undefined
+      );
+    }
+
     ctx.registerQueueName(job.queue);
   }
 

@@ -203,6 +203,20 @@ export class SqliteStorage {
     return row ? unpack(row.result, null, `getResult:${jobId}`) : null;
   }
 
+  /** Check if a job result exists (for dependency checking during recovery) */
+  hasResult(jobId: JobId): boolean {
+    const row = this.db
+      .query<{ job_id: string }, [string]>('SELECT job_id FROM job_results WHERE job_id = ?')
+      .get(String(jobId));
+    return row !== null;
+  }
+
+  /** Load all completed job IDs (for dependency recovery) */
+  loadCompletedJobIds(): Set<JobId> {
+    const rows = this.db.query<{ job_id: string }, []>('SELECT job_id FROM job_results').all();
+    return new Set(rows.map((r) => r.job_id as JobId));
+  }
+
   // ============ Bulk Operations ============
 
   /** Insert batch of jobs (adds to buffer) */

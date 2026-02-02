@@ -141,4 +141,56 @@ describe('Deduplication Recovery', () => {
       expect(job2.id).not.toBe(job1.id);
     });
   });
+
+  describe('uniqueKey deduplication', () => {
+    test('should deduplicate using uniqueKey with TTL', async () => {
+      // Add job with deduplication TTL
+      const job1 = await queue.add('test', { value: 1 }, {
+        deduplication: { id: 'unique-key-1', ttl: 60000 }
+      });
+      expect(job1.id).toBeDefined();
+
+      // Try to add duplicate - should return existing job
+      const job2 = await queue.add('test', { value: 2 }, {
+        deduplication: { id: 'unique-key-1', ttl: 60000 }
+      });
+      expect(job2.id).toBe(job1.id);
+    });
+
+    test('should allow different uniqueKeys', async () => {
+      const job1 = await queue.add('test', { value: 1 }, {
+        deduplication: { id: 'key-a', ttl: 60000 }
+      });
+      const job2 = await queue.add('test', { value: 2 }, {
+        deduplication: { id: 'key-b', ttl: 60000 }
+      });
+
+      expect(job1.id).not.toBe(job2.id);
+    });
+  });
+
+  describe('dependency tracking', () => {
+    test('job without dependencies should be in main queue', async () => {
+      const job = await queue.add('test', { value: 1 });
+      expect(job.id).toBeDefined();
+
+      const count = await queue.count();
+      expect(count).toBe(1);
+    });
+
+    test('jobs with all options should be tracked correctly', async () => {
+      // Add job with both jobId and deduplication
+      const job = await queue.add('test', { value: 1 }, {
+        jobId: 'combined-id',
+        deduplication: { id: 'combined-dedup', ttl: 30000 },
+        delay: 1000
+      });
+
+      expect(job.id).toBeDefined();
+
+      // Should find by jobId
+      const foundByJobId = await queue.getDeduplicationJobId('combined-id');
+      expect(foundByJobId).toBe(String(job.id));
+    });
+  });
 });

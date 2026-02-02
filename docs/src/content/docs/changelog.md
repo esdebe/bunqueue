@@ -10,6 +10,20 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.0.2] - 2026-02-02
+
+### Fixed
+- **Critical: Complete recovery logic for deduplication after restart** - Fixed all recovery scenarios that caused duplicate jobs after server restart:
+  - **jobId deduplication** (`customIdMap`) - Now properly populated on recovery
+  - **uniqueKey TTL deduplication** - Now restored with TTL settings via `registerUniqueKeyWithTtl()`
+  - **Dependency recovery** - Now checks SQLite `job_results` table (not just in-memory `completedJobs`)
+  - **Counter consistency** - Fixed `incrementQueued()` only called for main queue jobs, not `waitingDeps`
+
+### Added
+- `loadCompletedJobIds()` method in SQLite storage for dependency recovery
+- `hasResult()` method to check if job result exists in SQLite
+- Comprehensive recovery test suite (`test/recoveryLogic.test.ts`) with 8 tests covering all scenarios
+
 ## [2.0.1] - 2026-02-02
 
 ### Fixed
