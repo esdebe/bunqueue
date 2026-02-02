@@ -70,27 +70,29 @@ describe('SandboxedWorker', () => {
     expect(worker.getStats().total).toBe(0);
   });
 
-  // Skip: Bun Worker termination causes segfault (Bun bug)
-  test.skip('should process jobs in isolated workers', async () => {
-    const queueName = 'sandboxed-process-test';
+  test('should process jobs in isolated workers', async () => {
+    const queueName = `sandboxed-process-test-${Date.now()}`;
     const worker = new SandboxedWorker(queueName, {
       processor: processorPath,
-      concurrency: 2,
+      concurrency: 1,
       timeout: 5000,
       manager,
     });
 
-    await worker.start();
+    worker.start();
 
     // Add job using manager directly
     const job = await manager.push(queueName, { data: { value: 21 } });
     expect(job.id).toBeDefined();
 
-    // Wait for processing
-    await Bun.sleep(500);
+    // Wait for processing with polling
+    let result: unknown;
+    for (let i = 0; i < 20; i++) {
+      await Bun.sleep(100);
+      result = manager.getResult(job.id);
+      if (result !== undefined) break;
+    }
 
-    // Check result
-    const result = await manager.getResult(job.id);
     expect(result).toEqual({ processed: true, value: 42 });
 
     await worker.stop();
@@ -127,8 +129,7 @@ describe('SandboxedWorker', () => {
     await worker.stop();
   });
 
-  // Skip: Bun Worker termination causes segfault (Bun bug)
-  test.skip('should handle worker timeout', async () => {
+  test('should handle worker timeout', async () => {
     // Create a slow processor
     const slowProcessorPath = join(tmpdir(), `slow-processor-${Date.now()}.ts`);
     writeFileSync(
@@ -141,7 +142,7 @@ describe('SandboxedWorker', () => {
     `
     );
 
-    const queueName = 'sandboxed-timeout-test';
+    const queueName = `sandboxed-timeout-test-${Date.now()}`;
     const worker = new SandboxedWorker(queueName, {
       processor: slowProcessorPath,
       concurrency: 1,
@@ -149,15 +150,19 @@ describe('SandboxedWorker', () => {
       manager,
     });
 
-    await worker.start();
+    worker.start();
 
-    const job = await manager.push(queueName, { data: { test: true } });
+    await manager.push(queueName, { data: { test: true } });
 
-    // Wait for timeout + restart
-    await Bun.sleep(500);
+    // Wait for timeout + restart with polling
+    let stats = worker.getStats();
+    for (let i = 0; i < 20; i++) {
+      await Bun.sleep(100);
+      stats = worker.getStats();
+      if (stats.restarts > 0) break;
+    }
 
     // Worker should have restarted after timeout
-    const stats = worker.getStats();
     expect(stats.restarts).toBeGreaterThan(0);
 
     await worker.stop();
@@ -169,8 +174,7 @@ describe('SandboxedWorker', () => {
     }
   });
 
-  // Skip: Bun Worker termination causes segfault (Bun bug)
-  test.skip('should handle processor errors', async () => {
+  test('should handle processor errors', async () => {
     // Create an error-throwing processor
     const errorProcessorPath = join(tmpdir(), `error-processor-${Date.now()}.ts`);
     writeFileSync(
@@ -182,7 +186,7 @@ describe('SandboxedWorker', () => {
     `
     );
 
-    const queueName = 'sandboxed-error-test';
+    const queueName = `sandboxed-error-test-${Date.now()}`;
     const worker = new SandboxedWorker(queueName, {
       processor: errorProcessorPath,
       concurrency: 1,
@@ -190,15 +194,19 @@ describe('SandboxedWorker', () => {
       manager,
     });
 
-    await worker.start();
+    worker.start();
 
     await manager.push(queueName, { data: { test: true } });
 
-    // Wait for processing
-    await Bun.sleep(500);
+    // Wait for error to be processed
+    let stats = worker.getStats();
+    for (let i = 0; i < 20; i++) {
+      await Bun.sleep(100);
+      stats = worker.getStats();
+      if (stats.idle === 1) break;
+    }
 
     // Worker should still be running after handling error
-    const stats = worker.getStats();
     expect(stats.total).toBe(1);
     expect(stats.idle).toBe(1); // Worker is idle after processing
 

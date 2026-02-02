@@ -125,7 +125,17 @@ export class SandboxedWorker {
       type: 'job',
       job: { id: String(job.id), data: job.data, queue: job.queue, attempts: job.attempts },
     };
-    wp.worker.postMessage(request);
+    try {
+      wp.worker.postMessage(request);
+    } catch (err) {
+      // Worker may have been terminated - clean up and requeue job
+      clearTimeout(wp.timeoutId);
+      wp.timeoutId = null;
+      wp.busy = false;
+      wp.currentJob = null;
+      wp.currentToken = null;
+      console.error(`[SandboxedWorker] Failed to dispatch job ${job.id}:`, err);
+    }
   }
 
   private handleMessage(wp: WorkerProcess, msg: IPCResponse): void {
