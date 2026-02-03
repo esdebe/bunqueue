@@ -60,8 +60,8 @@ export interface IPCRequest {
 
 /** IPC message from worker to main */
 export interface IPCResponse {
-  type: 'result' | 'error' | 'progress';
-  jobId: string;
+  type: 'result' | 'error' | 'progress' | 'ready';
+  jobId?: string;
   result?: unknown;
   error?: string;
   progress?: number;

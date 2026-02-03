@@ -15,7 +15,7 @@ describe('SandboxedWorker', () => {
     manager = new QueueManager();
 
     // Create a temporary processor file
-    processorPath = `${Bun.env.TMPDIR || '/tmp'}/test-processor-${Date.now()}.ts`;
+    processorPath = `${Bun.env.TMPDIR ?? '/tmp'}/test-processor-${Date.now()}.ts`;
     await Bun.write(
       processorPath,
       `
@@ -97,7 +97,7 @@ describe('SandboxedWorker', () => {
   });
 
   test('should handle multiple concurrent jobs', async () => {
-    const queueName = 'sandboxed-concurrent-test';
+    const queueName = `sandboxed-concurrent-test-${Date.now()}`;
     const worker = new SandboxedWorker(queueName, {
       processor: processorPath,
       concurrency: 4,
@@ -115,12 +115,14 @@ describe('SandboxedWorker', () => {
       manager.push(queueName, { data: { value: 4 } }),
     ]);
 
-    // Wait for processing
-    await Bun.sleep(1000);
-
-    // Check all results
+    // Wait for processing with polling
     for (let i = 0; i < jobs.length; i++) {
-      const result = await manager.getResult(jobs[i].id);
+      let result: unknown;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await Bun.sleep(100);
+        result = manager.getResult(jobs[i].id);
+        if (result !== undefined) break;
+      }
       expect(result).toEqual({ processed: true, value: (i + 1) * 2 });
     }
 
@@ -129,7 +131,7 @@ describe('SandboxedWorker', () => {
 
   test('should handle worker timeout', async () => {
     // Create a slow processor
-    const slowProcessorPath = `${Bun.env.TMPDIR || '/tmp'}/slow-processor-${Date.now()}.ts`;
+    const slowProcessorPath = `${Bun.env.TMPDIR ?? '/tmp'}/slow-processor-${Date.now()}.ts`;
     await Bun.write(
       slowProcessorPath,
       `
@@ -174,7 +176,7 @@ describe('SandboxedWorker', () => {
 
   test('should handle processor errors', async () => {
     // Create an error-throwing processor
-    const errorProcessorPath = `${Bun.env.TMPDIR || '/tmp'}/error-processor-${Date.now()}.ts`;
+    const errorProcessorPath = `${Bun.env.TMPDIR ?? '/tmp'}/error-processor-${Date.now()}.ts`;
     await Bun.write(
       errorProcessorPath,
       `

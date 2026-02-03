@@ -11,6 +11,28 @@ import type { RWLock } from '../../shared/lock';
 import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 
+const LOG_PREFIX = '[Pull]';
+
+/** Structured log helper */
+function log(
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  data?: Record<string, unknown>
+): void {
+  const entry = data ? { message, ...data } : message;
+  switch (level) {
+    case 'info':
+      console.log(LOG_PREFIX, entry);
+      break;
+    case 'warn':
+      console.warn(LOG_PREFIX, entry);
+      break;
+    case 'error':
+      console.error(LOG_PREFIX, entry);
+      break;
+  }
+}
+
 /** Pull operation context */
 export interface PullContext {
   storage: SqliteStorage | null;
@@ -28,6 +50,126 @@ export interface PullContext {
   }) => void;
 }
 
+/** Result of trying to dequeue a job */
+type DequeueResult =
+  | { status: 'job'; job: Job }
+  | { status: 'skip' } // expired, try next
+  | { status: 'stop' }; // not ready or blocked
+
+/**
+ * Try to dequeue next ready job from queue
+ * Handles: expired skip, ready check, group blocking, timestamps
+ */
+function tryDequeueNextJob(
+  shard: Shard,
+  queue: string,
+  now: number,
+  ctx: PullContext
+): DequeueResult {
+  const q = shard.getQueue(queue);
+  const job = q.peek();
+
+  if (!job) return { status: 'stop' };
+
+  // Skip expired jobs
+  if (isExpired(job, now)) {
+    q.pop();
+    shard.decrementQueued(job.id);
+    ctx.jobIndex.delete(job.id);
+    log('warn', 'Skipped expired job', {
+      queue,
+      jobId: String(job.id),
+      ttl: job.ttl,
+    });
+    return { status: 'skip' };
+  }
+
+  // Not ready yet (delayed)
+  if (!isReady(job, now)) return { status: 'stop' };
+
+  // FIFO group blocked
+  if (job.groupId && shard.isGroupActive(queue, job.groupId)) {
+    return { status: 'stop' };
+  }
+
+  // Dequeue and update
+  q.pop();
+  shard.decrementQueued(job.id);
+
+  if (job.groupId) {
+    shard.activateGroup(queue, job.groupId);
+  }
+
+  job.startedAt = now;
+  job.lastHeartbeat = now;
+
+  return { status: 'job', job };
+}
+
+/**
+ * Move job to processing shard and broadcast
+ */
+async function moveToProcessing(job: Job, queue: string, ctx: PullContext): Promise<void> {
+  const procIdx = processingShardIndex(job.id);
+  const now = Date.now();
+
+  await withWriteLock(ctx.processingLocks[procIdx], () => {
+    ctx.processingShards[procIdx].set(job.id, job);
+  });
+
+  ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
+  ctx.storage?.markActive(job.id, job.startedAt ?? now);
+  ctx.totalPulled.value++;
+  ctx.broadcast({
+    eventType: 'pulled' as EventType,
+    queue,
+    jobId: job.id,
+    timestamp: now,
+  });
+}
+
+/**
+ * Move multiple jobs to processing shards (optimized: groups by shard)
+ */
+async function moveToProcessingBatch(jobs: Job[], queue: string, ctx: PullContext): Promise<void> {
+  // Group by processing shard for efficiency
+  const byProcShard = new Map<number, Job[]>();
+  for (const job of jobs) {
+    const procIdx = processingShardIndex(job.id);
+    const shardJobs = byProcShard.get(procIdx) ?? [];
+    if (shardJobs.length === 0) byProcShard.set(procIdx, shardJobs);
+    shardJobs.push(job);
+  }
+
+  // Add to processing shards in parallel
+  const lockPromises: Promise<void>[] = [];
+  for (const [procIdx, shardJobs] of byProcShard) {
+    lockPromises.push(
+      withWriteLock(ctx.processingLocks[procIdx], () => {
+        for (const job of shardJobs) {
+          ctx.processingShards[procIdx].set(job.id, job);
+        }
+      })
+    );
+  }
+  await Promise.all(lockPromises);
+
+  // Update indexes and broadcast
+  const now = Date.now();
+  for (const job of jobs) {
+    const procIdx = processingShardIndex(job.id);
+    ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
+    ctx.storage?.markActive(job.id, job.startedAt ?? now);
+    ctx.totalPulled.value++;
+    ctx.broadcast({
+      eventType: 'pulled' as EventType,
+      queue,
+      jobId: job.id,
+      timestamp: now,
+    });
+  }
+}
+
 /**
  * Pull next job from queue
  */
@@ -43,26 +185,7 @@ export async function pullJob(
     const job = await tryPullFromShard(queue, idx, ctx);
 
     if (job) {
-      // Move to processing
-      const procIdx = processingShardIndex(job.id);
-      await withWriteLock(ctx.processingLocks[procIdx], () => {
-        ctx.processingShards[procIdx].set(job.id, job);
-      });
-      ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-
-      // Persist state change
-      const startedAt = job.startedAt ?? Date.now();
-      ctx.storage?.markActive(job.id, startedAt);
-
-      // Update metrics
-      ctx.totalPulled.value++;
-      ctx.broadcast({
-        eventType: 'pulled' as EventType,
-        queue,
-        jobId: job.id,
-        timestamp: Date.now(),
-      });
-
+      await moveToProcessing(job, queue, ctx);
       return job;
     }
 
@@ -71,7 +194,7 @@ export async function pullJob(
       return null;
     }
 
-    // Wait for notification or timeout (event-based, not polling)
+    // Wait for notification or timeout
     const remaining = deadline - Date.now();
     await ctx.shards[idx].waitForJob(remaining);
   }
@@ -85,65 +208,35 @@ async function tryPullFromShard(queue: string, idx: number, ctx: PullContext): P
     const shard = ctx.shards[idx];
     const state = shard.getState(queue);
 
-    // Check if paused
-    if (state.paused) return null;
-
-    // Check rate limit
-    if (!shard.tryAcquireRateLimit(queue)) return null;
-
-    // Check concurrency
-    if (!shard.tryAcquireConcurrency(queue)) return null;
-
-    const q = shard.getQueue(queue);
-    const now = Date.now();
-
-    // Find ready job
-    while (true) {
-      const job = q.peek();
-      if (!job) break;
-
-      // Skip expired jobs
-      if (isExpired(job, now)) {
-        q.pop();
-        // Update running counters for O(1) stats
-        shard.decrementQueued(job.id);
-        ctx.jobIndex.delete(job.id);
-        continue;
-      }
-
-      // Check if ready
-      if (!isReady(job, now)) break;
-
-      // Check FIFO group
-      if (job.groupId && shard.isGroupActive(queue, job.groupId)) {
-        // Skip, will retry
-        break;
-      }
-
-      // Dequeue
-      q.pop();
-      // Update running counters for O(1) stats
-      shard.decrementQueued(job.id);
-
-      // Mark group active
-      if (job.groupId) {
-        shard.activateGroup(queue, job.groupId);
-      }
-
-      // Update job
-      job.startedAt = now;
-      job.lastHeartbeat = now;
-
-      return job;
+    if (state.paused) {
+      log('info', 'Queue is paused, skipping pull', { queue });
+      return null;
     }
 
-    return null;
+    if (!shard.tryAcquireRateLimit(queue)) {
+      log('info', 'Rate limit reached', { queue });
+      return null;
+    }
+
+    if (!shard.tryAcquireConcurrency(queue)) {
+      log('info', 'Concurrency limit reached', { queue });
+      return null;
+    }
+
+    const now = Date.now();
+
+    while (true) {
+      const result = tryDequeueNextJob(shard, queue, now, ctx);
+
+      if (result.status === 'job') return result.job;
+      if (result.status === 'stop') return null;
+      // status === 'skip': continue loop
+    }
   });
 }
 
 /**
  * Pull multiple jobs from queue
- * Optimized: single lock acquisition for all jobs instead of O(count) locks
  */
 export async function pullJobBatch(
   queue: string,
@@ -155,51 +248,15 @@ export async function pullJobBatch(
   const idx = shardIndex(queue);
 
   while (true) {
-    // Try to pull multiple jobs with single lock
     const jobs = await tryPullBatchFromShard(queue, idx, count, ctx);
 
     if (jobs.length > 0) {
-      // Move all jobs to processing - group by processing shard for efficiency
-      const byProcShard = new Map<number, Job[]>();
-      for (const job of jobs) {
-        const procIdx = processingShardIndex(job.id);
-        let shardJobs = byProcShard.get(procIdx);
-        if (!shardJobs) {
-          shardJobs = [];
-          byProcShard.set(procIdx, shardJobs);
-        }
-        shardJobs.push(job);
-      }
-
-      // Add to processing shards in parallel - avoid Array.from allocation
-      const now = Date.now();
-      const lockPromises: Promise<void>[] = [];
-      for (const [procIdx, shardJobs] of byProcShard) {
-        lockPromises.push(
-          withWriteLock(ctx.processingLocks[procIdx], () => {
-            for (const job of shardJobs) {
-              ctx.processingShards[procIdx].set(job.id, job);
-            }
-          })
-        );
-      }
-      await Promise.all(lockPromises);
-
-      // Update indexes and metrics
-      for (const job of jobs) {
-        const procIdx = processingShardIndex(job.id);
-        ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-        const startedAt = job.startedAt ?? now;
-        ctx.storage?.markActive(job.id, startedAt);
-        ctx.totalPulled.value++;
-        ctx.broadcast({
-          eventType: 'pulled' as EventType,
-          queue,
-          jobId: job.id,
-          timestamp: now,
-        });
-      }
-
+      await moveToProcessingBatch(jobs, queue, ctx);
+      log('info', 'Batch pull completed', {
+        queue,
+        count: jobs.length,
+        requested: count,
+      });
       return jobs;
     }
 
@@ -215,7 +272,7 @@ export async function pullJobBatch(
 }
 
 /**
- * Try to pull multiple jobs from a shard with single lock
+ * Try to pull multiple jobs from a shard
  */
 async function tryPullBatchFromShard(
   queue: string,
@@ -228,53 +285,33 @@ async function tryPullBatchFromShard(
     const state = shard.getState(queue);
     const jobs: Job[] = [];
 
-    // Check if paused
     if (state.paused) return jobs;
 
-    const q = shard.getQueue(queue);
     const now = Date.now();
 
-    // Pull up to count jobs
     while (jobs.length < count) {
-      // Check rate limit for each job
-      if (!shard.tryAcquireRateLimit(queue)) break;
-
-      // Check concurrency for each job
-      if (!shard.tryAcquireConcurrency(queue)) break;
-
-      const job = q.peek();
-      if (!job) break;
-
-      // Skip expired jobs
-      if (isExpired(job, now)) {
-        q.pop();
-        shard.decrementQueued(job.id);
-        ctx.jobIndex.delete(job.id);
-        continue;
+      // Check limits per job
+      if (!shard.tryAcquireRateLimit(queue)) {
+        if (jobs.length === 0) {
+          log('info', 'Rate limit reached', { queue });
+        }
+        break;
       }
-
-      // Check if ready
-      if (!isReady(job, now)) break;
-
-      // Check FIFO group
-      if (job.groupId && shard.isGroupActive(queue, job.groupId)) {
+      if (!shard.tryAcquireConcurrency(queue)) {
+        if (jobs.length === 0) {
+          log('info', 'Concurrency limit reached', { queue });
+        }
         break;
       }
 
-      // Dequeue
-      q.pop();
-      shard.decrementQueued(job.id);
+      const result = tryDequeueNextJob(shard, queue, now, ctx);
 
-      // Mark group active
-      if (job.groupId) {
-        shard.activateGroup(queue, job.groupId);
+      if (result.status === 'job') {
+        jobs.push(result.job);
+      } else if (result.status === 'stop') {
+        break;
       }
-
-      // Update job
-      job.startedAt = now;
-      job.lastHeartbeat = now;
-
-      jobs.push(job);
+      // status === 'skip': continue loop
     }
 
     return jobs;

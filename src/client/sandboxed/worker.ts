@@ -14,6 +14,28 @@ import type {
 } from './types';
 import { createWrapperScript, cleanupWrapperScript } from './wrapper';
 
+const LOG_PREFIX = '[SandboxedWorker]';
+
+/** Structured log helper */
+function log(
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  data?: Record<string, unknown>
+): void {
+  const entry = data ? { message, ...data } : message;
+  switch (level) {
+    case 'info':
+      console.log(LOG_PREFIX, entry);
+      break;
+    case 'warn':
+      console.warn(LOG_PREFIX, entry);
+      break;
+    case 'error':
+      console.error(LOG_PREFIX, entry);
+      break;
+  }
+}
+
 /**
  * Sandboxed Worker - runs processors in isolated Bun Worker processes
  */
@@ -48,9 +70,13 @@ export class SandboxedWorker {
     this.running = true;
     this.wrapperPath = await createWrapperScript(this.queueName, this.options.processor);
 
+    // Spawn all workers and wait for them to be ready
+    const spawnPromises: Promise<void>[] = [];
     for (let i = 0; i < this.options.concurrency; i++) {
-      this.spawnWorker(i);
+      spawnPromises.push(this.spawnWorker(i));
     }
+    await Promise.all(spawnPromises);
+
     this.pullPromise = this.pullLoop();
   }
 
@@ -75,29 +101,66 @@ export class SandboxedWorker {
     return { total: this.workers.length, busy, idle: this.workers.length - busy, restarts };
   }
 
-  private spawnWorker(index: number): void {
-    if (!this.wrapperPath) return;
+  /** Reset worker state to idle */
+  private resetWorkerState(wp: WorkerProcess): void {
+    if (wp.timeoutId) {
+      clearTimeout(wp.timeoutId);
+      wp.timeoutId = null;
+    }
+    wp.busy = false;
+    wp.currentJob = null;
+    wp.currentToken = null;
+  }
 
-    const worker = new Worker(this.wrapperPath, { smol: this.options.maxMemory <= 64 });
-    const wp: WorkerProcess = {
-      worker,
-      busy: false,
-      currentJob: null,
-      currentToken: null,
-      restarts: this.workers[index]?.restarts ?? 0,
-      timeoutId: null,
-    };
+  private spawnWorker(index: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.wrapperPath) {
+        resolve();
+        return;
+      }
 
-    worker.onmessage = (event: MessageEvent<IPCResponse>) => {
-      this.handleMessage(wp, event.data);
-    };
-    worker.onerror = (error) => {
-      console.error(`[SandboxedWorker] Worker ${index} error:`, error.message);
-      this.handleCrash(wp, index);
-    };
+      const worker = new Worker(this.wrapperPath, { smol: this.options.maxMemory <= 64 });
+      const wp: WorkerProcess = {
+        worker,
+        busy: false,
+        currentJob: null,
+        currentToken: null,
+        restarts: this.workers[index]?.restarts ?? 0,
+        timeoutId: null,
+      };
 
-    if (this.workers[index]) this.workers[index] = wp;
-    else this.workers.push(wp);
+      let resolved = false;
+      const readyTimeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          log('warn', 'Worker ready timeout, continuing anyway', { workerIndex: index });
+          resolve();
+        }
+      }, 5000);
+
+      worker.onmessage = (event: MessageEvent<IPCResponse>) => {
+        if (event.data.type === 'ready' && !resolved) {
+          resolved = true;
+          clearTimeout(readyTimeout);
+          resolve();
+          return;
+        }
+        this.handleMessage(wp, event.data);
+      };
+
+      worker.onerror = (error) => {
+        log('error', 'Worker error', { workerIndex: index, error: error.message });
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(readyTimeout);
+          reject(new Error(error.message));
+        }
+        this.handleCrash(wp, index);
+      };
+
+      if (this.workers[index]) this.workers[index] = wp;
+      else this.workers.push(wp);
+    });
   }
 
   private async pullLoop(): Promise<void> {
@@ -128,17 +191,19 @@ export class SandboxedWorker {
     try {
       wp.worker.postMessage(request);
     } catch (err) {
-      // Worker may have been terminated - clean up and requeue job
-      clearTimeout(wp.timeoutId);
-      wp.timeoutId = null;
-      wp.busy = false;
-      wp.currentJob = null;
-      wp.currentToken = null;
-      console.error(`[SandboxedWorker] Failed to dispatch job ${job.id}:`, err);
+      log('error', 'Failed to dispatch job', {
+        jobId: String(job.id),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.resetWorkerState(wp);
+      this.manager
+        .fail(job.id, 'Dispatch failed: worker terminated', token ?? undefined)
+        .catch(() => {});
     }
   }
 
   private handleMessage(wp: WorkerProcess, msg: IPCResponse): void {
+    if (msg.type === 'ready') return;
     if (!wp.currentJob || msg.jobId !== String(wp.currentJob.id)) return;
 
     switch (msg.type) {
@@ -157,80 +222,72 @@ export class SandboxedWorker {
   }
 
   private complete(wp: WorkerProcess, result: unknown): void {
-    if (wp.timeoutId) {
-      clearTimeout(wp.timeoutId);
-      wp.timeoutId = null;
-    }
     if (wp.currentJob) {
       const jobId = wp.currentJob.id;
       const token = wp.currentToken ?? undefined;
       this.manager.ack(jobId, result, token).catch((e: unknown) => {
-        console.error(`[SandboxedWorker] Failed to ack job ${jobId}:`, e);
+        log('error', 'Failed to ack job', {
+          jobId: String(jobId),
+          error: e instanceof Error ? e.message : String(e),
+        });
       });
     }
-    wp.busy = false;
-    wp.currentJob = null;
-    wp.currentToken = null;
+    this.resetWorkerState(wp);
   }
 
   private fail(wp: WorkerProcess, error: string): void {
-    if (wp.timeoutId) {
-      clearTimeout(wp.timeoutId);
-      wp.timeoutId = null;
-    }
     if (wp.currentJob) {
       const jobId = wp.currentJob.id;
       const token = wp.currentToken ?? undefined;
       this.manager.fail(jobId, error, token).catch((e: unknown) => {
-        console.error(`[SandboxedWorker] Failed to fail job ${jobId}:`, e);
+        log('error', 'Failed to mark job as failed', {
+          jobId: String(jobId),
+          error: e instanceof Error ? e.message : String(e),
+        });
       });
     }
-    wp.busy = false;
-    wp.currentJob = null;
-    wp.currentToken = null;
+    this.resetWorkerState(wp);
   }
 
   private handleTimeout(wp: WorkerProcess, job: DomainJob): void {
-    console.error(`[SandboxedWorker] Job ${job.id} timed out after ${this.options.timeout}ms`);
+    log('warn', 'Job timed out', {
+      jobId: String(job.id),
+      timeoutMs: this.options.timeout,
+    });
     wp.worker.terminate();
     const token = wp.currentToken ?? undefined;
     this.manager
       .fail(job.id, `Job timed out after ${this.options.timeout}ms`, token)
       .catch(() => {});
 
-    // Clear job state so handleCrash won't fail it again
-    wp.currentJob = null;
-    wp.currentToken = null;
-    wp.timeoutId = null;
+    this.resetWorkerState(wp);
 
     const index = this.workers.indexOf(wp);
     if (index !== -1) this.handleCrash(wp, index);
   }
 
   private handleCrash(wp: WorkerProcess, index: number): void {
-    // Clear timeout if still pending (e.g., when called from onerror)
-    if (wp.timeoutId) {
-      clearTimeout(wp.timeoutId);
-      wp.timeoutId = null;
-    }
-
     if (wp.currentJob) {
       const token = wp.currentToken ?? undefined;
       this.manager.fail(wp.currentJob.id, 'Worker crashed', token).catch(() => {});
     }
 
-    wp.busy = false;
-    wp.currentJob = null;
-    wp.currentToken = null;
+    this.resetWorkerState(wp);
     wp.restarts++;
 
     if (this.options.autoRestart && wp.restarts < this.options.maxRestarts && this.running) {
-      console.log(`[SandboxedWorker] Restarting worker ${index} (attempt ${wp.restarts})`);
-      this.spawnWorker(index);
+      log('info', 'Restarting worker', { workerIndex: index, attempt: wp.restarts });
+      this.spawnWorker(index).catch((err: unknown) => {
+        log('error', 'Failed to restart worker', {
+          workerIndex: index,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     } else if (wp.restarts >= this.options.maxRestarts) {
-      console.error(
-        `[SandboxedWorker] Worker ${index} exceeded max restarts (${this.options.maxRestarts})`
-      );
+      log('error', 'Worker exceeded max restarts', {
+        workerIndex: index,
+        maxRestarts: this.options.maxRestarts,
+      });
     }
   }
 }

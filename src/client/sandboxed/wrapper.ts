@@ -31,6 +31,9 @@ export async function createWrapperScript(
 // Sandboxed Worker Wrapper
 const processor = (await import('${escapedPath}')).default;
 
+// Signal ready to parent
+self.postMessage({ type: 'ready' });
+
 self.onmessage = async (event) => {
   const { type, job } = event.data;
   if (type !== 'job') return;
