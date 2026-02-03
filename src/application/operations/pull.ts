@@ -190,12 +190,14 @@ export async function pullJob(
     }
 
     // No job available, check timeout
-    if (deadline === 0 || Date.now() >= deadline) {
+    // Cache Date.now() to avoid multiple syscalls per iteration
+    const now = Date.now();
+    if (deadline === 0 || now >= deadline) {
       return null;
     }
 
     // Wait for notification or timeout
-    const remaining = deadline - Date.now();
+    const remaining = deadline - now;
     await ctx.shards[idx].waitForJob(remaining);
   }
 }
@@ -261,12 +263,14 @@ export async function pullJobBatch(
     }
 
     // No jobs available, check timeout
-    if (deadline === 0 || Date.now() >= deadline) {
+    // Cache Date.now() to avoid multiple syscalls per iteration
+    const now = Date.now();
+    if (deadline === 0 || now >= deadline) {
       return [];
     }
 
     // Wait for notification or timeout
-    const remaining = deadline - Date.now();
+    const remaining = deadline - now;
     await ctx.shards[idx].waitForJob(remaining);
   }
 }
