@@ -40,12 +40,19 @@ export default function Simulator() {
   const [workerConcurrency, setWorkerConcurrency] = useState(3);
   const [failureRate, setFailureRate] = useState(10);
   const [shardCount] = useState(8);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const failureRateRef = useRef(failureRate / 100);
 
-  // Initialize simulator
+  // Update failure rate ref when slider changes (no re-init)
+  useEffect(() => {
+    failureRateRef.current = failureRate / 100;
+  }, [failureRate]);
+
+  // Initialize simulator (only on mount/shardCount change)
   useEffect(() => {
     const sim = new QueueSimulator({
       shardCount,
-      failureRate: failureRate / 100,
+      failureRate: failureRateRef.current,
     });
     simulatorRef.current = sim;
 
@@ -54,19 +61,19 @@ export default function Simulator() {
       setEvents((prev) => [event, ...prev].slice(0, 50));
     });
 
-    // Update loop
+    // Update loop (500ms is sufficient for demo)
     const interval = setInterval(() => {
       if (simulatorRef.current) {
         updateState();
       }
-    }, 200);
+    }, 500);
 
     return () => {
       unsubscribe();
       clearInterval(interval);
       sim.destroy();
     };
-  }, [shardCount, failureRate]);
+  }, [shardCount]);
 
   const updateState = useCallback(() => {
     const sim = simulatorRef.current;
@@ -89,7 +96,8 @@ export default function Simulator() {
       sim.push(queueName, jobName, data, { priority, delay });
       updateState();
     } catch (_e) {
-      alert('Invalid JSON data');
+      setErrorMsg('Invalid JSON data. Check syntax.');
+      setTimeout(() => setErrorMsg(null), 3000);
     }
   };
 
@@ -107,7 +115,8 @@ export default function Simulator() {
       sim.pushBulk(queueName, jobs);
       updateState();
     } catch (_e) {
-      alert('Invalid JSON data');
+      setErrorMsg('Invalid JSON data. Check syntax.');
+      setTimeout(() => setErrorMsg(null), 3000);
     }
   };
 
@@ -221,49 +230,59 @@ export default function Simulator() {
           <h3>Controls</h3>
 
           <div className="control-group">
-            <label>Queue Name</label>
+            <label htmlFor="queue-name">Queue Name</label>
             <input
+              id="queue-name"
               type="text"
               value={queueName}
               onChange={(e) => { setQueueName(e.target.value); }}
               placeholder="queue name"
+              aria-label="Queue name"
             />
           </div>
 
           <div className="control-group">
-            <label>Job Name</label>
+            <label htmlFor="job-name">Job Name</label>
             <input
+              id="job-name"
               type="text"
               value={jobName}
               onChange={(e) => { setJobName(e.target.value); }}
               placeholder="job name"
+              aria-label="Job name"
             />
           </div>
 
           <div className="control-group">
-            <label>Job Data (JSON)</label>
+            <label htmlFor="job-data">Job Data (JSON)</label>
             <textarea
+              id="job-data"
               value={jobData}
               onChange={(e) => { setJobData(e.target.value); }}
               rows={2}
+              aria-label="Job data in JSON format"
             />
           </div>
 
           <div className="control-row">
             <div className="control-group half">
-              <label>Priority</label>
+              <label htmlFor="priority">Priority</label>
               <input
+                id="priority"
                 type="number"
                 value={priority}
                 onChange={(e) => { setPriority(Number(e.target.value)); }}
+                aria-label="Job priority (higher = processed sooner)"
               />
             </div>
             <div className="control-group half">
-              <label>Delay (ms)</label>
+              <label htmlFor="delay">Delay (ms)</label>
               <input
+                id="delay"
                 type="number"
                 value={delay}
                 onChange={(e) => { setDelay(Number(e.target.value)); }}
+                aria-label="Delay in milliseconds before job is processed"
               />
             </div>
           </div>
@@ -278,13 +297,18 @@ export default function Simulator() {
           </div>
 
           <div className="control-group">
-            <label>Bulk Count</label>
+            <label htmlFor="bulk-count">Bulk Count</label>
             <input
+              id="bulk-count"
               type="range"
               min="1"
               max="100"
               value={bulkCount}
               onChange={(e) => { setBulkCount(Number(e.target.value)); }}
+              aria-label={`Bulk count: ${bulkCount} jobs`}
+              aria-valuemin={1}
+              aria-valuemax={100}
+              aria-valuenow={bulkCount}
             />
             <span>{bulkCount}</span>
           </div>
@@ -292,13 +316,18 @@ export default function Simulator() {
           <hr />
 
           <div className="control-group">
-            <label>Worker Concurrency</label>
+            <label htmlFor="worker-concurrency">Worker Concurrency</label>
             <input
+              id="worker-concurrency"
               type="range"
               min="1"
               max="10"
               value={workerConcurrency}
               onChange={(e) => { setWorkerConcurrency(Number(e.target.value)); }}
+              aria-label={`Worker concurrency: ${workerConcurrency}`}
+              aria-valuemin={1}
+              aria-valuemax={10}
+              aria-valuenow={workerConcurrency}
             />
             <span>{workerConcurrency}</span>
           </div>
@@ -328,19 +357,30 @@ export default function Simulator() {
           <hr />
 
           <div className="control-group">
-            <label>Failure Rate: {failureRate}%</label>
+            <label htmlFor="failure-rate">Failure Rate: {failureRate}%</label>
             <input
+              id="failure-rate"
               type="range"
               min="0"
               max="50"
               value={failureRate}
               onChange={(e) => { setFailureRate(Number(e.target.value)); }}
+              aria-label={`Failure rate: ${failureRate} percent`}
+              aria-valuemin={0}
+              aria-valuemax={50}
+              aria-valuenow={failureRate}
             />
           </div>
 
           <button onClick={handleReset} className="btn btn-danger">
             Reset Simulator
           </button>
+
+          {errorMsg && (
+            <div className="error-message" role="alert">
+              {errorMsg}
+            </div>
+          )}
         </div>
 
         {/* Shards Visualization */}
