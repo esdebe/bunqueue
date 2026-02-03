@@ -66,8 +66,22 @@ export class EventsManager {
       };
 
       const timer = setTimeout(() => {
-        // Timeout - mark as cancelled instead of O(n) splice
+        // Timeout - mark as cancelled and remove from map to prevent memory leak
         waiter.cancelled = true;
+
+        // Remove the waiter from the array
+        const waiters = this.completionWaiters.get(jobKey);
+        if (waiters) {
+          const index = waiters.indexOf(waiter);
+          if (index !== -1) {
+            waiters.splice(index, 1);
+          }
+          // Clean up empty arrays to free memory
+          if (waiters.length === 0) {
+            this.completionWaiters.delete(jobKey);
+          }
+        }
+
         resolve(false);
       }, timeoutMs);
 

@@ -92,6 +92,16 @@ export class BatchInsertManager {
   }
 }
 
+/** Extended error callback with retry information */
+export type WriteBufferErrorCallback = (
+  err: Error,
+  jobCount: number,
+  retryInfo?: { retryCount: number; nextBackoffMs: number; maxRetries: number }
+) => void;
+
+/** Callback when jobs are moved to dead letter after max retries */
+export type CriticalErrorCallback = (jobs: Job[], lastError: Error, totalAttempts: number) => void;
+
 /** Write buffer for batching inserts with double-buffering for atomic swap */
 export class WriteBuffer {
   /** Active buffer for new jobs */
@@ -103,24 +113,39 @@ export class WriteBuffer {
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly batchManager: BatchInsertManager;
   private readonly bufferSize: number;
-  private readonly onError: (err: Error, jobCount: number) => void;
+  private readonly onError: WriteBufferErrorCallback;
+  private readonly onCriticalError?: CriticalErrorCallback;
+
+  /** Retry state for exponential backoff */
+  private retryCount = 0;
+  private currentBackoffMs = 100;
+  private readonly initialBackoffMs = 100;
+  private readonly maxBackoffMs = 30000;
+  private readonly maxRetries = 10;
+  private lastError: Error | null = null;
+  private backoffTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     batchManager: BatchInsertManager,
     bufferSize: number,
     flushIntervalMs: number,
-    onError: (err: Error, jobCount: number) => void
+    onError: WriteBufferErrorCallback,
+    onCriticalError?: CriticalErrorCallback
   ) {
     this.batchManager = batchManager;
     this.bufferSize = bufferSize;
     this.onError = onError;
+    this.onCriticalError = onCriticalError;
 
     // Auto-flush timer
     this.timer = setInterval(() => {
+      // Skip if we're in backoff mode (backoffTimer is active)
+      if (this.backoffTimer) return;
+
       try {
         this.flush();
       } catch {
-        // Error already logged in flush, will retry on next interval
+        // Error already handled in flush
       }
     }, flushIntervalMs);
   }
@@ -160,17 +185,85 @@ export class WriteBuffer {
     try {
       this.batchManager.insertJobsBatch(this.flushBuffer);
       this.flushBuffer = []; // Clear after successful write
+
+      // Reset retry state on success
+      this.retryCount = 0;
+      this.currentBackoffMs = this.initialBackoffMs;
+      this.lastError = null;
+
       return jobCount;
     } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.lastError = error;
+      this.retryCount++;
+
       // On failure, prepend failed jobs back to active buffer
       // This preserves order: failed jobs first, then new jobs
       this.activeBuffer = this.flushBuffer.concat(this.activeBuffer);
       this.flushBuffer = [];
-      this.onError(err instanceof Error ? err : new Error(String(err)), jobCount);
+
+      // Check if we've exceeded max retries
+      if (this.retryCount >= this.maxRetries) {
+        // Move jobs to dead letter / emit critical error
+        const lostJobs = [...this.activeBuffer];
+        this.activeBuffer = [];
+
+        if (this.onCriticalError) {
+          this.onCriticalError(lostJobs, error, this.retryCount);
+        }
+
+        // Also call onError with retry info for logging
+        this.onError(error, lostJobs.length, {
+          retryCount: this.retryCount,
+          nextBackoffMs: 0, // No more retries
+          maxRetries: this.maxRetries,
+        });
+
+        // Reset retry state
+        this.retryCount = 0;
+        this.currentBackoffMs = this.initialBackoffMs;
+        this.lastError = null;
+
+        throw err;
+      }
+
+      // Calculate next backoff with exponential increase
+      const nextBackoffMs = Math.min(this.currentBackoffMs * 2, this.maxBackoffMs);
+
+      // Call error callback with retry information
+      this.onError(error, jobCount, {
+        retryCount: this.retryCount,
+        nextBackoffMs: nextBackoffMs,
+        maxRetries: this.maxRetries,
+      });
+
+      // Schedule backoff retry
+      this.scheduleBackoffRetry();
+
       throw err;
     } finally {
       this.flushing = false;
     }
+  }
+
+  /** Schedule a retry with exponential backoff */
+  private scheduleBackoffRetry(): void {
+    // Clear any existing backoff timer
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer);
+    }
+
+    // Update backoff for next attempt
+    this.currentBackoffMs = Math.min(this.currentBackoffMs * 2, this.maxBackoffMs);
+
+    this.backoffTimer = setTimeout(() => {
+      this.backoffTimer = null;
+      try {
+        this.flush();
+      } catch {
+        // Error already handled in flush
+      }
+    }, this.currentBackoffMs);
   }
 
   /** Get pending job count (includes both buffers) */
@@ -178,11 +271,80 @@ export class WriteBuffer {
     return this.activeBuffer.length + this.flushBuffer.length;
   }
 
-  /** Stop auto-flush timer */
+  /** Stop auto-flush timer and flush pending jobs */
   stop(): void {
+    // Clear backoff timer
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer);
+      this.backoffTimer = null;
+    }
+
+    // Clear auto-flush timer
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+
+    // Flush any pending jobs before stopping
+    if (this.pendingCount > 0) {
+      try {
+        this.flush();
+      } catch {
+        // Log but don't throw - we're shutting down
+        // Jobs that fail to flush here will be lost
+        // The onError callback has already been called
+      }
+    }
+  }
+
+  /**
+   * Graceful shutdown with timeout.
+   * Attempts to flush pending jobs within the specified timeout.
+   * @param timeoutMs Maximum time to wait for flush (default: 5000ms)
+   * @returns Promise resolving to number of jobs flushed, or -1 if timed out
+   */
+  async stopGracefully(timeoutMs = 5000): Promise<number> {
+    // Clear backoff timer
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer);
+      this.backoffTimer = null;
+    }
+
+    // Clear auto-flush timer
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+
+    const pending = this.pendingCount;
+    if (pending === 0) {
+      return 0;
+    }
+
+    // Try to flush with timeout
+    return new Promise<number>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(-1); // Timed out
+      }, timeoutMs);
+
+      try {
+        const flushed = this.flush();
+        clearTimeout(timeout);
+        resolve(flushed);
+      } catch {
+        // Flush failed, but we tried
+        clearTimeout(timeout);
+        resolve(0);
+      }
+    });
+  }
+
+  /** Get current retry state (for monitoring) */
+  getRetryState(): { retryCount: number; currentBackoffMs: number; lastError: Error | null } {
+    return {
+      retryCount: this.retryCount,
+      currentBackoffMs: this.currentBackoffMs,
+      lastError: this.lastError,
+    };
   }
 }

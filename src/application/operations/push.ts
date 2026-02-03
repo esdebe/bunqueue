@@ -212,40 +212,24 @@ function insertJobToShard(
 
 /**
  * Push a single job to queue
- * NOTE: customId check happens OUTSIDE lock for performance (unlike batch)
+ * NOTE: customId check happens INSIDE lock to prevent race conditions
  */
 export async function pushJob(queue: string, input: JobInput, ctx: PushContext): Promise<Job> {
   const idx = shardIndex(queue);
   const now = Date.now();
-
-  // Check custom ID idempotency OUTSIDE lock (original behavior)
-  const id = input.customId ? jobId(input.customId) : generateJobId();
-  if (input.customId) {
-    const existing = ctx.customIdMap.get(input.customId);
-    if (existing) {
-      const location = ctx.jobIndex.get(existing);
-      if (location?.type === 'queue') {
-        const shard = ctx.shards[location.shardIdx];
-        const existingJob = shard.getQueue(location.queueName).find(existing);
-        if (existingJob) {
-          log('info', 'Duplicate customId, returning existing job', {
-            queue,
-            customId: input.customId,
-            existingJobId: String(existing),
-          });
-          return existingJob;
-        }
-      }
-      ctx.customIdMap.delete(input.customId);
-    }
-    ctx.customIdMap.set(input.customId, id);
-  }
-
-  const job = createJob(id, queue, input, now);
   let result: { job: Job; persisted: boolean } | undefined;
 
   await withWriteLock(ctx.shardLocks[idx], () => {
     const shard = ctx.shards[idx];
+
+    // Check custom ID idempotency INSIDE lock to prevent race conditions
+    const customIdResult = handleCustomId(input, shard, ctx);
+    if (customIdResult.skip) {
+      result = { job: customIdResult.existingJob, persisted: false };
+      return;
+    }
+
+    const job = createJob(customIdResult.id, queue, input, now);
 
     // Check deduplication
     const dedupResult = handleDeduplication(job, input, queue, shard, ctx);
@@ -264,7 +248,7 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
   });
 
   if (!result) {
-    log('error', 'Push failed unexpectedly', { queue, jobId: String(id) });
+    log('error', 'Push failed unexpectedly', { queue, input });
     throw new Error('Push failed');
   }
 

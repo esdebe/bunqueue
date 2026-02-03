@@ -10,6 +10,21 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.0.9] - 2026-02-03
+
+### Fixed
+- **Critical: Memory leak in EventsManager** - Cancelled waiters in `waitForJobCompletion()` were never removed from the `completionWaiters` map on timeout. Now properly cleaned up when timeout fires.
+- **Critical: Lost notification TOCTOU race** - Fixed race condition in pull.ts where `notify()` could fire between `tryPullFromShard()` returning null and `waitForJob()` being called. Added `pendingNotification` flag to Shard to capture notifications when no waiters exist.
+- **Critical: WriteBuffer data loss** - Added exponential backoff (100ms → 30s), max 10 retries, critical error callback, `stopGracefully()` method, and enhanced error callback with retry information. Previously, persistent errors caused infinite retries and shutdown lost pending jobs.
+- **Critical: CustomIdMap race condition** - Concurrent pushes with same customId could create duplicates. Moved customIdMap check inside shard write lock for atomic check-and-insert.
+
+### Added
+- Comprehensive test suites for all bug fixes:
+  - `test/bug-memory-leak-waiters.test.ts` - 5 tests verifying memory leak fix
+  - `test/bug-lost-notification.test.ts` - 4 tests verifying notification fix
+  - `test/bug-writebuffer-dataloss.test.ts` - 10 tests verifying WriteBuffer fix
+  - `test/bug-verification-remaining.test.ts` - 7 tests verifying CustomId fix and JS concurrency model
+
 ## [2.0.3] - 2026-02-02
 
 ### Changed

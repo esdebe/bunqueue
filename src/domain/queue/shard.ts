@@ -76,6 +76,9 @@ export class Shard {
   /** Threshold for triggering full waiters cleanup */
   private static readonly WAITERS_CLEANUP_THRESHOLD = 1000;
 
+  /** Pending notification flag - set when notify() is called with no waiters */
+  private pendingNotification = false;
+
   constructor() {
     this.dlqManager = new DlqShard({
       incrementDlq: () => {
@@ -98,6 +101,9 @@ export class Shard {
     const waiter = this.waiters.shift();
     if (waiter && !waiter.cancelled) {
       waiter.resolve();
+    } else {
+      // No active waiter - set pending flag so next waitForJob returns immediately
+      this.pendingNotification = true;
     }
 
     // Periodic full cleanup when array grows too large
@@ -116,6 +122,12 @@ export class Shard {
   /** Wait for a job to become available (with timeout) */
   waitForJob(timeoutMs: number): Promise<void> {
     if (timeoutMs <= 0) return Promise.resolve();
+
+    // Check for pending notification - if set, clear it and return immediately
+    if (this.pendingNotification) {
+      this.pendingNotification = false;
+      return Promise.resolve();
+    }
 
     return new Promise<void>((resolve) => {
       const waiter = { resolve, cancelled: false };
