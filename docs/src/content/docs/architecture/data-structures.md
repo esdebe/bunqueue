@@ -185,13 +185,19 @@ Used for sharding and distribution.
 │                                                              │
 │  shardIndex = fnv1aHash(queueName) & SHARD_MASK            │
 │                                                              │
-│  SHARD_COUNT = 32                                          │
-│  SHARD_MASK = 0x1f (binary: 11111)                         │
+│  SHARD_COUNT = auto-detected from CPU cores (power of 2)   │
+│  SHARD_MASK = SHARD_COUNT - 1                              │
+│                                                              │
+│  Examples:                                                  │
+│  • 4 cores  → SHARD_COUNT=4,  SHARD_MASK=0x03 (binary: 11) │
+│  • 10 cores → SHARD_COUNT=16, SHARD_MASK=0x0f (binary: 1111)│
+│  • 20 cores → SHARD_COUNT=32, SHARD_MASK=0x1f (binary: 11111)│
+│  • 64+ cores → SHARD_COUNT=64 (capped)                      │
 │                                                              │
 │  Why bitwise AND?                                          │
 │  • 3-5x faster than modulo                                 │
 │  • Requires power-of-2 shard count                         │
-│  • hash & 0x1f equivalent to hash % 32                     │
+│  • hash & SHARD_MASK equivalent to hash % SHARD_COUNT      │
 └─────────────────────────────────────────────────────────────┘
 ```
 

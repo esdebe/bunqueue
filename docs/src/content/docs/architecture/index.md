@@ -25,9 +25,9 @@ bunqueue is a high-performance job queue built for Bun with SQLite persistence. 
                             │  │         QueueManager           │  │
                             │  │                                │  │
                             │  │  ┌──────────────────────────┐  │  │
-                            │  │  │      32 Shards           │  │  │
+                            │  │  │   N Shards (auto-detect) │  │  │
                             │  │  │  ┌──────┬──────┬──────┐  │  │  │
-                            │  │  │  │Shard0│Shard1│ ...  │  │  │  │
+                            │  │  │  │Shard0│Shard1│ ...N │  │  │  │
                             │  │  │  └──────┴──────┴──────┘  │  │  │
                             │  │  └──────────────────────────┘  │  │
                             │  │                                │  │
@@ -73,15 +73,20 @@ bunqueue is a high-performance job queue built for Bun with SQLite persistence. 
 
 ## Key Design Decisions
 
-### 32-Shard Architecture
+### Dynamic Shard Architecture
 
-Jobs are distributed across 32 independent shards using FNV-1a hash:
+Jobs are distributed across N independent shards (auto-detected from CPU cores) using FNV-1a hash:
 
 ```
-shardIndex = fnv1aHash(queueName) & 0x1f
+SHARD_COUNT = calculateShardCount()  // Power of 2, based on CPU cores, max 64
+SHARD_MASK = SHARD_COUNT - 1
+shardIndex = fnv1aHash(queueName) & SHARD_MASK
+
+// Examples: 4 cores → 4 shards, 10 cores → 16 shards, 64+ cores → 64 shards
 ```
 
 **Benefits:**
+- Auto-scales with hardware (power of 2, max 64)
 - Parallel operations on different queues
 - Reduced lock contention
 - Bitwise AND faster than modulo

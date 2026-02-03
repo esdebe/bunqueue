@@ -30,8 +30,8 @@ src/application/
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │                     STATE                               │ │
 │  │                                                         │ │
-│  │  shards[32] ◄──► shardLocks[32]                        │ │
-│  │  processingShards[32] ◄──► processingLocks[32]         │ │
+│  │  shards[N] ◄──► shardLocks[N]    (N = auto-detected)  │ │
+│  │  processingShards[N] ◄──► processingLocks[N]          │ │
 │  │                                                         │ │
 │  │  jobIndex: Map<id, location>                           │ │
 │  │  completedJobs: BoundedSet (50k)                       │ │
@@ -78,7 +78,7 @@ push(queue, input)
               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  3. Acquire shard write lock                                │
-│     shardIdx = fnv1aHash(queue) & 0x1f                     │
+│     shardIdx = fnv1aHash(queue) & SHARD_MASK               │
 └─────────────┬───────────────────────────────────────────────┘
               │
               ▼
@@ -170,7 +170,7 @@ ack(jobId, result, token)
               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  2. Remove from processing shard                            │
-│     procIdx = fnv1aHash(jobId) & 0x1f                      │
+│     procIdx = fnv1aHash(jobId) & SHARD_MASK                │
 └─────────────┬───────────────────────────────────────────────┘
               │
               ▼

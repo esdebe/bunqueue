@@ -27,9 +27,9 @@ High-performance job queue server for Bun. SQLite persistence, cron jobs, priori
 │   ┌────────────────────────────────────────────────────────────┐           │
 │   │                    QueueManager                             │           │
 │   │  ┌─────────────────────────────────────────────────────┐   │           │
-│   │  │                  32 Shards                           │   │           │
+│   │  │              N Shards (auto-detected)                │   │           │
 │   │  │  ┌─────────┬─────────┬─────────┬─────────┐          │   │           │
-│   │  │  │ Shard 0 │ Shard 1 │   ...   │ Shard 31│          │   │           │
+│   │  │  │ Shard 0 │ Shard 1 │   ...   │ Shard N │          │   │           │
 │   │  │  │┌───────┐│┌───────┐│         │┌───────┐│          │   │           │
 │   │  │  ││PQueue ││PQueue ││         ││PQueue ││          │   │           │
 │   │  │  │└───────┘│└───────┘│         │└───────┘│          │   │           │
@@ -91,10 +91,15 @@ src/
 - One concern per file (Single Responsibility)
 - Export only what's needed
 
-## Sharding (32 shards)
+## Sharding (auto-detected from CPU cores)
+
+Shard count is automatically calculated based on CPU cores (power of 2, max 64):
 
 ```typescript
-const SHARD_MASK = 0x1f;
+// Calculated at startup based on navigator.hardwareConcurrency
+// Examples: 4 cores → 4 shards, 10 cores → 16 shards, 20 cores → 32 shards
+const SHARD_COUNT = calculateShardCount(); // Power of 2, capped at 64
+const SHARD_MASK = SHARD_COUNT - 1;
 const shardIndex = (key: string) => fnv1aHash(key) & SHARD_MASK;
 ```
 

@@ -24,19 +24,20 @@ src/domain/
 
 ## Sharding Architecture
 
-Jobs are distributed across 32 shards for parallelism:
+Jobs are distributed across N shards (auto-detected from CPU cores) for parallelism:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    QUEUE MANAGER                             │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │              32 INDEPENDENT SHARDS                    │   │
+│  │         N INDEPENDENT SHARDS (auto-detected)          │   │
+│  │         Power of 2, based on CPU cores, max 64        │   │
 │  │                                                       │   │
-│  │  queueName ──► fnv1aHash() ──► & 0x1f ──► shardIdx   │   │
+│  │  queueName ──► fnv1aHash() ──► & SHARD_MASK ──► idx  │   │
 │  │                                                       │   │
 │  │  ┌────────┬────────┬────────┬─────────┬────────┐     │   │
-│  │  │Shard 0 │Shard 1 │Shard 2 │  ...    │Shard 31│     │   │
+│  │  │Shard 0 │Shard 1 │Shard 2 │  ...    │Shard N │     │   │
 │  │  │        │        │        │         │        │     │   │
 │  │  │ queues │ queues │ queues │         │ queues │     │   │
 │  │  │ unique │ unique │ unique │         │ unique │     │   │

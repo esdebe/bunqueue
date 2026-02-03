@@ -30,9 +30,9 @@ bunqueue is a high-performance job queue server built for Bun. This document pro
 │   ┌────────────────────────────────────────────────────────────┐           │
 │   │                    QueueManager                             │           │
 │   │  ┌─────────────────────────────────────────────────────┐   │           │
-│   │  │                  32 Shards                           │   │           │
+│   │  │              N Shards (auto-detected)                │   │           │
 │   │  │  ┌─────────┬─────────┬─────────┬─────────┐          │   │           │
-│   │  │  │ Shard 0 │ Shard 1 │   ...   │ Shard 31│          │   │           │
+│   │  │  │ Shard 0 │ Shard 1 │   ...   │ Shard N │          │   │           │
 │   │  │  │┌───────┐│┌───────┐│         │┌───────┐│          │   │           │
 │   │  │  ││PQueue ││PQueue ││         ││PQueue ││          │   │           │
 │   │  │  │└───────┘│└───────┘│         │└───────┘│          │   │           │
@@ -85,13 +85,24 @@ src/
 
 ## Sharding Architecture
 
-bunqueue uses a 32-shard architecture for both queues and processing jobs to maximize concurrency while minimizing lock contention.
+bunqueue uses a dynamic sharding architecture that auto-detects the optimal number of shards based on CPU cores, maximizing concurrency while minimizing lock contention.
 
 ### Shard Distribution
 
 ```typescript
-const SHARD_COUNT = 32;  // Auto-detected from CPU cores, power of 2
-const SHARD_MASK = 0x1f; // Fast bitwise AND instead of modulo
+// Auto-calculated at startup based on CPU cores
+// Must be power of 2 for fast bitwise operations, capped at 64
+function calculateShardCount(): number {
+  const cores = navigator.hardwareConcurrency || 4;
+  let shards = 1;
+  while (shards < cores && shards < 64) {
+    shards *= 2;
+  }
+  return shards;
+}
+
+const SHARD_COUNT = calculateShardCount(); // e.g., 4, 8, 16, 32, 64
+const SHARD_MASK = SHARD_COUNT - 1;        // Fast bitwise AND instead of modulo
 
 // Queue sharding by queue name
 function shardIndex(queueName: string): number {
@@ -102,6 +113,12 @@ function shardIndex(queueName: string): number {
 function processingShardIndex(jobId: bigint): number {
   return Number(jobId & BigInt(SHARD_MASK));
 }
+
+// Examples:
+// 4 cores  → 4 shards  (SHARD_MASK = 0x03)
+// 10 cores → 16 shards (SHARD_MASK = 0x0f)
+// 20 cores → 32 shards (SHARD_MASK = 0x1f)
+// 64+ cores → 64 shards (SHARD_MASK = 0x3f)
 ```
 
 ### Why FNV-1a Hash?
@@ -652,11 +669,12 @@ try {
 
 ## Design Decisions
 
-### Why 32 Shards?
+### Why Dynamic Shard Count?
 
-- Auto-scales with CPU cores (power of 2)
+- **Auto-scales with CPU cores** (power of 2, max 64)
 - Balances parallelism vs memory overhead
-- Bitwise mask (& 0x1f) faster than modulo
+- Bitwise mask faster than modulo
+- Examples: 4 cores → 4 shards, 10 cores → 16 shards, 64+ cores → 64 shards
 
 ### Why 4-ary Heap?
 
