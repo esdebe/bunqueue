@@ -1,0 +1,225 @@
+---
+title: Monitoring
+description: Monitor bunqueue with Prometheus and Grafana
+---
+
+bunqueue exposes Prometheus-compatible metrics for production monitoring. This guide covers the built-in metrics endpoint and a ready-to-use Grafana dashboard.
+
+## Quick Start with Docker Compose
+
+bunqueue includes a pre-configured monitoring stack:
+
+```bash
+# Start bunqueue + Prometheus + Grafana
+docker compose --profile monitoring up -d
+```
+
+Access the dashboards:
+- **Grafana**: http://localhost:3000 (admin/bunqueue)
+- **Prometheus**: http://localhost:9090
+
+## Prometheus Endpoint
+
+bunqueue exposes metrics at `/prometheus` on the HTTP port (default 6790):
+
+```bash
+curl http://localhost:6790/prometheus
+```
+
+### Available Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bunqueue_jobs_waiting` | gauge | Jobs waiting in queue |
+| `bunqueue_jobs_delayed` | gauge | Delayed jobs |
+| `bunqueue_jobs_active` | gauge | Jobs being processed |
+| `bunqueue_jobs_completed` | gauge | Completed jobs in memory |
+| `bunqueue_jobs_dlq` | gauge | Jobs in dead letter queue |
+| `bunqueue_jobs_pushed_total` | counter | Total jobs pushed |
+| `bunqueue_jobs_pulled_total` | counter | Total jobs pulled |
+| `bunqueue_jobs_completed_total` | counter | Total jobs completed |
+| `bunqueue_jobs_failed_total` | counter | Total jobs failed |
+| `bunqueue_uptime_seconds` | gauge | Server uptime |
+| `bunqueue_cron_jobs_total` | gauge | Registered cron jobs |
+| `bunqueue_workers_total` | gauge | Registered workers |
+| `bunqueue_workers_active` | gauge | Active workers |
+| `bunqueue_workers_processed_total` | counter | Jobs processed by workers |
+| `bunqueue_workers_failed_total` | counter | Jobs failed by workers |
+| `bunqueue_webhooks_total` | gauge | Total webhooks |
+| `bunqueue_webhooks_enabled` | gauge | Enabled webhooks |
+
+### Example Output
+
+```
+# HELP bunqueue_jobs_waiting Number of jobs waiting in queue
+# TYPE bunqueue_jobs_waiting gauge
+bunqueue_jobs_waiting 42
+
+# HELP bunqueue_jobs_active Number of jobs being processed
+# TYPE bunqueue_jobs_active gauge
+bunqueue_jobs_active 8
+
+# HELP bunqueue_jobs_pushed_total Total jobs pushed
+# TYPE bunqueue_jobs_pushed_total counter
+bunqueue_jobs_pushed_total 150432
+```
+
+## Prometheus Configuration
+
+Add bunqueue to your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'bunqueue'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:6790']
+    metrics_path: /prometheus
+```
+
+With authentication:
+
+```yaml
+scrape_configs:
+  - job_name: 'bunqueue'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:6790']
+    metrics_path: /prometheus
+    bearer_token: 'your-auth-token'
+```
+
+## Grafana Dashboard
+
+The included dashboard provides:
+
+### Overview Row
+- Jobs Waiting, Delayed, Active, Completed, DLQ
+- Active Workers, Cron Jobs, Uptime
+
+### Throughput & Performance
+- Job throughput (pushed/pulled/completed/failed per second)
+- Queue depth over time (stacked area chart)
+
+### Success & Failure Analysis
+- Success rate gauge (with thresholds)
+- Failure rate gauge (5-minute window)
+- Completed vs Failed bar chart
+
+### Workers & Processing
+- Worker count over time
+- Worker throughput (processed/failed per second)
+- Worker utilization gauge
+
+### Webhooks & Cron
+- Webhook status
+- Cron job count
+- Lifetime totals
+
+### Alerts & Health
+- Visual alert indicators for:
+  - DLQ > 100 jobs
+  - Failure rate > 5%
+  - Queue backlog > 10,000
+  - No active workers
+  - Server health
+
+## Alert Rules
+
+Pre-configured Prometheus alerts in `monitoring/alert_rules.yml`:
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| `BunqueueDLQHigh` | DLQ > 100 for 5m | critical |
+| `BunqueueHighFailureRate` | Failure > 5% for 5m | warning |
+| `BunqueueQueueBacklog` | Waiting > 10k for 10m | warning |
+| `BunqueueNoWorkers` | 0 workers + waiting jobs | critical |
+| `BunqueueServerDown` | Server unreachable | critical |
+| `BunqueueLowThroughput` | < 1 job/s for 10m | warning |
+| `BunqueueWorkerOverload` | Utilization > 95% | warning |
+| `BunqueueJobsStuck` | Active jobs, no completions | warning |
+
+### Example Alert Rule
+
+```yaml
+- alert: BunqueueDLQHigh
+  expr: bunqueue_jobs_dlq > 100
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "High number of jobs in DLQ"
+    description: "{{ $value }} jobs are in the dead letter queue."
+```
+
+## CLI Metrics
+
+View metrics from the command line:
+
+```bash
+# JSON format
+bunqueue metrics
+
+# Prometheus format
+bunqueue metrics --format prometheus
+
+# Server stats
+bunqueue stats
+```
+
+## Health Endpoints
+
+bunqueue provides Kubernetes-compatible health endpoints:
+
+```bash
+# Detailed health (includes memory stats)
+curl http://localhost:6790/health
+
+# Kubernetes liveness probe
+curl http://localhost:6790/healthz
+
+# Kubernetes readiness probe
+curl http://localhost:6790/ready
+```
+
+## Debug Endpoints
+
+For troubleshooting:
+
+```bash
+# Heap statistics
+curl http://localhost:6790/heapstats
+
+# Force garbage collection
+curl -X POST http://localhost:6790/gc
+```
+
+## File Structure
+
+```
+monitoring/
+├── prometheus.yml              # Prometheus config
+├── alert_rules.yml             # Alert definitions
+└── grafana/
+    ├── provisioning/
+    │   ├── datasources/        # Auto-configure Prometheus
+    │   └── dashboards/         # Auto-load dashboards
+    └── dashboards/
+        └── bunqueue.json       # Complete dashboard
+```
+
+## Custom Dashboards
+
+Import the dashboard JSON directly:
+
+1. Open Grafana → Dashboards → Import
+2. Upload `monitoring/grafana/dashboards/bunqueue.json`
+3. Select Prometheus datasource
+4. Click Import
+
+## Best Practices
+
+1. **Scrape interval**: Use 5-15 seconds for real-time visibility
+2. **Retention**: Keep 15+ days for trend analysis
+3. **Alerts**: Start with the included rules, tune thresholds for your workload
+4. **Labels**: Consider adding custom labels for multi-queue environments

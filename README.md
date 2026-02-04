@@ -56,6 +56,16 @@ const worker = new Worker('emails', async (job) => {
 await queue.add('welcome', { to: 'user@example.com' });
 ```
 
+## Monitoring
+
+```bash
+# Start with Prometheus + Grafana
+docker compose --profile monitoring up -d
+```
+
+- **Grafana**: http://localhost:3000 (admin/bunqueue)
+- **Prometheus**: http://localhost:9090
+
 ## Documentation
 
 **[Read the full documentation →](https://egeominotti.github.io/bunqueue/)**
@@ -64,8 +74,8 @@ await queue.add('welcome', { to: 'user@example.com' });
 - [Queue API](https://egeominotti.github.io/bunqueue/guide/queue/)
 - [Worker API](https://egeominotti.github.io/bunqueue/guide/worker/)
 - [Server Mode](https://egeominotti.github.io/bunqueue/guide/server/)
+- [Monitoring](https://egeominotti.github.io/bunqueue/guide/monitoring/)
 - [CLI Reference](https://egeominotti.github.io/bunqueue/guide/cli/)
-- [Environment Variables](https://egeominotti.github.io/bunqueue/guide/env-vars/)
 
 ## License
 

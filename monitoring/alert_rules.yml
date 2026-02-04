@@ -1,0 +1,90 @@
+groups:
+  - name: bunqueue_alerts
+    interval: 30s
+    rules:
+      # DLQ Alert - Too many jobs in dead letter queue
+      - alert: BunqueueDLQHigh
+        expr: bunqueue_jobs_dlq > 100
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High number of jobs in DLQ"
+          description: "{{ $value }} jobs are in the dead letter queue. Check for systematic failures."
+
+      # Failure Rate Alert
+      - alert: BunqueueHighFailureRate
+        expr: |
+          100 * rate(bunqueue_jobs_failed_total[5m])
+          / (rate(bunqueue_jobs_completed_total[5m]) + rate(bunqueue_jobs_failed_total[5m]) + 0.001) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High job failure rate"
+          description: "Job failure rate is {{ $value | printf \"%.1f\" }}% over the last 5 minutes."
+
+      # Queue Backlog Alert
+      - alert: BunqueueQueueBacklog
+        expr: bunqueue_jobs_waiting > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Large queue backlog"
+          description: "{{ $value }} jobs waiting in queue. Consider scaling workers."
+
+      # No Workers Available
+      - alert: BunqueueNoWorkers
+        expr: bunqueue_workers_active == 0 and bunqueue_jobs_waiting > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active workers"
+          description: "No workers processing jobs while {{ $value }} jobs are waiting."
+
+      # Server Down
+      - alert: BunqueueServerDown
+        expr: up{job="bunqueue"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bunqueue server is down"
+          description: "Cannot reach Bunqueue server for metrics scraping."
+
+      # Low Throughput (after having traffic)
+      - alert: BunqueueLowThroughput
+        expr: |
+          rate(bunqueue_jobs_completed_total[5m]) < 1
+          and bunqueue_jobs_pushed_total > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low job completion throughput"
+          description: "Job completion rate dropped below 1/s. Check workers and job processing."
+
+      # Worker Utilization High
+      - alert: BunqueueWorkerOverload
+        expr: |
+          100 * bunqueue_workers_active / (bunqueue_workers_total + 0.001) > 95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workers near capacity"
+          description: "Worker utilization is {{ $value | printf \"%.0f\" }}%. Consider scaling."
+
+      # Jobs Stuck in Active
+      - alert: BunqueueJobsStuck
+        expr: |
+          bunqueue_jobs_active > 100
+          and rate(bunqueue_jobs_completed_total[10m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Jobs appear stuck"
+          description: "{{ $value }} active jobs but no completions in 10 minutes."

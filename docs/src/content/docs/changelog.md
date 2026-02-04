@@ -10,6 +10,33 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.1.1] - 2026-02-04
+
+### Added
+- **Prometheus + Grafana Monitoring Stack** - Complete observability setup:
+  - Docker Compose profile for one-command monitoring deployment
+  - Pre-configured Prometheus scraping with 5s interval
+  - Comprehensive Grafana dashboard with 6 panel rows:
+    - Overview: Waiting, Delayed, Active, Completed, DLQ, Workers, Cron, Uptime
+    - Throughput: Jobs/sec graphs, queue depth over time
+    - Success/Failure: Rate gauges, completed vs failed charts
+    - Workers: Count, throughput, utilization gauge
+    - Webhooks & Cron: Status and lifetime totals
+    - Alerts: Visual indicators for DLQ, failure rate, backlog, workers
+  - 8 pre-configured Prometheus alert rules:
+    - `BunqueueDLQHigh` - DLQ > 100 for 5m (critical)
+    - `BunqueueHighFailureRate` - Failure > 5% for 5m (warning)
+    - `BunqueueQueueBacklog` - Waiting > 10k for 10m (warning)
+    - `BunqueueNoWorkers` - No workers with waiting jobs (critical)
+    - `BunqueueServerDown` - Server unreachable (critical)
+    - `BunqueueLowThroughput` - < 1 job/s for 10m (warning)
+    - `BunqueueWorkerOverload` - Utilization > 95% (warning)
+    - `BunqueueJobsStuck` - Active jobs, no completions (warning)
+- **Monitoring Documentation** - New guide at `/guide/monitoring/`
+
+### Changed
+- Docker Compose now supports `--profile monitoring` for optional stack
+
 ## [2.1.0] - 2026-02-04
 
 ### Performance
