@@ -11,28 +11,6 @@ import type { RWLock } from '../../shared/lock';
 import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 
-const LOG_PREFIX = '[Pull]';
-
-/** Structured log helper */
-function log(
-  level: 'info' | 'warn' | 'error',
-  message: string,
-  data?: Record<string, unknown>
-): void {
-  const entry = data ? { message, ...data } : message;
-  switch (level) {
-    case 'info':
-      console.log(LOG_PREFIX, entry);
-      break;
-    case 'warn':
-      console.warn(LOG_PREFIX, entry);
-      break;
-    case 'error':
-      console.error(LOG_PREFIX, entry);
-      break;
-  }
-}
-
 /** Pull operation context */
 export interface PullContext {
   storage: SqliteStorage | null;
@@ -76,11 +54,6 @@ function tryDequeueNextJob(
     q.pop();
     shard.decrementQueued(job.id);
     ctx.jobIndex.delete(job.id);
-    log('warn', 'Skipped expired job', {
-      queue,
-      jobId: String(job.id),
-      ttl: job.ttl,
-    });
     return { status: 'skip' };
   }
 
@@ -211,17 +184,14 @@ async function tryPullFromShard(queue: string, idx: number, ctx: PullContext): P
     const state = shard.getState(queue);
 
     if (state.paused) {
-      log('info', 'Queue is paused, skipping pull', { queue });
       return null;
     }
 
     if (!shard.tryAcquireRateLimit(queue)) {
-      log('info', 'Rate limit reached', { queue });
       return null;
     }
 
     if (!shard.tryAcquireConcurrency(queue)) {
-      log('info', 'Concurrency limit reached', { queue });
       return null;
     }
 
@@ -254,11 +224,6 @@ export async function pullJobBatch(
 
     if (jobs.length > 0) {
       await moveToProcessingBatch(jobs, queue, ctx);
-      log('info', 'Batch pull completed', {
-        queue,
-        count: jobs.length,
-        requested: count,
-      });
       return jobs;
     }
 
@@ -296,15 +261,9 @@ async function tryPullBatchFromShard(
     while (jobs.length < count) {
       // Check limits per job
       if (!shard.tryAcquireRateLimit(queue)) {
-        if (jobs.length === 0) {
-          log('info', 'Rate limit reached', { queue });
-        }
         break;
       }
       if (!shard.tryAcquireConcurrency(queue)) {
-        if (jobs.length === 0) {
-          log('info', 'Concurrency limit reached', { queue });
-        }
         break;
       }
 

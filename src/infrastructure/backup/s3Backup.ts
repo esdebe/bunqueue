@@ -74,7 +74,6 @@ export class S3BackupManager {
    */
   start(): void {
     if (!this.config.enabled) {
-      backupLog.info('S3 backup disabled');
       return;
     }
 
@@ -83,13 +82,6 @@ export class S3BackupManager {
       backupLog.error('S3 backup configuration invalid', { errors: validation.errors });
       return;
     }
-
-    backupLog.info('S3 backup scheduler started', {
-      bucket: this.config.bucket,
-      endpoint: this.config.endpoint ?? 'AWS S3',
-      interval: `${Math.round(this.config.intervalMs / 1000 / 60)} minutes`,
-      retention: this.config.retention,
-    });
 
     // Run initial backup after 1 minute
     this.initialBackupTimeout = setTimeout(() => {
@@ -119,7 +111,6 @@ export class S3BackupManager {
       clearInterval(this.backupInterval);
       this.backupInterval = null;
     }
-    backupLog.info('S3 backup scheduler stopped');
   }
 
   /**
@@ -127,7 +118,6 @@ export class S3BackupManager {
    */
   async backup(): Promise<BackupResult> {
     if (this.isBackupInProgress) {
-      backupLog.warn('Backup already in progress, skipping');
       return { success: false, error: 'Backup already in progress' };
     }
 

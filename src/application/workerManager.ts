@@ -4,9 +4,6 @@
  */
 
 import { type Worker, type WorkerId, createWorker } from '../domain/types/worker';
-import { createLogger } from '../shared/logger';
-
-const workerLog = createLogger('Worker');
 
 /** Worker timeout - consider dead after this many ms without heartbeat */
 const WORKER_TIMEOUT_MS = parseInt(Bun.env.WORKER_TIMEOUT_MS ?? '30000', 10);
@@ -34,7 +31,6 @@ export class WorkerManager {
   register(name: string, queues: string[]): Worker {
     const worker = createWorker(name, queues);
     this.workers.set(worker.id, worker);
-    workerLog.info('Registered worker', { workerId: worker.id, name, queues });
     return worker;
   }
 
@@ -45,11 +41,7 @@ export class WorkerManager {
       // Adjust running counters before removal
       this.totalActiveJobsCounter -= worker.activeJobs;
     }
-    const removed = this.workers.delete(id);
-    if (removed) {
-      workerLog.info('Unregistered worker', { workerId: id });
-    }
-    return removed;
+    return this.workers.delete(id);
   }
 
   /** Get worker by ID */
@@ -136,7 +128,6 @@ export class WorkerManager {
         // Adjust running counters before removal
         this.totalActiveJobsCounter -= worker.activeJobs;
         this.workers.delete(id);
-        workerLog.info('Removed stale worker', { workerId: id, name: worker.name });
       }
     }
   }

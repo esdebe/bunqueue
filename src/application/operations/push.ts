@@ -19,28 +19,6 @@ import { withWriteLock } from '../../shared/lock';
 import { shardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
 
-const LOG_PREFIX = '[Push]';
-
-/** Structured log helper */
-function log(
-  level: 'info' | 'warn' | 'error',
-  message: string,
-  data?: Record<string, unknown>
-): void {
-  const entry = data ? { message, ...data } : message;
-  switch (level) {
-    case 'info':
-      console.log(LOG_PREFIX, entry);
-      break;
-    case 'warn':
-      console.warn(LOG_PREFIX, entry);
-      break;
-    case 'error':
-      console.error(LOG_PREFIX, entry);
-      break;
-  }
-}
-
 /** Push operation context */
 export interface PushContext {
   storage: SqliteStorage | null;
@@ -88,10 +66,6 @@ function handleCustomId(input: JobInput, shard: Shard, ctx: PushContext): Custom
     location?.type === 'queue' ? shard.getQueue(location.queueName).find(existing) : null;
 
   if (existingJob) {
-    log('info', 'Duplicate customId, returning existing job', {
-      customId: input.customId,
-      existingJobId: String(existing),
-    });
     return { skip: true, existingJob };
   }
 
@@ -133,12 +107,6 @@ function handleDeduplication(
       q.remove(existingEntry.jobId);
       shard.decrementQueued(existingEntry.jobId);
       ctx.jobIndex.delete(existingEntry.jobId);
-      log('info', 'Dedup replace: removed existing job', {
-        queue,
-        uniqueKey: job.uniqueKey,
-        removedJobId: String(existingEntry.jobId),
-        newJobId: String(job.id),
-      });
     }
     shard.releaseUniqueKey(queue, job.uniqueKey);
     shard.registerUniqueKeyWithTtl(queue, job.uniqueKey, job.id, dedupOpts?.ttl);
@@ -151,12 +119,6 @@ function handleDeduplication(
     if (input.customId) ctx.customIdMap.delete(input.customId);
     const existingJob = q.find(existingEntry.jobId);
     if (existingJob) {
-      log('info', 'Dedup extend: extended TTL, returning existing job', {
-        queue,
-        uniqueKey: job.uniqueKey,
-        existingJobId: String(existingEntry.jobId),
-        ttl: dedupOpts.ttl,
-      });
       return { skip: true, existingId: existingEntry.jobId };
     }
     throw new Error('Duplicate unique_key (extended TTL)');
@@ -196,11 +158,6 @@ function insertJobToShard(
   if (needsWaiting) {
     shard.waitingDeps.set(job.id, job);
     shard.registerDependencies(job.id, job.dependsOn);
-    log('info', 'Job waiting for dependencies', {
-      queue,
-      jobId: String(job.id),
-      pendingDeps: job.dependsOn.filter((d) => !ctx.completedJobs.has(d)).map(String),
-    });
   } else {
     shard.getQueue(queue).push(job);
     const isDelayed = job.runAt > Date.now();
@@ -248,7 +205,7 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
   });
 
   if (!result) {
-    log('error', 'Push failed unexpectedly', { queue, input });
+    console.error('[Push] Push failed unexpectedly', { queue, input });
     throw new Error('Push failed');
   }
 
@@ -314,11 +271,6 @@ export async function pushJobBatch(
   if (jobsToInsert.length > 0) {
     ctx.storage?.insertJobsBatch(jobsToInsert);
     ctx.totalPushed.value += BigInt(jobsToInsert.length);
-    log('info', 'Batch push completed', {
-      queue,
-      inserted: jobsToInsert.length,
-      duplicates: inputs.length - jobsToInsert.length,
-    });
   }
 
   return resultIds;

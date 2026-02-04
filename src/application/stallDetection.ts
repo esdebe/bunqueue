@@ -130,12 +130,6 @@ function moveStalliedJobToDlq(
   procIdx: number,
   _idx: number
 ): void {
-  queueLog.warn('Job exceeded max stalls, moving to DLQ', {
-    jobId: String(job.id),
-    queue: job.queue,
-    stallCount: job.stallCount,
-  });
-
   ctx.processingShards[procIdx].delete(job.id);
   shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
@@ -161,13 +155,6 @@ function retryStalliedJob(
   job.startedAt = null;
   job.runAt = Date.now() + calculateBackoff(job);
   job.lastHeartbeat = Date.now();
-
-  queueLog.warn('Job stalled, retrying', {
-    jobId: String(job.id),
-    queue: job.queue,
-    stallCount: job.stallCount,
-    attempt: job.attempts,
-  });
 
   ctx.processingShards[procIdx].delete(job.id);
   shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);

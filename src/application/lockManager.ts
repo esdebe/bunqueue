@@ -8,7 +8,6 @@ import { isLockExpired } from '../domain/types/job';
 import { FailureReason } from '../domain/types/dlq';
 import { EventType } from '../domain/types/queue';
 import type { IndexedPriorityQueue } from '../domain/queue/priorityQueue';
-import { queueLog } from '../shared/logger';
 import { shardIndex, processingShardIndex } from '../shared/hash';
 import { withWriteLock } from '../shared/lock';
 import type { LockContext } from './types';
@@ -91,8 +90,6 @@ export async function checkExpiredLocks(ctx: LockContext): Promise<void> {
       }
     });
   }
-
-  queueLog.info('Processed expired locks', { count: expired.length });
 }
 
 /**
@@ -149,14 +146,6 @@ function handleMaxStallsExceeded(opts: MaxStallsOptions): void {
   shard.addToDlq(job, FailureReason.Stalled, `Lock expired after ${lock.renewalCount} renewals`);
   ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
 
-  queueLog.warn('Job moved to DLQ due to lock expiration', {
-    jobId: String(jobId),
-    queue: job.queue,
-    owner: lock.owner,
-    renewals: lock.renewalCount,
-    stallCount: job.stallCount,
-  });
-
   ctx.eventsManager.broadcast({
     eventType: EventType.Failed,
     jobId,
@@ -179,17 +168,9 @@ interface RequeueOptions {
 
 /** Requeue job for retry */
 function requeueExpiredJob(opts: RequeueOptions): void {
-  const { jobId, job, lock, queue, idx, ctx, now } = opts;
+  const { jobId, job, queue, idx, ctx, now } = opts;
   queue.push(job);
   ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
-
-  queueLog.info('Job requeued due to lock expiration', {
-    jobId: String(jobId),
-    queue: job.queue,
-    owner: lock.owner,
-    renewals: lock.renewalCount,
-    attempt: job.attempts,
-  });
 
   ctx.eventsManager.broadcast({
     eventType: EventType.Stalled,

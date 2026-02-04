@@ -7,7 +7,7 @@ import type { JobId } from '../domain/types/job';
 import { EventType, type JobEvent } from '../domain/types/queue';
 import type { WebhookManager } from './webhookManager';
 import type { WebhookEvent } from '../domain/types/webhook';
-import { queueLog, webhookLog } from '../shared/logger';
+import { webhookLog } from '../shared/logger';
 
 /** Event subscriber callback */
 export type EventSubscriber = (event: JobEvent) => void;
@@ -129,14 +129,8 @@ export class EventsManager {
       for (const sub of this.subscribers) {
         try {
           sub(event as JobEvent);
-        } catch (err) {
-          // Log subscriber errors for debugging
-          queueLog.warn('Event subscriber error', {
-            eventType: event.eventType,
-            jobId: String(event.jobId),
-            queue: event.queue,
-            error: err instanceof Error ? err.message : String(err),
-          });
+        } catch {
+          // Ignore subscriber errors
         }
       }
     }

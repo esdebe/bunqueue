@@ -183,10 +183,8 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       // Release all jobs owned by this WebSocket client back to queue
       queueManager
         .releaseClientJobs(clientId)
-        .then((released) => {
-          if (released > 0) {
-            httpLog.info('WebSocket client disconnected, released jobs', { clientId, released });
-          }
+        .then(() => {
+          // Jobs released successfully
         })
         .catch((err: unknown) => {
           httpLog.error('Failed to release WebSocket client jobs', {
@@ -201,7 +199,6 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
   let server: Server<WsData>;
   if (config.socketPath) {
     server = Bun.serve<WsData>({ unix: config.socketPath, fetch, websocket });
-    httpLog.info('Server listening', { unix: config.socketPath });
   } else {
     server = Bun.serve<WsData>({
       hostname: config.hostname ?? '0.0.0.0',
@@ -209,7 +206,6 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       fetch,
       websocket,
     });
-    httpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
   }
 
   return {
@@ -221,7 +217,6 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     stop(): void {
       sseHandler.closeAll();
       void server.stop();
-      httpLog.info('Server stopped');
     },
   };
 }

@@ -4,7 +4,6 @@
  */
 
 import type { Job, JobId } from '../domain/types/job';
-import { queueLog } from '../shared/logger';
 import { processingShardIndex, SHARD_COUNT } from '../shared/hash';
 import { withWriteLock } from '../shared/lock';
 import type { BackgroundContext } from './types';
@@ -63,7 +62,6 @@ async function cleanOrphanedProcessingEntries(
         if (job) {
           ctx.processingShards[i].delete(jobId);
           ctx.jobIndex.delete(jobId);
-          queueLog.warn('Cleaned orphaned processing job', { jobId: String(jobId) });
         }
       }
     });
@@ -85,7 +83,6 @@ function cleanStaleWaitingDependencies(ctx: BackgroundContext, now: number): voi
       shard.waitingDeps.delete(job.id);
       shard.unregisterDependencies(job.id, job.dependsOn);
       ctx.jobIndex.delete(job.id);
-      queueLog.warn('Cleaned stale waiting dependency', { jobId: String(job.id) });
     }
   }
 }
@@ -95,13 +92,10 @@ function cleanUniqueKeysAndGroups(ctx: BackgroundContext): void {
     const shard = ctx.shards[i];
 
     // Clean expired unique keys
-    const expiredCleaned = shard.cleanExpiredUniqueKeys();
-    if (expiredCleaned > 0) {
-      queueLog.info('Cleaned expired unique keys', { shard: i, removed: expiredCleaned });
-    }
+    shard.cleanExpiredUniqueKeys();
 
     // Trim if too many keys remain
-    for (const [queueName, keys] of shard.uniqueKeys) {
+    for (const [_queueName, keys] of shard.uniqueKeys) {
       if (keys.size > 1000) {
         const toRemove = Math.floor(keys.size / 2);
         const iter = keys.keys();
@@ -110,12 +104,11 @@ function cleanUniqueKeysAndGroups(ctx: BackgroundContext): void {
           if (done) break;
           keys.delete(value);
         }
-        queueLog.info('Trimmed unique keys', { queue: queueName, removed: toRemove });
       }
     }
 
     // Clean orphaned active groups
-    for (const [queueName, groups] of shard.activeGroups) {
+    for (const [_queueName, groups] of shard.activeGroups) {
       if (groups.size > 1000) {
         const toRemove = Math.floor(groups.size / 2);
         const iter = groups.values();
@@ -124,7 +117,6 @@ function cleanUniqueKeysAndGroups(ctx: BackgroundContext): void {
           if (done) break;
           groups.delete(value);
         }
-        queueLog.info('Trimmed active groups', { queue: queueName, removed: toRemove });
       }
     }
   }
@@ -170,15 +162,12 @@ async function cleanOrphanedJobIndex(ctx: BackgroundContext): Promise<void> {
     }
   }
 
-  let orphanedCount = 0;
-
   // Phase 2: Check and delete processing entries with locks
   for (const [procIdx, candidates] of processingCandidates) {
     await withWriteLock(ctx.processingLocks[procIdx], () => {
       for (const jobId of candidates) {
         if (!ctx.processingShards[procIdx].has(jobId)) {
           ctx.jobIndex.delete(jobId);
-          orphanedCount++;
         }
       }
     });
@@ -191,14 +180,9 @@ async function cleanOrphanedJobIndex(ctx: BackgroundContext): Promise<void> {
       for (const { jobId, queueName } of candidates) {
         if (!shard.getQueue(queueName).has(jobId)) {
           ctx.jobIndex.delete(jobId);
-          orphanedCount++;
         }
       }
     });
-  }
-
-  if (orphanedCount > 0) {
-    queueLog.info('Cleaned orphaned jobIndex entries', { count: orphanedCount });
   }
 }
 
@@ -235,14 +219,7 @@ function cleanEmptyQueues(ctx: BackgroundContext): void {
       ctx.unregisterQueueName(queueName);
     }
 
-    if (emptyQueues.length > 0) {
-      queueLog.info('Removed empty queues', { shard: i, count: emptyQueues.length });
-    }
-
     // Clean orphaned temporal index entries
-    const cleanedTemporal = shard.cleanOrphanedTemporalEntries();
-    if (cleanedTemporal > 0) {
-      queueLog.info('Cleaned orphaned temporal entries', { shard: i, count: cleanedTemporal });
-    }
+    shard.cleanOrphanedTemporalEntries();
   }
 }

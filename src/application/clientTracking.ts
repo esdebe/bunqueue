@@ -4,7 +4,6 @@
  */
 
 import type { Job, JobId } from '../domain/types/job';
-import { queueLog } from '../shared/logger';
 import { shardIndex } from '../shared/hash';
 import { withWriteLock } from '../shared/lock';
 import type { LockContext } from './types';
@@ -123,10 +122,6 @@ export async function releaseClientJobs(clientId: string, ctx: LockContext): Pro
 
   // Clear client tracking
   ctx.clientJobs.delete(clientId);
-
-  if (released > 0) {
-    queueLog.info('Released client jobs', { clientId: clientId.substring(0, 8), released });
-  }
 
   return released;
 }

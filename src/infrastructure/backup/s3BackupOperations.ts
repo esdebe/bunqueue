@@ -66,15 +66,6 @@ export async function performBackup(
 
     const duration = Date.now() - startTime;
 
-    const ratio = ((1 - compressedSize / originalSize) * 100).toFixed(1);
-    backupLog.info('Backup completed', {
-      key,
-      size: `${(originalSize / 1024 / 1024).toFixed(2)} MB`,
-      compressed: `${(compressedSize / 1024 / 1024).toFixed(2)} MB (${ratio}% saved)`,
-      duration: `${duration}ms`,
-      checksum: checksum.substring(0, 16) + '...',
-    });
-
     return { success: true, key, size: originalSize, duration };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -179,15 +170,6 @@ export async function restoreBackup(
 
     const duration = Date.now() - startTime;
 
-    backupLog.info('Restore completed', {
-      key,
-      size: `${(data.byteLength / 1024 / 1024).toFixed(2)} MB`,
-      compressed: isCompressed
-        ? `${(compressedData.byteLength / 1024 / 1024).toFixed(2)} MB`
-        : 'no',
-      duration: `${duration}ms`,
-    });
-
     return { success: true, key, size: data.byteLength, duration };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -221,16 +203,11 @@ export async function cleanupOldBackups(config: S3BackupConfig, client: S3Client
         if (await metadataFile.exists()) {
           await client.delete(metadataKey);
         }
-
-        backupLog.info('Deleted old backup', { key: backup.key });
-      } catch (err) {
-        backupLog.warn('Failed to delete old backup', {
-          key: backup.key,
-          error: String(err),
-        });
+      } catch {
+        // Ignore delete errors
       }
     }
-  } catch (error) {
-    backupLog.warn('Failed to cleanup old backups', { error: String(error) });
+  } catch {
+    // Ignore cleanup errors
   }
 }

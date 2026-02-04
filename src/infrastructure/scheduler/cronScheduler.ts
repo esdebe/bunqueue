@@ -81,8 +81,6 @@ export class CronScheduler {
     this.checkInterval = setInterval(() => {
       void this.tick();
     }, this.config.checkIntervalMs);
-
-    cronLog.info('Scheduler started');
   }
 
   /**
@@ -93,7 +91,6 @@ export class CronScheduler {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
-    cronLog.info('Scheduler stopped');
   }
 
   /**
@@ -130,8 +127,6 @@ export class CronScheduler {
     this.cronJobs.set(cron.name, { cron, generation: gen });
     this.cronHeap.push({ cron, generation: gen });
 
-    cronLog.info('Added job', { name: cron.name, nextRun: new Date(nextRun).toISOString() });
-
     return cron;
   }
 
@@ -145,7 +140,6 @@ export class CronScheduler {
 
     // Just remove from map - heap entry becomes stale (lazy deletion)
     this.cronJobs.delete(name);
-    cronLog.info('Removed job', { name });
     return true;
   }
 
@@ -175,7 +169,6 @@ export class CronScheduler {
     }
     // Rebuild heap from loaded crons - O(n)
     this.cronHeap.buildFrom(entries);
-    cronLog.info('Loaded jobs', { count: crons.length });
   }
 
   /**
@@ -209,7 +202,6 @@ export class CronScheduler {
 
       // Check if at limit
       if (isAtLimit(cron)) {
-        cronLog.info('Job reached execution limit', { name: cron.name });
         toRemove.push(cron.name);
         continue;
       }
@@ -255,12 +247,6 @@ export class CronScheduler {
 
         // Re-insert with same generation (not stale)
         toReinsert.push(entry);
-
-        cronLog.info('Executed job', {
-          name: cron.name,
-          executions: cron.executions,
-          nextRun: new Date(cron.nextRun).toISOString(),
-        });
       } catch (err) {
         // Push failed but state was already persisted
         // Job is lost but cron state is consistent - no duplicates on retry

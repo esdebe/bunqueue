@@ -6,7 +6,6 @@ import type { ServerWebSocket } from 'bun';
 import type { JobEvent } from '../../domain/types/queue';
 import { handleCommand, type HandlerContext } from './handler';
 import { parseCommand, serializeResponse, errorResponse } from './protocol';
-import { wsLog } from '../../shared/logger';
 
 /** Singleton TextDecoder for WebSocket messages */
 const textDecoder = new TextDecoder();
@@ -42,7 +41,6 @@ export class WsHandler {
   /** Handle WebSocket open */
   onOpen(ws: ServerWebSocket<WsData>): void {
     this.clients.set(ws.data.id, ws);
-    wsLog.info('Client connected', { clientId: ws.data.id });
   }
 
   /** Handle WebSocket message */
@@ -77,7 +75,6 @@ export class WsHandler {
   /** Handle WebSocket close */
   onClose(ws: ServerWebSocket<WsData>): void {
     this.clients.delete(ws.data.id);
-    wsLog.info('Client disconnected', { clientId: ws.data.id });
   }
 
   /** Get clients map (for backward compatibility) */

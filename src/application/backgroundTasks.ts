@@ -205,15 +205,8 @@ function performDlqMaintenance(ctx: BackgroundContext): void {
 
   for (const queueName of ctx.queueNamesCache) {
     try {
-      const retried = dlqOps.processAutoRetry(queueName, dlqCtx);
-      if (retried > 0) {
-        queueLog.info('DLQ auto-retry completed', { queue: queueName, retried });
-      }
-
-      const purged = dlqOps.purgeExpiredDlq(queueName, dlqCtx);
-      if (purged > 0) {
-        queueLog.info('DLQ purge completed', { queue: queueName, purged });
-      }
+      dlqOps.processAutoRetry(queueName, dlqCtx);
+      dlqOps.purgeExpiredDlq(queueName, dlqCtx);
     } catch (err) {
       queueLog.error('DLQ maintenance failed', { queue: queueName, error: String(err) });
     }
@@ -236,7 +229,6 @@ export function recover(ctx: BackgroundContext): void {
 
   // === PHASE 1: Recover active jobs (were processing when server stopped) ===
   // These jobs are considered "stalled" and need to be retried or moved to DLQ
-  let totalActiveRecovered = 0;
   let activeOffset = 0;
 
   while (true) {
@@ -266,11 +258,6 @@ export function recover(ctx: BackgroundContext): void {
         ctx.jobIndex.set(job.id, { type: 'dlq', queueName: job.queue });
         ctx.storage.saveDlqEntry(entry);
         ctx.storage.deleteJob(job.id);
-        queueLog.warn('Recovered active job exceeded max stalls, moved to DLQ', {
-          jobId: String(job.id),
-          queue: job.queue,
-          stallCount: job.stallCount,
-        });
       } else {
         // Retry: put back in queue with backoff
         job.runAt = now + job.backoff * Math.pow(2, job.attempts - 1);
@@ -279,28 +266,16 @@ export function recover(ctx: BackgroundContext): void {
         shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
         ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
         ctx.storage.updateForRetry(job);
-        queueLog.info('Recovered active job, retrying', {
-          jobId: String(job.id),
-          queue: job.queue,
-          stallCount: job.stallCount,
-          attempt: job.attempts,
-        });
       }
 
       ctx.registerQueueName(job.queue);
     }
 
-    totalActiveRecovered += activeJobs.length;
     activeOffset += activeJobs.length;
     if (activeJobs.length < RECOVERY_BATCH_SIZE) break;
   }
 
-  if (totalActiveRecovered > 0) {
-    queueLog.info('Recovered active jobs from previous session', { count: totalActiveRecovered });
-  }
-
   // === PHASE 2: Load pending jobs ===
-  let totalPendingLoaded = 0;
   let offset = 0;
 
   // Load pending jobs in batches to avoid memory spikes
@@ -352,31 +327,21 @@ export function recover(ctx: BackgroundContext): void {
       ctx.registerQueueName(job.queue);
     }
 
-    totalPendingLoaded += jobs.length;
     offset += jobs.length;
 
     // If we got less than batch size, we're done
     if (jobs.length < RECOVERY_BATCH_SIZE) break;
   }
 
-  if (totalPendingLoaded > 0) {
-    queueLog.info('Loaded pending jobs', { count: totalPendingLoaded });
-  }
-
   // Load DLQ entries
   const dlqEntries = ctx.storage.loadDlq();
-  let dlqCount = 0;
   for (const [queue, entries] of dlqEntries) {
     const idx = shardIndex(queue);
     const shard = ctx.shards[idx];
     for (const entry of entries) {
       shard.restoreDlqEntry(queue, entry);
-      dlqCount++;
     }
     ctx.registerQueueName(queue);
-  }
-  if (dlqCount > 0) {
-    queueLog.info('Loaded DLQ entries', { count: dlqCount });
   }
 }
 

@@ -4,7 +4,6 @@
 
 import type { JobId, JobLock, LockToken } from '../domain/types/job';
 import { createJobLock, isLockExpired, renewLock, DEFAULT_LOCK_TTL } from '../domain/types/job';
-import { queueLog } from '../shared/logger';
 import type { LockContext } from './types';
 
 /**
@@ -22,7 +21,6 @@ export function createLock(
 
   // Check if lock already exists (shouldn't happen, but defensive)
   if (ctx.jobLocks.has(jobId)) {
-    queueLog.warn('Lock already exists for job', { jobId: String(jobId), owner });
     return null;
   }
 
@@ -101,11 +99,6 @@ export function releaseLock(jobId: JobId, ctx: LockContext, token?: string): boo
 
   // If token provided, verify it matches
   if (token && lock.token !== token) {
-    queueLog.warn('Token mismatch on lock release', {
-      jobId: String(jobId),
-      expected: lock.token.substring(0, 8),
-      got: token.substring(0, 8),
-    });
     return false;
   }
 

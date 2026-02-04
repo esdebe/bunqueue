@@ -133,7 +133,6 @@ export class SandboxedWorker {
       const readyTimeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          log('warn', 'Worker ready timeout, continuing anyway', { workerIndex: index });
           resolve();
         }
       }, 5000);
@@ -250,10 +249,6 @@ export class SandboxedWorker {
   }
 
   private handleTimeout(wp: WorkerProcess, job: DomainJob): void {
-    log('warn', 'Job timed out', {
-      jobId: String(job.id),
-      timeoutMs: this.options.timeout,
-    });
     wp.worker.terminate();
     const token = wp.currentToken ?? undefined;
     this.manager
@@ -276,7 +271,6 @@ export class SandboxedWorker {
     wp.restarts++;
 
     if (this.options.autoRestart && wp.restarts < this.options.maxRestarts && this.running) {
-      log('info', 'Restarting worker', { workerIndex: index, attempt: wp.restarts });
       this.spawnWorker(index).catch((err: unknown) => {
         log('error', 'Failed to restart worker', {
           workerIndex: index,

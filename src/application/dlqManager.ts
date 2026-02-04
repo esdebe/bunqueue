@@ -9,7 +9,6 @@ import type { Shard } from '../domain/queue/shard';
 import type { DlqEntry, DlqConfig, DlqFilter, DlqStats } from '../domain/types/dlq';
 import { FailureReason, scheduleNextRetry } from '../domain/types/dlq';
 import { shardIndex } from '../shared/hash';
-import { queueLog } from '../shared/logger';
 import type { SqliteStorage } from '../infrastructure/persistence/sqlite';
 
 /** Context for DLQ operations */
@@ -106,7 +105,6 @@ export function retryDlqJob(queue: string, jobId: JobId, ctx: DlqContext): Job |
   shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
   ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
 
-  queueLog.info('Retried DLQ job', { jobId: String(jobId), queue });
   return job;
 }
 
@@ -140,7 +138,6 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
   }
 
-  queueLog.info('Retried all DLQ jobs', { queue, count });
   return count;
 }
 
@@ -173,7 +170,6 @@ export function retryDlqByFilter(queue: string, ctx: DlqContext, filter: DlqFilt
     count++;
   }
 
-  queueLog.info('Retried filtered DLQ jobs', { queue, count, filter: JSON.stringify(filter) });
   return count;
 }
 
@@ -209,12 +205,6 @@ export function processAutoRetry(queue: string, ctx: DlqContext): number {
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
     count++;
-
-    queueLog.info('Auto-retried DLQ job', {
-      jobId: String(job.id),
-      queue,
-      retryCount: entry.retryCount,
-    });
   }
 
   return count;
@@ -236,9 +226,6 @@ export function purgeExpiredDlq(queue: string, ctx: DlqContext): number {
     }
   }
 
-  if (count > 0) {
-    queueLog.info('Purged expired DLQ entries', { queue, count });
-  }
   return count;
 }
 
@@ -255,7 +242,6 @@ export function purgeDlqJobs(queue: string, ctx: DlqContext): number {
 export function configureDlq(queue: string, ctx: DlqContext, config: Partial<DlqConfig>): void {
   const idx = shardIndex(queue);
   ctx.shards[idx].setDlqConfig(queue, config);
-  queueLog.info('Updated DLQ config', { queue, config });
 }
 
 /** Get DLQ configuration */

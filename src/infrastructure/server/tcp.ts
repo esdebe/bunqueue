@@ -40,11 +40,6 @@ async function releaseClientJobsWithRetry(
       return await queueManager.releaseClientJobs(clientId);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      tcpLog.warn('Release client jobs failed, retrying', {
-        clientId,
-        attempt: attempt + 1,
-        error: lastError.message,
-      });
       // Exponential backoff: 100ms, 200ms, 400ms
       await Bun.sleep(100 * Math.pow(2, attempt));
     }
@@ -112,7 +107,6 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       };
 
       connections.set(clientId, socket);
-      tcpLog.info('Client connected', { clientId });
     },
 
     async data(socket: Socket<ConnectionData>, data: Buffer) {
@@ -130,11 +124,6 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         frames = frameParser.addData(new Uint8Array(data));
       } catch (err) {
         if (err instanceof FrameSizeError) {
-          tcpLog.warn('Frame size exceeded', {
-            clientId: state.clientId,
-            requestedSize: err.requestedSize,
-            maxSize: err.maxSize,
-          });
           socket.write(
             errorResponse(
               `Frame too large: ${err.requestedSize} bytes exceeds maximum ${err.maxSize}`
@@ -185,12 +174,8 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
 
       // Release all jobs owned by this client back to queue with retry logic
       releaseClientJobsWithRetry(queueManager, clientId)
-        .then((released) => {
-          if (released > 0) {
-            tcpLog.info('Client disconnected, released jobs', { clientId, released });
-          } else {
-            tcpLog.info('Client disconnected', { clientId });
-          }
+        .then(() => {
+          // Jobs released successfully
         })
         .catch((err: unknown) => {
           // After all retries failed, log the final error
@@ -218,8 +203,6 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     port: config.port ?? 6789,
     socket: socketHandlers,
   });
-  tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
-
   return {
     server,
     connections,
@@ -244,7 +227,6 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         socket.end();
       }
       connections.clear();
-      tcpLog.info('Server stopped');
     },
   };
 }

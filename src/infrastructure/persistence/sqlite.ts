@@ -175,7 +175,6 @@ export class SqliteStorage {
       queueEntries.push(reconstructedEntry);
     }
 
-    storageLog.info('Loaded DLQ entries', { count: rows.length });
     return result;
   }
 
@@ -330,10 +329,7 @@ export class SqliteStorage {
     this.writeBuffer.stop();
 
     try {
-      const flushed = this.writeBuffer.flush();
-      if (flushed > 0) {
-        storageLog.info('Flushed write buffer on close', { jobCount: flushed });
-      }
+      this.writeBuffer.flush();
     } catch (err) {
       storageLog.error('Failed to flush write buffer on close', {
         bufferedJobs: this.writeBuffer.pendingCount,

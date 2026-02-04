@@ -4,7 +4,6 @@
  */
 
 import { SHARD_COUNT } from '../shared/hash';
-import { queueLog } from '../shared/logger';
 import type { StatsContext } from './types';
 
 export interface QueueStats {
@@ -158,6 +157,4 @@ export function compactMemory(ctx: StatsContext): void {
       ctx.jobLocks.delete(jobId);
     }
   }
-
-  queueLog.info('Memory compacted');
 }

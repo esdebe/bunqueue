@@ -43,7 +43,6 @@ export class WebhookManager {
     if (webhook.enabled) {
       this.enabledCount++;
     }
-    webhookLog.info('Added webhook', { webhookId: webhook.id, events });
     return webhook;
   }
 
@@ -53,11 +52,7 @@ export class WebhookManager {
     if (webhook?.enabled) {
       this.enabledCount--;
     }
-    const removed = this.webhooks.delete(id);
-    if (removed) {
-      webhookLog.info('Removed webhook', { webhookId: id });
-    }
-    return removed;
+    return this.webhooks.delete(id);
   }
 
   /** Get webhook by ID */
