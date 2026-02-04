@@ -60,7 +60,15 @@ export class Queue<T = unknown> {
       const poolSize = connOpts.poolSize ?? 4;
 
       if (poolSize === 4 && !connOpts.token) {
-        this.tcpPool = getSharedPool({ host: connOpts.host, port: connOpts.port, poolSize });
+        this.tcpPool = getSharedPool({
+          host: connOpts.host,
+          port: connOpts.port,
+          poolSize,
+          pingInterval: connOpts.pingInterval,
+          commandTimeout: connOpts.commandTimeout,
+          pipelining: connOpts.pipelining,
+          maxInFlight: connOpts.maxInFlight,
+        });
         this.useSharedPool = true;
       } else {
         this.tcpPool = new TcpConnectionPool({
@@ -68,6 +76,10 @@ export class Queue<T = unknown> {
           port: connOpts.port ?? 6789,
           token: connOpts.token,
           poolSize,
+          pingInterval: connOpts.pingInterval,
+          commandTimeout: connOpts.commandTimeout,
+          pipelining: connOpts.pipelining,
+          maxInFlight: connOpts.maxInFlight,
         });
         this.useSharedPool = false;
       }

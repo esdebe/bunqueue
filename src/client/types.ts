@@ -391,6 +391,14 @@ export interface ConnectionOptions {
   token?: string;
   /** Connection pool size for parallel operations (default: 1, set >1 to enable pooling) */
   poolSize?: number;
+  /** Ping interval in ms for health checks (default: 30000, 0 to disable) */
+  pingInterval?: number;
+  /** Command timeout in ms (default: 30000) */
+  commandTimeout?: number;
+  /** Enable TCP pipelining (default: true) */
+  pipelining?: boolean;
+  /** Max commands in flight per connection (default: 100) */
+  maxInFlight?: number;
 }
 
 /** Queue options */

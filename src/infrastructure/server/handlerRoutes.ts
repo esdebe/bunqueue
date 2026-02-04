@@ -67,6 +67,7 @@ import {
   handleJobHeartbeat,
   handleJobHeartbeatBatch,
   handlePing,
+  handleHello,
   handleRegisterWorker,
   handleUnregisterWorker,
   handleListWorkers,
@@ -277,6 +278,8 @@ export function routeMonitoringCommand(
       return handleJobHeartbeatBatch(cmd, ctx, reqId);
     case 'Ping':
       return handlePing(cmd, ctx, reqId);
+    case 'Hello':
+      return handleHello(cmd, ctx, reqId);
     case 'RegisterWorker':
       return handleRegisterWorker(cmd, ctx, reqId);
     case 'UnregisterWorker':

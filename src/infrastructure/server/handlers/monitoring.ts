@@ -11,6 +11,7 @@ import type {
   JobHeartbeatCommand,
   JobHeartbeatBatchCommand,
   PingCommand,
+  HelloCommand,
   RegisterWorkerCommand,
   UnregisterWorkerCommand,
   ListWorkersCommand,
@@ -19,6 +20,7 @@ import type {
   ListWebhooksCommand,
   PrometheusCommand,
 } from '../../../domain/types/command';
+import { VERSION } from '../../../shared/version';
 import type { Response } from '../../../domain/types/response';
 import * as resp from '../../../domain/types/response';
 import type { HandlerContext } from '../types';
@@ -88,6 +90,18 @@ export function handleJobHeartbeatBatch(
 
 export function handlePing(_cmd: PingCommand, _ctx: HandlerContext, reqId?: string): Response {
   return resp.data({ pong: true, time: Date.now() }, reqId);
+}
+
+// ============ Hello (protocol negotiation) ============
+
+/** Current protocol version */
+export const PROTOCOL_VERSION = 2;
+
+/** Supported capabilities */
+export const SUPPORTED_CAPABILITIES: 'pipelining'[] = ['pipelining'];
+
+export function handleHello(_cmd: HelloCommand, _ctx: HandlerContext, reqId?: string): Response {
+  return resp.hello(PROTOCOL_VERSION, SUPPORTED_CAPABILITIES, 'bunqueue', VERSION, reqId);
 }
 
 // ============ Worker Management ============

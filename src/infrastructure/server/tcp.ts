@@ -1,6 +1,7 @@
 /**
  * TCP Server
  * Handles TCP connections with msgpack binary protocol
+ * Supports pipelining with parallel command processing
  */
 
 import type { Socket, TCPSocketListener } from 'bun';
@@ -18,6 +19,10 @@ import { uuid } from '../../shared/hash';
 import { tcpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
 import { pack, unpack } from 'msgpackr';
+import { Semaphore, withSemaphore } from '../../shared/semaphore';
+
+/** Max concurrent commands per connection for pipelining */
+const MAX_CONCURRENT_PER_CONNECTION = 50;
 
 /**
  * Release client jobs with retry logic and exponential backoff.
@@ -67,6 +72,8 @@ interface ConnectionData {
   state: ConnectionState;
   frameParser: FrameParser;
   ctx: HandlerContext;
+  /** Semaphore for limiting concurrent command processing (pipelining) */
+  semaphore: Semaphore;
 }
 
 /** Serialize response to framed msgpack */
@@ -101,6 +108,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         state,
         frameParser: new FrameParser(),
         ctx,
+        semaphore: new Semaphore(MAX_CONCURRENT_PER_CONNECTION),
       };
 
       connections.set(clientId, socket);
@@ -108,7 +116,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     },
 
     async data(socket: Socket<ConnectionData>, data: Buffer) {
-      const { frameParser, ctx, state } = socket.data;
+      const { frameParser, ctx, state, semaphore } = socket.data;
       const rateLimiter = getRateLimiter();
 
       // Check rate limit
@@ -138,28 +146,36 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         throw err;
       }
 
-      for (const frame of frames) {
+      // Process frames in parallel for pipelining support
+      // Each command is processed with semaphore-controlled concurrency
+      const processFrame = async (frame: Uint8Array): Promise<void> => {
         let cmd: Command;
         try {
           cmd = unpack(frame) as Command;
         } catch {
           socket.write(errorResponse('Invalid command format'));
-          continue;
+          return;
         }
 
         if (!cmd?.cmd) {
           socket.write(errorResponse('Invalid command'));
-          continue;
+          return;
         }
 
-        try {
-          const response = await handleCommand(cmd, ctx);
-          socket.write(serializeResponse(response));
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          socket.write(errorResponse(message, cmd.reqId));
-        }
-      }
+        // Process with concurrency limit
+        await withSemaphore(semaphore, async () => {
+          try {
+            const response = await handleCommand(cmd, ctx);
+            socket.write(serializeResponse(response));
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            socket.write(errorResponse(message, cmd.reqId));
+          }
+        });
+      };
+
+      // Process all frames in parallel (client uses reqId to match responses)
+      await Promise.all(frames.map(processFrame));
     },
 
     close(socket: Socket<ConnectionData>) {

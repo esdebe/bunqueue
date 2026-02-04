@@ -175,6 +175,22 @@ export interface ErrorResponse extends BaseResponse {
   readonly error: string;
 }
 
+/** Protocol capability */
+export type ProtocolCapability = 'pipelining';
+
+/** Hello response for protocol negotiation */
+export interface HelloResponse extends BaseResponse {
+  readonly ok: true;
+  /** Server protocol version */
+  readonly protocolVersion: number;
+  /** Supported capabilities */
+  readonly capabilities: ProtocolCapability[];
+  /** Server name */
+  readonly server: string;
+  /** Server version */
+  readonly version: string;
+}
+
 /** Union of all responses */
 export type Response =
   | OkResponse
@@ -194,6 +210,7 @@ export type Response =
   | StatsResponse
   | MetricsResponse
   | CronListResponse
+  | HelloResponse
   | ErrorResponse
   | DataResponse<unknown>;
 
@@ -261,6 +278,23 @@ export function error(message: string, reqId?: string): ErrorResponse {
   return {
     ok: false,
     error: message,
+    reqId,
+  };
+}
+
+export function hello(
+  protocolVersion: number,
+  capabilities: ProtocolCapability[],
+  server: string,
+  version: string,
+  reqId?: string
+): HelloResponse {
+  return {
+    ok: true,
+    protocolVersion,
+    capabilities,
+    server,
+    version,
     reqId,
   };
 }

@@ -13,6 +13,12 @@ All notable changes to bunqueue are documented here.
 ## [2.1.0] - 2026-02-04
 
 ### Performance
+- **TCP Pipelining** - Major throughput improvement for TCP client operations:
+  - Client-side: Multiple commands in flight per connection (up to 100 by default)
+  - Server-side: Parallel command processing with `Promise.all()`
+  - reqId-based response matching for correct command-response pairing
+  - **125,000 ops/sec** in pipelining benchmarks (vs ~20,000 before)
+  - Configurable via `pipelining: boolean` and `maxInFlight: number` options
 - **SQLite indexes for high-throughput operations** - Added 4 new indexes for 30-50% faster queries:
   - `idx_jobs_state_started`: Stall detection now O(log n) instead of O(n) table scan
   - `idx_jobs_group_id`: Fast lookup for group operations
@@ -20,12 +26,24 @@ All notable changes to bunqueue are documented here.
   - `idx_dlq_entered_at`: DLQ expiration cleanup now O(log n)
 - **Date.now() caching in pull loop** - Reduced syscalls by caching timestamp per iteration (+3-5% throughput)
 
+### Added
+- **Hello command** for protocol version negotiation (`cmd: 'Hello'`)
+- **Protocol version 2** with pipelining capability support
+- **Semaphore utility** for server-side concurrency limiting (`src/shared/semaphore.ts`)
+- Comprehensive pipelining test suites:
+  - `test/protocol-reqid.test.ts` - 7 tests for reqId handling
+  - `test/client-pipelining.test.ts` - 7 tests for client pipelining
+  - `test/server-pipelining.test.ts` - 7 tests for server parallel processing
+  - `test/backward-compat.test.ts` - 10 tests for backward compatibility
+
 ### Fixed
 - **SQLITE_BUSY under high concurrency** - Added `PRAGMA busy_timeout = 5000` to wait for locks instead of failing immediately
 - **"Database has closed" errors during shutdown** - Added `stopped` flag to WriteBuffer to prevent flush attempts after stop()
 
 ### Changed
 - Schema version bumped to 5 (auto-migrates existing databases)
+- TCP client now includes `reqId` in all commands for response matching
+- Server processes multiple frames in parallel (max 50 concurrent per connection)
 
 ## [2.0.9] - 2026-02-03
 

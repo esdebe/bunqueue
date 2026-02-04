@@ -386,6 +386,17 @@ export interface AuthCommand extends BaseCommand {
   readonly token: string;
 }
 
+// ============ Protocol Negotiation ============
+
+/** Hello command for protocol version negotiation */
+export interface HelloCommand extends BaseCommand {
+  readonly cmd: 'Hello';
+  /** Client protocol version */
+  readonly protocolVersion: number;
+  /** Supported capabilities */
+  readonly capabilities?: 'pipelining'[];
+}
+
 /** Union of all commands */
 export type Command =
   | PushCommand
@@ -445,7 +456,8 @@ export type Command =
   | StatsCommand
   | MetricsCommand
   | PrometheusCommand
-  | AuthCommand;
+  | AuthCommand
+  | HelloCommand;
 
 /** Extract command type */
 export type CommandType = Command['cmd'];

@@ -1,6 +1,7 @@
 /**
  * TCP Client
  * Production-ready TCP client with auto-reconnection (msgpack binary protocol)
+ * Supports pipelining via reqId-based response matching for high throughput
  */
 
 import { EventEmitter } from 'events';
@@ -14,6 +15,7 @@ import { FrameParser } from '../../infrastructure/server/protocol';
 
 /**
  * TCP Client - manages connection to bunqueue server
+ * Supports pipelining for high-throughput operations
  */
 export class TcpClient extends EventEmitter {
   private socket: SocketWrapper | null = null;
@@ -23,6 +25,8 @@ export class TcpClient extends EventEmitter {
   private readonly health: HealthTracker;
   private readonly reconnect: ReconnectManager;
   private readonly commands: CommandQueue;
+  /** Request ID counter for pipelining support */
+  private reqIdCounter = 0;
 
   constructor(options: Partial<ConnectionOptions> = {}) {
     super();
@@ -63,7 +67,7 @@ export class TcpClient extends EventEmitter {
       this.health.startPing(async () => {
         await this.ping();
       });
-      this.processNextCommand();
+      this.processQueue();
     } catch (err) {
       this.connecting = false;
       if (this.reconnect.canReconnect()) {
@@ -117,27 +121,54 @@ export class TcpClient extends EventEmitter {
   }
 
   private async authenticate(): Promise<void> {
-    const response = await this.sendInternal({ cmd: 'Auth', token: this.options.token });
+    const response = await this.sendDirect({ cmd: 'Auth', token: this.options.token });
     if (!response.ok) {
       throw new Error('Authentication failed');
     }
   }
 
+  /**
+   * Handle incoming data frame
+   * Uses reqId-based matching for pipelining support
+   */
   private handleData(frame: Uint8Array): void {
-    const current = this.commands.getCurrentCommand();
-    if (!current) return;
-
     try {
       const response = unpack(frame) as Record<string, unknown>;
-      clearTimeout(current.timeout);
-      current.resolve(response);
-      this.commands.setCurrentCommand(null);
-      this.processNextCommand();
+      const reqId = response.reqId as string | undefined;
+
+      // Try pipelining mode first (reqId-based matching)
+      if (reqId) {
+        const pending = this.commands.removeByReqId(reqId);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          pending.resolve(response);
+          // Process more queued commands if we have room
+          this.processQueue();
+          return;
+        }
+      }
+
+      // Fall back to legacy mode (current command)
+      const current = this.commands.getCurrentCommand();
+      if (current) {
+        clearTimeout(current.timeout);
+        current.resolve(response);
+        this.commands.setCurrentCommand(null);
+        this.processQueue();
+        return;
+      }
+
+      // Unknown response - log warning
+      this.emit('warning', { type: 'unknown_response', reqId });
     } catch {
-      clearTimeout(current.timeout);
-      current.reject(new Error('Invalid response from server'));
-      this.commands.setCurrentCommand(null);
-      this.processNextCommand();
+      // Invalid response - reject current command if any
+      const current = this.commands.getCurrentCommand();
+      if (current) {
+        clearTimeout(current.timeout);
+        current.reject(new Error('Invalid response from server'));
+        this.commands.setCurrentCommand(null);
+        this.processQueue();
+      }
     }
   }
 
@@ -147,8 +178,9 @@ export class TcpClient extends EventEmitter {
     this.connecting = false;
     this.socket = null;
     this.health.stopPing();
-    // Reject current in-flight command so it doesn't hang forever
-    this.commands.clearCurrent(new Error('Connection lost'));
+
+    // Reject all in-flight commands (pipelining + legacy)
+    this.commands.rejectAll(new Error('Connection lost'));
 
     if (wasConnected) {
       this.emit('disconnected');
@@ -204,104 +236,141 @@ export class TcpClient extends EventEmitter {
     return this.health.getHealth(this.getState());
   }
 
-  private async sendInternal(command: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (!this.socket) throw new Error('Not connected');
+  /** Generate unique request ID for pipelining */
+  private generateReqId(): string {
+    // Use modulo to prevent overflow, wrap at 2^31
+    this.reqIdCounter = (this.reqIdCounter + 1) & 0x7fffffff;
+    return String(this.reqIdCounter);
+  }
+
+  /**
+   * Send command directly (bypass queue)
+   * Used for authentication and critical commands
+   */
+  private sendDirect(command: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.socket) return Promise.reject(new Error('Not connected'));
 
     const startTime = Date.now();
     this.health.recordCommandSent();
 
+    const reqId = this.generateReqId();
+    const commandWithReqId = { ...command, reqId };
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        const current = this.commands.getCurrentCommand();
-        if (current?.command === command) {
-          this.commands.setCurrentCommand(null);
+        // Try to remove from in-flight
+        const removed = this.commands.removeByReqId(reqId);
+        if (removed) {
           this.health.recordError();
           reject(new Error('Command timeout'));
-          this.processNextCommand();
         }
       }, this.options.commandTimeout);
 
-      this.commands.setCurrentCommand({
+      const pending = {
         id: 0,
-        command,
-        resolve: (result) => {
+        reqId,
+        command: commandWithReqId,
+        resolve: (result: Record<string, unknown>) => {
           this.health.recordSuccess(Date.now() - startTime);
           resolve(result);
         },
-        reject: (err) => {
+        reject: (err: Error) => {
           this.health.recordError();
           reject(err);
         },
         timeout,
-      });
+      };
 
-      this.socket?.write(FrameParser.frame(pack(command)));
+      // Add to in-flight tracking
+      this.commands.addInFlight(pending);
+
+      // Send immediately
+      this.socket?.write(FrameParser.frame(pack(commandWithReqId)));
     });
   }
 
-  private processNextCommand(): void {
-    if (this.commands.getCurrentCommand() || !this.connected) return;
+  /**
+   * Process queued commands
+   * Sends multiple commands up to maxInFlight (pipelining)
+   */
+  private processQueue(): void {
+    if (!this.connected || !this.socket) return;
 
-    const next = this.commands.dequeue();
-    if (!next || !this.socket) return;
+    // Send commands while under the maxInFlight limit
+    while (this.commands.hasPending() && this.commands.canSendMore(this.options.maxInFlight)) {
+      const next = this.commands.dequeue();
+      if (!next) break;
 
-    // Clear the old timeout (it checked pendingCommands which no longer has this command)
-    clearTimeout(next.timeout);
+      // Clear old timeout and create new one
+      clearTimeout(next.timeout);
+      const newTimeout = setTimeout(() => {
+        const removed = this.commands.removeByReqId(next.reqId);
+        if (removed) {
+          this.health.recordError();
+          next.reject(new Error('Command timeout'));
+        }
+      }, this.options.commandTimeout);
 
-    // Create a new timeout for the current command
-    const newTimeout = setTimeout(() => {
-      const current = this.commands.getCurrentCommand();
-      if (current === next) {
-        this.commands.setCurrentCommand(null);
-        this.health.recordError();
-        next.reject(new Error('Command timeout'));
-        this.processNextCommand();
-      }
-    }, this.options.commandTimeout);
+      next.timeout = newTimeout;
 
-    // Update the command with the new timeout and set as current
-    next.timeout = newTimeout;
-    this.commands.setCurrentCommand(next);
-    this.socket.write(FrameParser.frame(pack(next.command)));
+      // Add to in-flight tracking and send
+      this.commands.addInFlight(next);
+      this.socket.write(FrameParser.frame(pack(next.command)));
+    }
   }
 
-  /** Send command and wait for response */
+  /**
+   * Send command and wait for response
+   * Uses pipelining for high throughput
+   */
   async send(command: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (this.connected && !this.commands.hasPending() && !this.commands.getCurrentCommand()) {
-      return this.sendInternal(command);
-    }
-
     const startTime = Date.now();
     this.health.recordCommandSent();
+
+    const reqId = this.generateReqId();
+    const commandWithReqId = { ...command, reqId };
 
     return new Promise((resolve, reject) => {
       const id = this.commands.nextId();
 
       const timeout = setTimeout(() => {
+        // Try to remove from queue first
         if (this.commands.remove(id)) {
+          this.health.recordError();
+          reject(new Error('Command timeout'));
+          return;
+        }
+        // Try to remove from in-flight
+        const removed = this.commands.removeByReqId(reqId);
+        if (removed) {
           this.health.recordError();
           reject(new Error('Command timeout'));
         }
       }, this.options.commandTimeout);
 
-      this.commands.enqueue({
+      const pending = {
         id,
-        command,
-        resolve: (result) => {
+        reqId,
+        command: commandWithReqId,
+        resolve: (result: Record<string, unknown>) => {
           this.health.recordSuccess(Date.now() - startTime);
           resolve(result);
         },
-        reject: (err) => {
+        reject: (err: Error) => {
           this.health.recordError();
           reject(err);
         },
         timeout,
-      });
+      };
 
+      // Add to queue
+      this.commands.enqueue(pending);
+
+      // Connect if needed, then process queue
       if (!this.connected && !this.connecting) {
         this.connect().catch(() => {});
       } else if (this.connected) {
-        this.processNextCommand();
+        this.processQueue();
       }
     });
   }
@@ -330,5 +399,10 @@ export class TcpClient extends EventEmitter {
     if (this.connected) return 'connected';
     if (this.connecting) return 'connecting';
     return 'disconnected';
+  }
+
+  /** Get number of in-flight commands (for monitoring) */
+  getInFlightCount(): number {
+    return this.commands.getInFlightCount();
   }
 }

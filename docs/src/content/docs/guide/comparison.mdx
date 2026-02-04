@@ -1,31 +1,31 @@
 ---
 title: bunqueue vs BullMQ
-description: Comprehensive performance comparison between bunqueue and BullMQ
+description: Fair performance comparison between bunqueue (TCP mode) and BullMQ (Redis)
 ---
 
 import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
 
-Real benchmark results comparing bunqueue with BullMQ on identical workloads.
+Real benchmark results comparing bunqueue TCP server against BullMQ with Redis on identical workloads.
 
-<Aside type="caution">
-These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may vary based on hardware, Redis configuration, and workload characteristics.
+<Aside type="note">
+This is a **fair comparison**: both systems use network connections (bunqueue TCP vs Redis TCP). For embedded mode benchmarks (no network), bunqueue is significantly faster.
 </Aside>
 
 ## Summary
 
 <CardGrid>
-  <Card title="36x Faster Push" icon="rocket">
-    **341,362 vs 9,488 ops/sec**
+  <Card title="1.3x Faster Push" icon="rocket">
+    **54,140 vs 43,261 ops/sec**
 
     Single job push operations
   </Card>
-  <Card title="28x Faster Bulk" icon="star">
-    **1,023,376 vs 36,656 ops/sec**
+  <Card title="3.2x Faster Bulk" icon="star">
+    **139,200 vs 44,000 ops/sec**
 
     Bulk push (100 jobs per batch)
   </Card>
-  <Card title="8x Faster Processing" icon="approve-check">
-    **131,923 vs 15,947 ops/sec**
+  <Card title="1.7x Faster Processing" icon="approve-check">
+    **33,052 vs 19,225 ops/sec**
 
     Job processing throughput
   </Card>
@@ -42,7 +42,7 @@ These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
   <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push','Bulk Push','Process'],datasets:[{label:'bunqueue',data:[341362,1023376,131923],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[9488,36656,15947],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Throughput Comparison (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{type:'logarithmic',title:{display:true,text:'Operations/sec (log scale)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=400&backgroundColor=white"
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push','Bulk Push','Process'],datasets:[{label:'bunqueue',data:[54140,139200,33052],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[43261,44000,19225],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Throughput Comparison (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=400&backgroundColor=white"
     alt="Throughput comparison chart"
     style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
   />
@@ -50,9 +50,9 @@ These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may
 
 | Operation | bunqueue | BullMQ | Speedup |
 |-----------|----------|--------|---------|
-| **Push** | 341,362 ops/sec | 9,488 ops/sec | **36x faster** |
-| **Bulk Push** | 1,023,376 ops/sec | 36,656 ops/sec | **28x faster** |
-| **Process** | 131,923 ops/sec | 15,947 ops/sec | **8.3x faster** |
+| **Push** | 54,140 ops/sec | 43,261 ops/sec | **1.3x faster** |
+| **Bulk Push** | 139,200 ops/sec | 44,000 ops/sec | **3.2x faster** |
+| **Process** | 33,052 ops/sec | 19,225 ops/sec | **1.7x faster** |
 
 ---
 
@@ -60,17 +60,15 @@ These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
   <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push p99','Bulk p99','Process p99'],datasets:[{label:'bunqueue',data:[0.01,0.55,56.8],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[0.54,6.77,614.49],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'p99 Latency Comparison (ms)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{type:'logarithmic',title:{display:true,text:'Latency in ms (log scale)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=400&backgroundColor=white"
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Bulk Push p99'],datasets:[{label:'bunqueue',data:[3.26],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[4.53],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'p99 Latency Comparison (ms)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{title:{display:true,text:'Latency in ms'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=350&backgroundColor=white"
     alt="Latency comparison chart"
-    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
   />
 </div>
 
 | Operation | bunqueue p99 | BullMQ p99 | Improvement |
 |-----------|--------------|------------|-------------|
-| **Push** | 0.01ms | 0.54ms | **54x lower** |
-| **Bulk Push** | 0.55ms | 6.77ms | **12x lower** |
-| **Process** | 56.8ms | 614.5ms | **11x lower** |
+| **Bulk Push** | 3.26ms | 4.53ms | **1.4x lower** |
 
 ---
 
@@ -78,7 +76,7 @@ These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
   <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push','Bulk Push','Process'],datasets:[{label:'bunqueue speedup vs BullMQ',data:[36,28,8.3],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(34,197,94,0.85)'],borderRadius:8}]},options:{indexAxis:'y',plugins:{title:{display:true,text:'How Many Times Faster is bunqueue?',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{x:{title:{display:true,text:'Speedup (x times faster)'},grid:{color:'rgba(0,0,0,0.1)'},beginAtZero:true},y:{grid:{display:false}}}}}&width=600&height=300&backgroundColor=white"
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Bulk Push','Process','Push'],datasets:[{label:'bunqueue speedup vs BullMQ',data:[3.2,1.7,1.3],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(34,197,94,0.85)'],borderRadius:8}]},options:{indexAxis:'y',plugins:{title:{display:true,text:'How Many Times Faster is bunqueue?',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{x:{title:{display:true,text:'Speedup (x times faster)'},grid:{color:'rgba(0,0,0,0.1)'},beginAtZero:true},y:{grid:{display:false}}}}}&width=600&height=250&backgroundColor=white"
     alt="Speedup comparison chart"
     style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
   />
@@ -86,96 +84,69 @@ These benchmarks were run on a Mac Studio M1 Max with 32GB RAM. Your results may
 
 ---
 
-## Real-World Scenarios
+## How the Benchmark Works
 
-Performance comparison on typical production workloads.
+The benchmark performs three tests for both bunqueue and BullMQ:
 
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Email Queue','Webhook Burst','Image Processing','Order Processing'],datasets:[{label:'bunqueue',data:[324462,646964,190491,387220],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[11658,44648,8740,13281],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Real-World Scenarios (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{type:'logarithmic',title:{display:true,text:'Operations/sec (log scale)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=700&height=400&backgroundColor=white"
-    alt="Real-world scenarios comparison chart"
-    style={{ maxWidth: '700px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
+### 1. Push Test
+Pushes 10,000 jobs using 32 parallel connections to measure raw push throughput.
 
-| Scenario | bunqueue | BullMQ | Speedup |
-|----------|----------|--------|---------|
-| **Email Queue** (5k emails, mixed priorities) | 324,462 ops/sec | 11,658 ops/sec | **27.8x faster** |
-| **Webhook Burst** (3k webhooks with retries) | 646,964 ops/sec | 44,648 ops/sec | **14.5x faster** |
-| **Image Processing** (1k large payloads) | 190,491 ops/sec | 8,740 ops/sec | **21.8x faster** |
-| **Order Processing** (5k orders, priorities) | 387,220 ops/sec | 13,281 ops/sec | **29.2x faster** |
+```typescript
+// 32 concurrent clients pushing jobs
+await benchmarkParallel('Push', async () => {
+  await queue.add('job', PAYLOAD);
+}, 10000, 32);
+```
 
----
+### 2. Bulk Push Test
+Pushes 100 jobs per batch, 1,000 times (100,000 total jobs) to measure bulk insertion performance.
 
-## Niche Scenarios
+```typescript
+// Batch of 100 jobs per operation
+const jobs = Array.from({ length: 100 }, (_, i) => ({
+  name: 'bulk-job',
+  data: { ...PAYLOAD, i },
+}));
+await queue.addBulk(jobs);
+```
 
-Edge cases and stress tests that push the limits.
+### 3. Process Test
+Measures end-to-end throughput: pushing 10,000 jobs and processing them with 50 concurrent workers.
 
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Massive Delayed','Priority Stress','IoT (50k tiny)','Deduplication','High Concurrency'],datasets:[{label:'bunqueue',data:[950890,419013,1244372,362328,189236],backgroundColor:'rgba(236,72,153,0.85)'},{label:'BullMQ',data:[47914,14382,52268,14438,27379],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Niche Scenarios (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{type:'logarithmic',title:{display:true,text:'Operations/sec (log scale)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=700&height=400&backgroundColor=white"
-    alt="Niche scenarios comparison chart"
-    style={{ maxWidth: '700px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
+```typescript
+// Push jobs in parallel batches
+for (let i = 0; i < 10000; i += 1000) {
+  await Promise.all(batch.map(() => queue.add('job', PAYLOAD)));
+}
 
-| Scenario | bunqueue | BullMQ | Speedup |
-|----------|----------|--------|---------|
-| **Massive Delayed** (10k scheduled jobs) | 950,890 ops/sec | 47,914 ops/sec | **19.8x faster** |
-| **Priority Stress** (100 priority levels) | 419,013 ops/sec | 14,382 ops/sec | **29.1x faster** |
-| **IoT Tiny Payloads** (50k minimal jobs) | 1,244,372 ops/sec | 52,268 ops/sec | **23.8x faster** |
-| **Deduplication** (5k jobs, 1k unique keys) | 362,328 ops/sec | 14,438 ops/sec | **25.1x faster** |
-| **High Concurrency** (50 workers) | 189,236 ops/sec | 27,379 ops/sec | **6.9x faster** |
+// Wait for all to be processed
+while (processed < 10000) {
+  await new Promise(r => setTimeout(r, 10));
+}
+```
 
 <Aside type="tip">
-bunqueue excels in IoT and high-throughput scenarios, achieving over **1.2 million ops/sec** for tiny payloads.
+Both bunqueue and BullMQ use **identical test conditions**: same payload size (100 bytes), same batch sizes, same concurrency (50 workers), and same parallel push strategy.
 </Aside>
-
----
-
-## Scenario Speedups
-
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Order Processing','Priority Stress','Email Queue','Deduplication','IoT Tiny','Image Processing','Massive Delayed','Webhook Burst','High Concurrency'],datasets:[{label:'bunqueue speedup vs BullMQ',data:[29.2,29.1,27.8,25.1,23.8,21.8,19.8,14.5,6.9],backgroundColor:['rgba(236,72,153,0.85)','rgba(219,39,119,0.85)','rgba(190,24,93,0.85)','rgba(168,85,247,0.85)','rgba(139,92,246,0.85)','rgba(99,102,241,0.85)','rgba(59,130,246,0.85)','rgba(14,165,233,0.85)','rgba(34,197,94,0.85)'],borderRadius:8}]},options:{indexAxis:'y',plugins:{title:{display:true,text:'Speedup by Scenario (x times faster)',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{x:{title:{display:true,text:'Speedup (x times faster)'},grid:{color:'rgba(0,0,0,0.1)'},beginAtZero:true,max:35},y:{grid:{display:false}}}}}&width=700&height=400&backgroundColor=white"
-    alt="Scenario speedup comparison chart"
-    style={{ maxWidth: '700px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
 
 ---
 
 ## Why is bunqueue Faster?
 
 <CardGrid>
-  <Card title="No Network Overhead" icon="rocket">
-    bunqueue uses embedded SQLite with direct FFI bindings. BullMQ requires network round-trips to Redis.
+  <Card title="TCP Pipelining" icon="rocket">
+    bunqueue's TCP protocol supports **pipelining** - multiple commands in flight per connection, with reqId-based response matching.
   </Card>
   <Card title="Optimized Data Structures" icon="list-format">
     Skip lists, MinHeap, and LRU cache provide O(log n) or O(1) operations for common tasks.
   </Card>
   <Card title="Batch Transactions" icon="document">
-    SQLite transactions batch multiple operations into single disk writes.
+    SQLite transactions batch multiple operations into single disk writes with WAL mode.
   </Card>
   <Card title="Auto-Scaled Sharding" icon="setting">
     Lock contention is minimized by distributing work across N independent shards (auto-detected from CPU cores, max 64).
   </Card>
 </CardGrid>
-
----
-
-## Memory Comparison
-
-| Metric | bunqueue | BullMQ |
-|--------|----------|--------|
-| **Base Memory** | ~50 MB | ~80 MB + Redis |
-| **Per Job** | ~100 bytes | ~500 bytes |
-| **10K Jobs** | ~65 MB | ~120 MB |
-| **External Services** | None | Redis server |
-
-<Aside type="tip">
-bunqueue has zero external dependencies. BullMQ requires a running Redis server which adds memory overhead and operational complexity.
-</Aside>
 
 ---
 
@@ -194,12 +165,16 @@ bunqueue has zero external dependencies. BullMQ requires a running Redis server 
 | **Horizontal Scaling** | ⚠️ Single process | ✅ Multi-process |
 | **External Dependencies** | ✅ None | ❌ Redis required |
 | **S3 Backup** | ✅ Built-in | ❌ Manual |
+| **TCP Pipelining** | ✅ Built-in | ✅ Via Redis |
 
 ---
 
-## Run Your Own Benchmarks
+## Run the Benchmark Yourself
+
+The benchmark source code is available at [`bench/comparison/run.ts`](https://github.com/egeominotti/bunqueue/blob/main/bench/comparison/run.ts).
 
 ```bash
+# Clone the repository
 git clone https://github.com/egeominotti/bunqueue.git
 cd bunqueue
 bun install
@@ -207,11 +182,51 @@ bun install
 # Start Redis (required for BullMQ)
 redis-server --daemonize yes
 
-# Run core benchmark (push, bulk, process)
-bun run bench/comparison/run.ts
+# Start bunqueue server
+bun run start &
 
-# Run scenario benchmarks (real-world & niche)
-bun run bench/comparison/scenarios.ts
+# Run the benchmark
+bun run bench/comparison/run.ts
+```
+
+### Benchmark Output
+
+```
+═══════════════════════════════════════════════════════════════
+           bunqueue vs BullMQ Comparison Benchmark
+═══════════════════════════════════════════════════════════════
+
+Iterations: 10,000
+Bulk size: 100
+Concurrency: 50
+Payload: 111 bytes
+
+✓ Redis connected
+✓ bunqueue server connected (port 6789)
+
+📦 bunqueue (TCP mode) benchmarks...
+
+  Push: 54,140 ops/sec
+  Bulk Push: 139,200 ops/sec (p99: 3.26ms)
+  Process: 33,052 ops/sec
+
+🐂 BullMQ (Redis) benchmarks...
+
+  Push: 43,261 ops/sec
+  Bulk Push: 44,000 ops/sec (p99: 4.53ms)
+  Process: 19,225 ops/sec
+
+═══════════════════════════════════════════════════════════════
+                         RESULTS
+═══════════════════════════════════════════════════════════════
+
+┌─────────────┬──────────────────┬──────────────────┬──────────┐
+│ Operation   │ bunqueue         │ BullMQ           │ Speedup  │
+├─────────────┼──────────────────┼──────────────────┼──────────┤
+│ Push        │ 54,140 ops/s     │ 43,261 ops/s     │ 1.3x     │
+│ Bulk Push   │ 139,200 ops/s    │ 44,000 ops/s     │ 3.2x     │
+│ Process     │ 33,052 ops/s     │ 19,225 ops/s     │ 1.7x     │
+└─────────────┴──────────────────┴──────────────────┴──────────┘
 ```
 
 ---
@@ -224,16 +239,17 @@ bun run bench/comparison/scenarios.ts
 - SSD storage
 
 **Software:**
-- macOS 26.2 (Tahoe)
+- macOS Tahoe
 - Bun 1.3.8
-- Node.js 24.3.0
 - Redis 7.x (localhost)
 
 **Configuration:**
 - 10,000 iterations per test
 - Bulk size: 100 jobs
-- Concurrency: 10 workers
-- Payload: 100 bytes per job
+- Concurrency: 50 workers
+- Payload: ~100 bytes per job
+- TCP pipelining enabled
+- Connection pool: 32 connections
 
 ---
 

@@ -27,6 +27,10 @@ export interface ConnectionOptions {
   pingInterval?: number;
   /** Max consecutive ping failures before forcing reconnect (default: 3) */
   maxPingFailures?: number;
+  /** Enable pipelining - multiple commands in flight (default: true) */
+  pipelining?: boolean;
+  /** Max commands in flight when pipelining (default: 100) */
+  maxInFlight?: number;
 }
 
 /** Connection health metrics */
@@ -64,11 +68,15 @@ export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
   autoReconnect: true,
   pingInterval: 30000,
   maxPingFailures: 3,
+  pipelining: true,
+  maxInFlight: 100,
 };
 
 /** Pending command awaiting response */
 export interface PendingCommand {
   id: number;
+  /** Request ID for response matching (pipelining support) */
+  reqId: string;
   command: Record<string, unknown>;
   resolve: (value: Record<string, unknown>) => void;
   reject: (error: Error) => void;

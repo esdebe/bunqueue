@@ -103,6 +103,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         port: connOpts.port ?? 6789,
         token: connOpts.token,
         poolSize,
+        pingInterval: connOpts.pingInterval,
+        commandTimeout: connOpts.commandTimeout,
+        pipelining: connOpts.pipelining,
+        maxInFlight: connOpts.maxInFlight,
       });
       this.tcp = this.tcpPool;
       this.ackBatcher.setTcp(this.tcp);
@@ -635,8 +639,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
           // Register ALL pulled jobs for heartbeat tracking immediately
           this.registerPulledJobs(items);
           item = items[0];
-          this.pendingJobs = items;
-          this.pendingJobsHead = 1;
+          // IMPORTANT: Only set pendingJobs if buffer is empty to avoid race condition
+          // where concurrent tryProcess() calls could overwrite each other's buffers
+          if (this.pendingJobsHead >= this.pendingJobs.length) {
+            this.pendingJobs = items;
+            this.pendingJobsHead = 1;
+          } else {
+            // Buffer still has items - append new items instead of replacing
+            this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead).concat(items.slice(1));
+            this.pendingJobsHead = 0;
+          }
         }
       }
 

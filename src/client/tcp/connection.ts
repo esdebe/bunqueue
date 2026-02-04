@@ -126,6 +126,7 @@ export async function createConnection(
 
 /**
  * Command queue for managing pending commands
+ * Supports both legacy single-command mode and pipelining mode with reqId tracking
  */
 export class CommandQueue {
   private readonly pendingCommands: Map<number, PendingCommand> = new Map();
@@ -133,19 +134,51 @@ export class CommandQueue {
   private currentCommand: PendingCommand | null = null;
   private commandIdCounter = 0;
 
-  /** Get current command being processed */
+  /** In-flight commands tracked by reqId for pipelining */
+  private readonly inFlightByReqId: Map<string, PendingCommand> = new Map();
+
+  /** Get current command being processed (legacy mode) */
   getCurrentCommand(): PendingCommand | null {
     return this.currentCommand;
   }
 
-  /** Set current command */
+  /** Set current command (legacy mode) */
   setCurrentCommand(cmd: PendingCommand | null): void {
     this.currentCommand = cmd;
   }
 
-  /** Check if has pending commands */
+  /** Check if has pending commands in queue */
   hasPending(): boolean {
     return this.pendingCommands.size > 0;
+  }
+
+  /** Get number of in-flight commands */
+  getInFlightCount(): number {
+    return this.inFlightByReqId.size;
+  }
+
+  /** Check if can send more commands (pipelining backpressure) */
+  canSendMore(maxInFlight: number): boolean {
+    return this.inFlightByReqId.size < maxInFlight;
+  }
+
+  /** Add command to in-flight tracking by reqId */
+  addInFlight(command: PendingCommand): void {
+    this.inFlightByReqId.set(command.reqId, command);
+  }
+
+  /** Get in-flight command by reqId */
+  getByReqId(reqId: string): PendingCommand | undefined {
+    return this.inFlightByReqId.get(reqId);
+  }
+
+  /** Remove in-flight command by reqId */
+  removeByReqId(reqId: string): PendingCommand | undefined {
+    const cmd = this.inFlightByReqId.get(reqId);
+    if (cmd) {
+      this.inFlightByReqId.delete(reqId);
+    }
+    return cmd;
   }
 
   /** Add command to queue */
@@ -183,8 +216,9 @@ export class CommandQueue {
     return true;
   }
 
-  /** Reject all pending commands */
+  /** Reject all pending and in-flight commands */
   rejectAll(error: Error): void {
+    // Reject queued commands
     for (const cmd of this.pendingCommands.values()) {
       clearTimeout(cmd.timeout);
       cmd.reject(error);
@@ -192,6 +226,14 @@ export class CommandQueue {
     this.pendingCommands.clear();
     this.pendingQueue = [];
 
+    // Reject in-flight commands (pipelining)
+    for (const cmd of this.inFlightByReqId.values()) {
+      clearTimeout(cmd.timeout);
+      cmd.reject(error);
+    }
+    this.inFlightByReqId.clear();
+
+    // Reject current command (legacy)
     if (this.currentCommand) {
       clearTimeout(this.currentCommand.timeout);
       this.currentCommand.reject(error);
@@ -199,7 +241,7 @@ export class CommandQueue {
     }
   }
 
-  /** Clear current command with optional rejection */
+  /** Clear current command with optional rejection (legacy mode) */
   clearCurrent(error?: Error): void {
     if (this.currentCommand) {
       clearTimeout(this.currentCommand.timeout);

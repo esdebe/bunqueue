@@ -40,6 +40,8 @@ export class TcpConnectionPool {
       autoReconnect: options.autoReconnect ?? true,
       pingInterval: options.pingInterval ?? 30000,
       maxPingFailures: options.maxPingFailures ?? 3,
+      pipelining: options.pipelining ?? true,
+      maxInFlight: options.maxInFlight ?? 100,
     };
 
     // Create pool of connections

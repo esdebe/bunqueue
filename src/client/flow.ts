@@ -70,7 +70,15 @@ export class FlowProducer {
       const poolSize = connOpts.poolSize ?? 4;
 
       if (poolSize === 4 && !connOpts.token) {
-        this.tcp = getSharedPool({ host: connOpts.host, port: connOpts.port, poolSize });
+        this.tcp = getSharedPool({
+          host: connOpts.host,
+          port: connOpts.port,
+          poolSize,
+          pingInterval: connOpts.pingInterval,
+          commandTimeout: connOpts.commandTimeout,
+          pipelining: connOpts.pipelining,
+          maxInFlight: connOpts.maxInFlight,
+        });
         this.useSharedPool = true;
       } else {
         this.tcp = new TcpConnectionPool({
@@ -78,6 +86,10 @@ export class FlowProducer {
           port: connOpts.port ?? 6789,
           token: connOpts.token,
           poolSize,
+          pingInterval: connOpts.pingInterval,
+          commandTimeout: connOpts.commandTimeout,
+          pipelining: connOpts.pipelining,
+          maxInFlight: connOpts.maxInFlight,
         });
         this.useSharedPool = false;
       }
