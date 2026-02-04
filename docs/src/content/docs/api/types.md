@@ -66,8 +66,8 @@ interface JobOptions {
   /** Maximum retry attempts */
   attempts?: number;
 
-  /** Backoff delay between retries (ms) */
-  backoff?: number;
+  /** Backoff delay between retries (ms or BackoffOptions) */
+  backoff?: number | BackoffOptions;
 
   /** Job timeout (ms) */
   timeout?: number;
@@ -105,6 +105,84 @@ interface JobOptions {
 interface QueueOptions {
   /** Default job options for all jobs in this queue */
   defaultJobOptions?: JobOptions;
+
+  /** TCP connection options (for server mode) */
+  connection?: ConnectionOptions;
+
+  /** Use embedded mode (default: false) */
+  embedded?: boolean;
+}
+```
+
+### ConnectionOptions
+
+```typescript
+interface ConnectionOptions {
+  /** Server hostname (default: 'localhost') */
+  host?: string;
+
+  /** TCP port (default: 6789) */
+  port?: number;
+
+  /** Unix socket path (alternative to host/port) */
+  socketPath?: string;
+
+  /** Authentication token */
+  token?: string;
+
+  /** Connection pool size (default: 4) */
+  poolSize?: number;
+
+  /** Ping interval in ms (default: 30000, 0 to disable) */
+  pingInterval?: number;
+
+  /** Command timeout in ms (default: 30000) */
+  commandTimeout?: number;
+
+  /** Enable TCP pipelining (default: true) */
+  pipelining?: boolean;
+
+  /** Max commands in flight per connection (default: 100) */
+  maxInFlight?: number;
+}
+```
+
+### BackoffOptions
+
+```typescript
+interface BackoffOptions {
+  /** Backoff type */
+  type: 'fixed' | 'exponential';
+
+  /** Base delay in ms */
+  delay: number;
+}
+```
+
+### RateLimiterOptions
+
+```typescript
+interface RateLimiterOptions {
+  /** Max jobs per duration */
+  max: number;
+
+  /** Duration window in ms */
+  duration: number;
+
+  /** Optional group key for per-key limiting */
+  groupKey?: string;
+}
+```
+
+### KeepJobs
+
+```typescript
+interface KeepJobs {
+  /** Max age in ms */
+  age?: number;
+
+  /** Max count to keep */
+  count?: number;
 }
 ```
 
@@ -131,8 +209,41 @@ interface WorkerOptions {
   /** Auto-run on creation (default: true) */
   autorun?: boolean;
 
-  /** Heartbeat interval in ms (default: 10000) */
+  /** Heartbeat interval in ms (default: 10000, 0 to disable) */
   heartbeatInterval?: number;
+
+  /** TCP connection options (for server mode) */
+  connection?: ConnectionOptions;
+
+  /** Use embedded mode (default: false) */
+  embedded?: boolean;
+
+  /** Number of jobs to pull per batch (default: 10) */
+  batchSize?: number;
+
+  /** Long poll timeout in ms (default: 0, max: 30000) */
+  pollTimeout?: number;
+
+  /** Use lock-based job ownership (default: true) */
+  useLocks?: boolean;
+
+  /** Rate limiter configuration */
+  limiter?: RateLimiterOptions;
+
+  /** Lock duration in ms (default: 30000) */
+  lockDuration?: number;
+
+  /** Max stalls before moving to DLQ (default: 3) */
+  maxStalledCount?: number;
+
+  /** Skip stall check (default: false) */
+  skipStalledCheck?: boolean;
+
+  /** Remove completed jobs (boolean, count, or KeepJobs config) */
+  removeOnComplete?: boolean | number | KeepJobs;
+
+  /** Remove failed jobs (boolean, count, or KeepJobs config) */
+  removeOnFail?: boolean | number | KeepJobs;
 }
 ```
 

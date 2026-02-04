@@ -22,8 +22,8 @@ bun add bunqueue
 ## Install from source
 
 ```bash
-git clone https://github.com/egeominotti/bunQ.git
-cd bunQ
+git clone https://github.com/egeominotti/bunqueue.git
+cd bunqueue
 bun install
 bun run build
 ```

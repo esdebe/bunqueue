@@ -152,10 +152,13 @@ Token comparison uses constant-time algorithm to prevent timing attacks.
 | Command | Description |
 |---------|-------------|
 | `GetJob` | Get job by ID |
+| `GetJobByCustomId` | Get job by custom ID |
 | `GetState` | Get job state |
 | `GetResult` | Get job result |
 | `GetJobs` | List jobs with filters |
 | `GetJobCounts` | Queue statistics |
+| `GetCountsPerPriority` | Counts grouped by priority |
+| `GetProgress` | Get job progress |
 | `Count` | Count jobs in queue |
 
 ### Control Commands
@@ -164,11 +167,15 @@ Token comparison uses constant-time algorithm to prevent timing attacks.
 |---------|-------------|
 | `Pause` | Stop processing queue |
 | `Resume` | Resume processing |
+| `IsPaused` | Check if queue is paused |
 | `Drain` | Remove waiting jobs |
 | `Obliterate` | Delete queue completely |
 | `Clean` | Remove old jobs |
 | `Cancel` | Cancel pending job |
 | `Promote` | Move delayed job to waiting |
+| `MoveToDelayed` | Move job to delayed state |
+| `Progress` | Update job progress |
+| `ListQueues` | List all queues |
 
 ### DLQ Commands
 
@@ -176,6 +183,7 @@ Token comparison uses constant-time algorithm to prevent timing attacks.
 |---------|-------------|
 | `Dlq` | List DLQ entries |
 | `RetryDlq` | Retry failed jobs |
+| `RetryCompleted` | Retry completed jobs |
 | `PurgeDlq` | Clear DLQ |
 
 ### Cron Commands
@@ -196,6 +204,11 @@ Token comparison uses constant-time algorithm to prevent timing attacks.
 | `Ping` | Health check |
 | `Heartbeat` | Worker heartbeat |
 | `JobHeartbeat` | Per-job heartbeat |
+| `AddLog` | Add job log entry |
+| `GetLogs` | Get job logs |
+| `RegisterWorker` | Register worker with server |
+| `UnregisterWorker` | Unregister worker |
+| `ListWorkers` | List registered workers |
 
 ## Connection Pool
 

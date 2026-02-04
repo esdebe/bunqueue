@@ -75,8 +75,8 @@ const uploadQueue = new Queue('uploads', { embedded: true });
 const resizeQueue = new Queue('resize', { embedded: true });
 const thumbnailQueue = new Queue('thumbnails', { embedded: true });
 
-// Flow producer for dependencies
-const flow = new FlowProducer();
+// Flow producer for dependencies (embedded mode)
+const flow = new FlowProducer({ embedded: true });
 
 // Add image processing flow
 await flow.addTree({
@@ -371,18 +371,12 @@ new Worker('load', async (job) => {
 
 Multi-worker task distribution.
 
+```bash
+# Start bunqueue server (in terminal)
+bunqueue start --tcp-port 6789 --http-port 6790 --data-path ./data/tasks.db
+```
+
 ```typescript
-// server.ts - Start bunqueue server
-import { createServer } from 'bunqueue/server';
-
-const server = createServer({
-  tcpPort: 6789,
-  httpPort: 6790,
-  dataPath: './data/tasks.db'
-});
-
-server.start();
-
 // producer.ts - Add tasks
 import { Queue } from 'bunqueue/client';
 
@@ -555,13 +549,13 @@ Group related queues together.
 ```typescript
 import { Queue, Worker, QueueGroup } from 'bunqueue/client';
 
-// Create group for email-related queues
-const emailGroup = new QueueGroup(['welcome', 'notifications', 'digest']);
+// Create group with namespace
+const emailGroup = new QueueGroup('email');
 
-// Get queues from group
-const welcomeQueue = emailGroup.getQueue('welcome');
-const notificationQueue = emailGroup.getQueue('notifications');
-const digestQueue = emailGroup.getQueue('digest');
+// Get queues from group (creates queues with namespace prefix)
+const welcomeQueue = emailGroup.getQueue('welcome');        // email:welcome
+const notificationQueue = emailGroup.getQueue('notifications'); // email:notifications
+const digestQueue = emailGroup.getQueue('digest');          // email:digest
 
 // Pause all email queues at once
 emailGroup.pauseAll();

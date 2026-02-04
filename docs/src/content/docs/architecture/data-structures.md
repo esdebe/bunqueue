@@ -141,7 +141,7 @@ Used for job results, custom ID mapping, and logs.
 │                                                              │
 │  Collection        │ Max Size │ Eviction                   │
 │  ──────────────────┼──────────┼───────────────────────────│
-│  completedJobs     │ 50,000   │ FIFO batch (50%)          │
+│  completedJobs     │ 50,000   │ FIFO batch (10%)          │
 │  jobResults        │ 5,000    │ LRU                       │
 │  jobLogs           │ 10,000   │ LRU                       │
 │  customIdMap       │ 50,000   │ LRU                       │
@@ -149,7 +149,7 @@ Used for job results, custom ID mapping, and logs.
 │                                                              │
 │  BoundedSet (FIFO):                                        │
 │  └─ No recency tracking (faster)                           │
-│  └─ Batch eviction: remove 50% when full                  │
+│  └─ Batch eviction: remove 10% when full                  │
 │  └─ Amortized cost across many operations                  │
 └─────────────────────────────────────────────────────────────┘
 ```
