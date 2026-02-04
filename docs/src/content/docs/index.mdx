@@ -24,6 +24,79 @@ import VersionBadges from '@components/VersionBadges.astro';
 
 ---
 
+## Quick Start
+
+<Tabs>
+  <TabItem label="Embedded Mode">
+    ```typescript
+    import { Queue, Worker } from 'bunqueue/client';
+
+    // Create a queue
+    const queue = new Queue('emails', { embedded: true });
+
+    // Add jobs
+    await queue.add('welcome', {
+      to: 'user@example.com',
+      template: 'welcome'
+    });
+
+    // Process jobs
+    const worker = new Worker('emails', async (job) => {
+      await sendEmail(job.data);
+      return { sent: true };
+    }, { embedded: true });
+
+    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
+    ```
+  </TabItem>
+  <TabItem label="Server Mode">
+    ```bash
+    # First, start the server
+    bunqueue start --data-path ./data/queue.db
+    ```
+
+    ```typescript
+    // Then, in your application
+    import { Queue, Worker } from 'bunqueue/client';
+
+    // Create a queue (connects to localhost:6789)
+    const queue = new Queue('emails');
+
+    // Add jobs
+    await queue.add('welcome', {
+      to: 'user@example.com',
+      template: 'welcome'
+    });
+
+    // Process jobs
+    const worker = new Worker('emails', async (job) => {
+      await sendEmail(job.data);
+      return { sent: true };
+    });
+
+    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
+    ```
+  </TabItem>
+  <TabItem label="Docker">
+    ```dockerfile
+    FROM oven/bun:latest
+    WORKDIR /app
+    RUN bun add bunqueue
+    COPY . .
+    CMD ["bunqueue", "start"]
+    ```
+
+    ```bash
+    docker run -p 6789:6789 -p 6790:6790 \
+      -v ./data:/app/data \
+      -e DATA_PATH=/app/data/queue.db \
+      bunqueue
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
 ## Why bunqueue?
 
 <CardGrid>
@@ -122,79 +195,6 @@ Queue and Worker must use the **same mode**. Mixing embedded Queue with TCP Work
 
 ---
 
-## Quick Start
-
-<Tabs>
-  <TabItem label="Embedded Mode">
-    ```typescript
-    import { Queue, Worker } from 'bunqueue/client';
-
-    // Create a queue
-    const queue = new Queue('emails', { embedded: true });
-
-    // Add jobs
-    await queue.add('welcome', {
-      to: 'user@example.com',
-      template: 'welcome'
-    });
-
-    // Process jobs
-    const worker = new Worker('emails', async (job) => {
-      await sendEmail(job.data);
-      return { sent: true };
-    }, { embedded: true });
-
-    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
-    ```
-  </TabItem>
-  <TabItem label="Server Mode">
-    ```bash
-    # First, start the server
-    bunqueue start --data-path ./data/queue.db
-    ```
-
-    ```typescript
-    // Then, in your application
-    import { Queue, Worker } from 'bunqueue/client';
-
-    // Create a queue (connects to localhost:6789)
-    const queue = new Queue('emails');
-
-    // Add jobs
-    await queue.add('welcome', {
-      to: 'user@example.com',
-      template: 'welcome'
-    });
-
-    // Process jobs
-    const worker = new Worker('emails', async (job) => {
-      await sendEmail(job.data);
-      return { sent: true };
-    });
-
-    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
-    ```
-  </TabItem>
-  <TabItem label="Docker">
-    ```dockerfile
-    FROM oven/bun:latest
-    WORKDIR /app
-    RUN bun add bunqueue
-    COPY . .
-    CMD ["bunqueue", "start"]
-    ```
-
-    ```bash
-    docker run -p 6789:6789 -p 6790:6790 \
-      -v ./data:/app/data \
-      -e DATA_PATH=/app/data/queue.db \
-      bunqueue
-    ```
-  </TabItem>
-</Tabs>
-
----
-
 ## Performance
 
 Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
@@ -289,4 +289,3 @@ Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
     href="/bunqueue/api/http/"
   />
 </CardGrid>
-
