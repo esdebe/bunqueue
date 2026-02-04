@@ -81,11 +81,12 @@ async function runEmbeddedBenchmarks(): Promise<BenchResult[]> {
     log(`  Bulk Push: ${bulkPushOps.toLocaleString()} ops/sec`);
 
     // 3. Process benchmark
-    const processQueue = new EmbeddedQueue(`emb-proc-${scale}-${Date.now()}`, { embedded: true });
+    const embProcQueueName = `emb-proc-${scale}-${Date.now()}`;
+    const processQueue = new EmbeddedQueue(embProcQueueName, { embedded: true });
     let processed = 0;
 
     const worker = new EmbeddedWorker(
-      `emb-proc-${scale}-${Date.now()}`,
+      embProcQueueName,
       async () => {
         processed++;
         return { ok: true };
