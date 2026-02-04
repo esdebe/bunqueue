@@ -1,389 +1,267 @@
 ---
 title: Benchmarks
-description: Comprehensive performance benchmarks, stress tests, and methodology
+description: Embedded vs TCP mode performance benchmarks with scaling workloads
 ---
 
 import { Tabs, TabItem, Card, CardGrid, Aside, Code } from '@astrojs/starlight/components';
 
-bunqueue includes a comprehensive benchmark suite for performance testing, stress testing, and production validation.
+bunqueue supports two deployment modes: **Embedded** (direct SQLite) and **TCP** (network + SQLite). This page shows real benchmark results comparing both modes at scale.
 
-## Quick Results
+<Aside type="tip">
+The only honest benchmark is one you run on your own hardware. Clone the repo and run `bun run bench/comprehensive.ts` to verify these results.
+</Aside>
+
+## Summary
 
 <CardGrid>
-  <Card title="Push Throughput" icon="up-caret">
-    **1.2M+ ops/sec**
+  <Card title="Embedded Mode" icon="rocket">
+    **Up to 286K ops/sec**
 
-    With batch operations (1000+ jobs)
+    Direct SQLite access, zero network overhead
   </Card>
-  <Card title="Process Rate" icon="rocket">
-    **494,000 ops/sec**
+  <Card title="TCP Mode" icon="laptop">
+    **Up to 149K ops/sec**
 
-    Full cycle with 16 workers
+    Network client/server for distributed systems
+  </Card>
+  <Card title="Embedded Advantage" icon="star">
+    **2-4x Faster**
+
+    Depending on operation type
   </Card>
   <Card title="Scale Tested" icon="open-book">
-    **1 Million Jobs**
+    **50,000 Jobs**
 
-    Verified data integrity at scale
-  </Card>
-  <Card title="Memory Efficient" icon="setting">
-    **~100 bytes/job**
-
-    At scale with `removeOnComplete: true`
+    Verified at multiple scales
   </Card>
 </CardGrid>
 
 ---
 
-## Live Benchmark Results
+## Embedded Mode Results
 
-These results were measured on **Mac Studio M1 Max, 32GB RAM, Bun 1.3.8**.
-
-### Throughput by Operation
+Embedded mode uses direct SQLite access with no network overhead. Ideal for single-process applications.
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
   <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['PUSH','PULL','ACK','BATCH(100)','BATCH(1000)'],datasets:[{label:'ops/sec',data:[579603,420835,464857,1259234,1452193],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)','rgba(245,158,11,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Throughput by Operation (ops/sec)',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=350&backgroundColor=white"
-    alt="Throughput benchmark chart"
-    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['1K','5K','10K','50K'],datasets:[{label:'Push',data:[86248,187256,177098,204913],backgroundColor:'rgba(236,72,153,0.85)'},{label:'Bulk Push',data:[221365,278587,279640,286616],backgroundColor:'rgba(168,85,247,0.85)'},{label:'Process',data:[47538,64716,77713,74772],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Embedded Mode Throughput (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{title:{display:true,text:'Job Count'},grid:{display:false}}}}}&width=650&height=400&backgroundColor=white"
+    alt="Embedded mode throughput chart"
+    style={{ maxWidth: '650px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
   />
 </div>
 
-| Operation | Throughput | Notes |
-|-----------|------------|-------|
-| **PUSH** | 579,603 ops/sec | Single job insertion |
-| **PULL** | 420,835 ops/sec | Single job retrieval |
-| **ACK** | 464,857 ops/sec | Single job acknowledgment |
-| **BATCH(100)** | 1,259,234 ops/sec | Batch push, 100 jobs |
-| **BATCH(1000)** | 1,452,193 ops/sec | Batch push, 1000 jobs |
-
----
-
-### Batch Size Scaling
-
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Individual','Batch 100','Batch 1000','Batch 5000'],datasets:[{label:'Push ops/sec',data:[579603,1259234,1452193,1393745],backgroundColor:'rgba(236,72,153,0.85)',borderRadius:6}]},options:{indexAxis:'y',plugins:{title:{display:true,text:'Push Throughput Scaling with Batch Size',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{x:{title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'},beginAtZero:true},y:{grid:{display:false}}}}}&width=600&height=280&backgroundColor=white"
-    alt="Batch size scaling chart"
-    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
-
-| Batch Size | Throughput | Speedup vs Individual |
-|------------|------------|----------------------|
-| Individual | 579,603/s | 1x |
-| 100 | 1,259,234/s | **2.2x** |
-| 1,000 | 1,452,193/s | **2.5x** |
-| 5,000 | 1,393,745/s | **2.4x** |
+| Scale | Push | Bulk Push | Process |
+|-------|------|-----------|---------|
+| **1,000** | 86,248 ops/sec | 221,365 ops/sec | 47,538 ops/sec |
+| **5,000** | 187,256 ops/sec | 278,587 ops/sec | 64,716 ops/sec |
+| **10,000** | 177,098 ops/sec | 279,640 ops/sec | 77,713 ops/sec |
+| **50,000** | 204,913 ops/sec | 286,616 ops/sec | 74,772 ops/sec |
 
 <Aside>
-Batch size of 1,000 provides optimal throughput. Larger batches have diminishing returns.
+Embedded mode shows consistent performance scaling. Bulk push reaches nearly **287K ops/sec** at 50K jobs.
 </Aside>
 
 ---
 
-### Worker Benchmark (Realistic Workload)
+## TCP Mode Results
+
+TCP mode connects clients to a bunqueue server over the network. Required for distributed systems with multiple client processes.
 
 <div style={{ textAlign: 'center', margin: '2rem 0' }}>
   <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['10K Jobs','50K Jobs','100K Jobs'],datasets:[{label:'Push',data:[519445,604918,611819],backgroundColor:'rgba(236,72,153,0.85)'},{label:'Process',data:[217980,243945,232613],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Worker Benchmark: Push vs Process (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=350&backgroundColor=white"
-    alt="Worker benchmark chart"
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['1K','5K','10K','50K'],datasets:[{label:'Push',data:[28633,49284,54562,51827],backgroundColor:'rgba(236,72,153,0.85)'},{label:'Bulk Push',data:[96635,142152,149218,131897],backgroundColor:'rgba(168,85,247,0.85)'},{label:'Process',data:[20195,34098,34679,32544],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'TCP Mode Throughput (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{title:{display:true,text:'Job Count'},grid:{display:false}}}}}&width=650&height=400&backgroundColor=white"
+    alt="TCP mode throughput chart"
+    style={{ maxWidth: '650px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Scale | Push | Bulk Push | Process |
+|-------|------|-----------|---------|
+| **1,000** | 28,633 ops/sec | 96,635 ops/sec | 20,195 ops/sec |
+| **5,000** | 49,284 ops/sec | 142,152 ops/sec | 34,098 ops/sec |
+| **10,000** | 54,562 ops/sec | 149,218 ops/sec | 34,679 ops/sec |
+| **50,000** | 51,827 ops/sec | 131,897 ops/sec | 32,544 ops/sec |
+
+<Aside>
+TCP mode with pipelining achieves **149K ops/sec** bulk push at 10K jobs. Network overhead is amortized with connection pooling (32 connections).
+</Aside>
+
+---
+
+## Embedded vs TCP Comparison
+
+How much faster is Embedded mode compared to TCP mode?
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['1K Jobs','5K Jobs','10K Jobs','50K Jobs'],datasets:[{label:'Push',data:[3.0,3.8,3.2,4.0],backgroundColor:'rgba(236,72,153,0.85)'},{label:'Bulk Push',data:[2.3,2.0,1.9,2.2],backgroundColor:'rgba(168,85,247,0.85)'},{label:'Process',data:[2.4,1.9,2.2,2.3],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Embedded vs TCP Speedup (times faster)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Speedup (x times)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=650&height=400&backgroundColor=white"
+    alt="Embedded vs TCP comparison chart"
+    style={{ maxWidth: '650px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Scale | Push | Bulk Push | Process |
+|-------|------|-----------|---------|
+| **1,000** | 3.0x faster | 2.3x faster | 2.4x faster |
+| **5,000** | 3.8x faster | 2.0x faster | 1.9x faster |
+| **10,000** | 3.2x faster | 1.9x faster | 2.2x faster |
+| **50,000** | 4.0x faster | 2.2x faster | 2.3x faster |
+
+<Aside type="tip">
+Embedded mode is **2-4x faster** than TCP mode across all operations and scales. Use embedded mode when your workers run in the same process as the queue.
+</Aside>
+
+---
+
+## Peak Performance Summary
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push','Bulk Push','Process'],datasets:[{label:'Embedded',data:[204913,286616,77713],backgroundColor:'rgba(236,72,153,0.85)'},{label:'TCP',data:[54562,149218,34679],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Peak Throughput Comparison (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=400&backgroundColor=white"
+    alt="Peak throughput comparison chart"
     style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
   />
 </div>
 
-| Scale | Push Rate | Process Rate | Total Events |
-|-------|-----------|--------------|--------------|
-| 10,000 jobs | 519,445/s | 217,980/s | ✅ 10,000 |
-| 50,000 jobs | 604,918/s | 243,945/s | ✅ 50,000 |
-| 100,000 jobs | 611,819/s | 232,613/s | ✅ 100,000 |
+| Operation | Embedded Mode | TCP Mode |
+|-----------|--------------|----------|
+| **Push** (peak) | 204,913 ops/sec | 54,562 ops/sec |
+| **Bulk Push** (peak) | 286,616 ops/sec | 149,218 ops/sec |
+| **Process** (peak) | 77,713 ops/sec | 34,679 ops/sec |
 
 ---
 
-### Million Jobs Benchmark
+## Benchmark Methodology
 
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push Rate','Process Rate','Overall Rate'],datasets:[{label:'ops/sec',data:[1210654,494805,351247],backgroundColor:['rgba(236,72,153,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'1 Million Jobs Benchmark',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
-    alt="Million jobs benchmark chart"
-    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
+The benchmark tests three operations at four different scales (1K, 5K, 10K, 50K jobs):
 
-| Metric | Result |
-|--------|--------|
-| **Total Jobs** | 1,000,000 |
-| **Push Rate** | 1,210,654 ops/sec |
-| **Process Rate** | 494,805 ops/sec |
-| **Overall Rate** | 351,247 ops/sec |
-| **Total Time** | 2.85 seconds |
-| **Data Integrity** | ✅ PASSED (100%) |
+### 1. Push Test
+Sequential push of individual jobs to measure single-job insertion speed.
 
-<Aside type="tip">
-With 16 parallel workers, bunqueue processes **1 million jobs in under 3 seconds** with 100% data integrity.
-</Aside>
+```typescript
+for (let i = 0; i < scale; i++) {
+  await queue.add('job', PAYLOAD);
+}
+```
 
----
+### 2. Bulk Push Test
+Push jobs in batches of 100 to measure bulk insertion efficiency.
 
-### Stress Test Results
+```typescript
+const jobs = Array.from({ length: 100 }, (_, i) => ({
+  name: 'bulk-job',
+  data: { ...PAYLOAD, i },
+}));
 
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['High Volume','Concurrent Queues','Priority Stress','Batch Operations'],datasets:[{label:'Throughput (ops/sec)',data:[140032,138336,179983,266619],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Stress Test Throughput',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=300&backgroundColor=white"
-    alt="Stress test results chart"
-    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
+for (let i = 0; i < scale / 100; i++) {
+  await queue.addBulk(jobs);
+}
+```
 
-| Test | Configuration | Throughput | Status |
-|------|--------------|------------|--------|
-| **High Volume** | 100K jobs, single queue | 140,032/s | ✅ PASS |
-| **Concurrent Queues** | 10 queues × 10K jobs | 138,336/s | ✅ PASS |
-| **Large Payloads** | 5K jobs × 10KB each | 384,781 MB/s | ✅ PASS |
-| **Priority Stress** | 50K jobs, random priorities | 179,983/s | ✅ PASS |
-| **Retry Storm** | 10K jobs, 50% fail rate | - | ✅ PASS |
-| **Batch Operations** | 100K jobs, batch=1000 | 266,619/s | ✅ PASS |
+### 3. Process Test
+Push jobs in parallel batches of 500, then process them with 10 concurrent workers.
 
----
+```typescript
+// Push in parallel batches
+for (let i = 0; i < scale; i += 500) {
+  const promises = [];
+  for (let j = 0; j < Math.min(500, scale - i); j++) {
+    promises.push(queue.add('job', PAYLOAD));
+  }
+  await Promise.all(promises);
+}
 
-## Benchmark Suite Overview
-
-bunqueue includes 6 specialized benchmarks:
-
-| Benchmark | Purpose | Jobs | Duration |
-|-----------|---------|------|----------|
-| `throughput.bench.ts` | Individual operation speeds | 10K-50K | ~30s |
-| `worker.bench.ts` | Realistic worker simulation | 10K-100K | ~60s |
-| `stress.bench.ts` | Production validation (7 tests) | 5K-100K | ~3min |
-| `million-jobs.bench.ts` | High-volume integrity test | 1M | ~5min |
-| `10million-jobs.bench.ts` | Extreme stress test | 10M | ~15min |
-| `completed-events.bench.ts` | Event delivery verification | 10K | ~30s |
+// Wait for all to complete
+while (processed < scale) {
+  await sleep(5);
+}
+```
 
 ---
 
-## Running Benchmarks
-
-<Aside type="tip">
-The only honest benchmark is one you run on your own hardware.
-</Aside>
+## Run the Benchmark
 
 ```bash
-# Clone and install
+# Clone the repository
 git clone https://github.com/egeominotti/bunqueue.git
 cd bunqueue
 bun install
 
-# Individual benchmarks
-bun run src/benchmark/throughput.bench.ts
-bun run src/benchmark/worker.bench.ts
-bun run src/benchmark/stress.bench.ts
-bun run src/benchmark/million-jobs.bench.ts
-bun run src/benchmark/10million-jobs.bench.ts
-bun run src/benchmark/completed-events.bench.ts
+# Start the bunqueue server (for TCP tests)
+bun run start &
+
+# Run the comprehensive benchmark
+bun run bench/comprehensive.ts
+```
+
+### Expected Output
+
+```
+═══════════════════════════════════════════════════════════════
+         bunqueue Comprehensive Benchmark
+         Embedded vs TCP Mode
+═══════════════════════════════════════════════════════════════
+
+Scales: 1,000, 5,000, 10,000, 50,000 jobs
+Bulk size: 100
+Concurrency: 10
+Payload: 111 bytes
+
+✓ TCP server connected (port 6789)
+
+📦 EMBEDDED MODE (Direct SQLite)
+══════════════════════════════════════════════════
+
+🔄 Testing 1,000 jobs...
+  Push: 86,248 ops/sec
+  Bulk Push: 221,365 ops/sec
+  Process: 47,538 ops/sec
+
+...
+
+📊 EMBEDDED MODE RESULTS
+
+┌──────────┬────────────────┬────────────────┬────────────────┐
+│ Scale    │ Push (ops/s)   │ Bulk (ops/s)   │ Process (ops/s)│
+├──────────┼────────────────┼────────────────┼────────────────┤
+│    1,000 │       86,248   │      221,365   │       47,538   │
+│    5,000 │      187,256   │      278,587   │       64,716   │
+│   10,000 │      177,098   │      279,640   │       77,713   │
+│   50,000 │      204,913   │      286,616   │       74,772   │
+└──────────┴────────────────┴────────────────┴────────────────┘
+
+📈 EMBEDDED vs TCP (Embedded is X times faster)
+
+┌──────────┬────────────────┬────────────────┬────────────────┐
+│ Scale    │ Push           │ Bulk           │ Process        │
+├──────────┼────────────────┼────────────────┼────────────────┤
+│    1,000 │         3.0x   │         2.3x   │         2.4x   │
+│    5,000 │         3.8x   │         2.0x   │         1.9x   │
+│   10,000 │         3.2x   │         1.9x   │         2.2x   │
+│   50,000 │         4.0x   │         2.2x   │         2.3x   │
+└──────────┴────────────────┴────────────────┴────────────────┘
 ```
 
 ---
 
-## Detailed Benchmark Documentation
-
-<Tabs>
-  <TabItem label="1. Throughput">
-    **File**: `src/benchmark/throughput.bench.ts`
-
-    Measures raw throughput of individual queue operations with warmup.
-
-    ### Operations Tested
-
-    | Operation | Description | Measured Speed |
-    |-----------|-------------|----------------|
-    | `PUSH` | Single job insertion | 579,603/s |
-    | `PULL` | Single job retrieval | 420,835/s |
-    | `ACK` | Single job acknowledgment | 464,857/s |
-    | `FULL CYCLE` | Push → Pull → Ack | 182,822/s |
-    | `BATCH PUSH (100)` | Batch insertion | 1,259,234/s |
-    | `BATCH PUSH (1000)` | Batch insertion | 1,452,193/s |
-
-    ### How It Works
-
-    ```typescript
-    // 1. Warmup (100 iterations)
-    for (let i = 0; i < 100; i++) {
-      await fn();
-    }
-
-    // 2. Timed execution
-    const start = performance.now();
-    for (let i = 0; i < totalJobs; i++) {
-      await fn();
-    }
-    const durationMs = performance.now() - start;
-
-    // 3. Calculate throughput
-    const jobsPerSecond = (totalJobs / durationMs) * 1000;
-    ```
-  </TabItem>
-
-  <TabItem label="2. Worker">
-    **File**: `src/benchmark/worker.bench.ts`
-
-    Simulates realistic worker behavior with event verification.
-
-    ### Test Flow
-
-    ```
-    ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-    │   Push Phase    │────▶│  Process Phase  │────▶│  Event Check    │
-    │                 │     │                 │     │                 │
-    │ • Push N jobs   │     │ • Pull job      │     │ • Count events  │
-    │ • Sequential    │     │ • Ack with data │     │ • Verify count  │
-    └─────────────────┘     └─────────────────┘     └─────────────────┘
-    ```
-
-    ### Results
-
-    | Size | Push Rate | Process Rate | Events |
-    |------|-----------|--------------|--------|
-    | 10,000 | 519,445/s | 217,980/s | ✅ 10,000 |
-    | 50,000 | 604,918/s | 243,945/s | ✅ 50,000 |
-    | 100,000 | 611,819/s | 232,613/s | ✅ 100,000 |
-  </TabItem>
-
-  <TabItem label="3. Stress">
-    **File**: `src/benchmark/stress.bench.ts`
-
-    Comprehensive production validation with 7 different stress scenarios.
-
-    ### Test Suite
-
-    | Test | Configuration | Result |
-    |------|---------------|--------|
-    | High Volume | 100K jobs | 140,032/s ✅ |
-    | Concurrent Queues | 10 × 10K | 138,336/s ✅ |
-    | Large Payloads | 5K × 10KB | 384,781 MB/s ✅ |
-    | Priority Stress | 50K random | 0 violations ✅ |
-    | Retry Storm | 10K, 50% fail | 75% retry ratio ✅ |
-    | Memory Stability | 100 × 1K | Stable ✅ |
-    | Batch Operations | 100K batch | 1,393,745/s push ✅ |
-  </TabItem>
-
-  <TabItem label="4. Million Jobs">
-    **File**: `src/benchmark/million-jobs.bench.ts`
-
-    High-volume test with **data integrity verification**.
-
-    ### Configuration
-
-    | Parameter | Value |
-    |-----------|-------|
-    | Total Jobs | 1,000,000 |
-    | Batch Size (push) | 5,000 |
-    | Batch Size (pull) | 500 |
-    | Workers | 16 |
-    | Queues | 16 |
-
-    ### Results
-
-    ```
-    📊 Summary
-    ==========================
-    Total jobs:      1,000,000
-    Completed:       1,000,000
-    Total time:      2.85s
-
-    Push rate:       1,210,654 jobs/sec
-    Process rate:    494,805 jobs/sec
-    Overall rate:    351,247 jobs/sec
-
-    ✅ Data Integrity: PASSED
-       - Pull: 1,000,000 / 1,000,000 unique
-       - Events: 1,000,000 / 1,000,000 unique
-    ```
-  </TabItem>
-
-  <TabItem label="5. 10M Jobs">
-    **File**: `src/benchmark/10million-jobs.bench.ts`
-
-    **Extreme stress test** to validate system limits.
-
-    ### Configuration
-
-    | Parameter | Value |
-    |-----------|-------|
-    | Total Jobs | 10,000,000 |
-    | Workers | 32 |
-    | Queues | 32 |
-    | Shards | 32 |
-
-    ### Visual Progress
-
-    ```
-    👷 Processing 10M jobs...
-    [██████████████░░░░░░░░░░░░░░░░] 45.2% | 428,571 jobs/sec
-    [████████████████████░░░░░░░░░░] 67.8% | 435,897 jobs/sec
-    [██████████████████████████████] 100.0% | 441,176 jobs/sec
-    ```
-  </TabItem>
-
-  <TabItem label="6. Events">
-    **File**: `src/benchmark/completed-events.bench.ts`
-
-    Verifies that **every COMPLETED event** is reliably emitted.
-
-    ### Results
-
-    ```
-    📊 RESULTS
-    ══════════════════════════════════════════════════
-    Total jobs:         10,000
-    COMPLETED events:   10,000
-    Unique job IDs:     10,000
-    ──────────────────────────────────────────────────
-    Push time:          20ms (506,778 jobs/sec)
-    Process time:       47ms (211,589 jobs/sec)
-    ──────────────────────────────────────────────────
-    ✅ TEST PASSED: All COMPLETED events received!
-    ```
-  </TabItem>
-</Tabs>
-
----
-
-## Performance Tuning Guide
-
-### Batch Size Recommendations
-
-| Scenario | Push Batch | Pull Batch |
-|----------|------------|------------|
-| Low latency (real-time) | 100-500 | 10-50 |
-| High throughput | 1,000-5,000 | 500-1,000 |
-| Extreme volume | 5,000-10,000 | 1,000+ |
-
-### Worker Count Tuning
-
-```
-Optimal Workers = min(CPU cores, shard count)
-```
-
-bunqueue uses 16 shards by default:
-- **4-core machine**: 4-8 workers
-- **8-core machine**: 8-16 workers
-- **16+ core machine**: 16 workers
-
-### Memory Optimization
+## When to Use Each Mode
 
 <CardGrid>
-  <Card title="removeOnComplete: true" icon="approve-check-circle">
-    Maximum throughput (~495K/s)
+  <Card title="Embedded Mode" icon="rocket">
+    **Best for single-process apps**
 
-    - Jobs removed after completion
-    - No result storage
-    - Best for fire-and-forget
+    - Microservices
+    - CLI tools
+    - Edge functions
+    - Serverless
   </Card>
-  <Card title="removeOnComplete: false" icon="information">
-    ~25% slower (~370K/s)
+  <Card title="TCP Mode" icon="laptop">
+    **Best for distributed systems**
 
-    - Jobs tracked after completion
-    - Results queryable
-    - Required for dependencies
+    - Multiple worker processes
+    - Separate producer/consumer
+    - Horizontal scaling
+    - Remote workers
   </Card>
 </CardGrid>
 
@@ -392,17 +270,17 @@ bunqueue uses 16 shards by default:
 ## Why bunqueue is Fast
 
 <CardGrid>
-  <Card title="Native SQLite" icon="seti:db">
-    Direct FFI bindings via `bun:sqlite`. WAL mode for concurrent reads/writes. Memory-mapped I/O.
+  <Card title="SQLite WAL Mode" icon="seti:db">
+    Concurrent reads/writes with memory-mapped I/O via Bun's native FFI bindings.
   </Card>
-  <Card title="16 Shards" icon="puzzle">
-    Minimizes lock contention. Each shard handles ~6% of queues. Parallel processing by design.
+  <Card title="Auto Sharding" icon="puzzle">
+    Auto-detected from CPU cores (power of 2, max 64). Minimizes lock contention.
   </Card>
-  <Card title="Batch Optimization" icon="rocket">
-    Single transaction for bulk operations. Prepared statements reused. `ackBatchWithResults` for throughput.
+  <Card title="TCP Pipelining" icon="rocket">
+    Multiple commands in flight per connection with reqId-based response matching.
   </Card>
   <Card title="Efficient Structures" icon="seti:config">
-    Skip lists for O(log n) priority. MinHeap for delayed jobs. Bounded collections prevent leaks.
+    Skip lists for O(log n) priority queues. MinHeap for delayed jobs. LRU caches.
   </Card>
 </CardGrid>
 
@@ -410,46 +288,49 @@ bunqueue uses 16 shards by default:
 
 ## Benchmark Environment
 
-For reproducible results, note your environment:
-
-```bash
-# System info
-uname -a
-bun --version
-
-# CPU info (macOS)
-sysctl -n machdep.cpu.brand_string
-
-# CPU info (Linux)
-cat /proc/cpuinfo | grep "model name" | head -1
-```
-
-**Reference hardware** (used for these results):
-- Mac Studio, Apple M1 Max, 32GB RAM
-- macOS 26.2 (Tahoe)
-- Bun 1.3.8
+**Hardware:**
+- Mac Studio, Apple M1 Max
+- 32GB RAM
 - SSD storage
+
+**Software:**
+- macOS Tahoe
+- Bun 1.3.8
+
+**Configuration:**
+- Scales: 1,000, 5,000, 10,000, 50,000 jobs
+- Bulk size: 100 jobs per batch
+- Concurrency: 10 workers
+- Payload: 111 bytes
+- Connection pool: 32 connections (TCP mode)
 
 ---
 
-## Pass Criteria Summary
+## Other Benchmarks
 
-| Benchmark | Pass Condition | Result |
-|-----------|----------------|--------|
-| Throughput | Operations complete | ✅ |
-| Worker | `events === jobs` | ✅ |
-| Stress: High Volume | `events === jobs` | ✅ |
-| Stress: Concurrent | `events === totalJobs` | ✅ |
-| Stress: Priority | `orderViolations === 0` | ✅ |
-| Stress: Retry | `completed + dlq === jobs` | ✅ |
-| Million Jobs | Data integrity 100% | ✅ |
-| Events | `completedEvents === jobs` | ✅ |
+The repository includes additional specialized benchmarks:
+
+| Benchmark | Purpose | File |
+|-----------|---------|------|
+| **Comprehensive** | Embedded vs TCP at scale | `bench/comprehensive.ts` |
+| **BullMQ Comparison** | bunqueue vs BullMQ (Redis) | `bench/comparison/run.ts` |
+| **Throughput** | Individual operation speeds | `src/benchmark/throughput.bench.ts` |
+| **Worker** | Realistic worker simulation | `src/benchmark/worker.bench.ts` |
+| **Stress** | Production validation | `src/benchmark/stress.bench.ts` |
+| **Million Jobs** | High-volume integrity test | `src/benchmark/million-jobs.bench.ts` |
+
+```bash
+# Run BullMQ comparison (requires Redis)
+redis-server --daemonize yes
+bun run start &
+bun run bench/comparison/run.ts
+```
 
 ---
 
 ## Submit Your Results
 
-Run benchmarks on your hardware and share results via [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions) to help others compare.
+Run benchmarks on your hardware and share results via [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions).
 
 Include:
 - CPU model

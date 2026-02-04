@@ -39,6 +39,11 @@ All notable changes to bunqueue are documented here.
   - Both bunqueue and BullMQ use identical parallel push strategy
   - Queue cleanup with `obliterate()` between tests
   - Results: **1.3x Push**, **3.2x Bulk Push**, **1.7x Process** vs BullMQ
+- **Comprehensive benchmark** (`bench/comprehensive.ts`):
+  - Embedded vs TCP mode comparison at scales [1K, 5K, 10K, 50K]
+  - Log suppression for clean output
+  - Peak results: **287K ops/sec** (Embedded Bulk), **149K ops/sec** (TCP Bulk)
+  - Embedded mode is **2-4x faster** than TCP across all operations
 - **New ConnectionOptions** - Added `pingInterval`, `commandTimeout`, `pipelining`, `maxInFlight` to public API
 
 ### Fixed
