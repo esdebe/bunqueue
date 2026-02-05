@@ -275,12 +275,6 @@ export class WriteBuffer {
 
   /** Stop auto-flush timer and flush pending jobs */
   stop(): void {
-    // Clear backoff timer
-    if (this.backoffTimer) {
-      clearTimeout(this.backoffTimer);
-      this.backoffTimer = null;
-    }
-
     // Clear auto-flush timer
     if (this.timer) {
       clearInterval(this.timer);
@@ -292,14 +286,21 @@ export class WriteBuffer {
       try {
         this.flush();
       } catch {
-        // Log but don't throw - we're shutting down
-        // Jobs that fail to flush here will be lost
-        // The onError callback has already been called
+        // Flush failed during shutdown - jobs will be reported as lost below
       }
     }
 
     // Mark as stopped to prevent any future flush attempts
     this.stopped = true;
+
+    // Clear any backoff timer (pre-existing or scheduled by failed flush)
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer);
+      this.backoffTimer = null;
+    }
+
+    // Report any jobs still stuck in buffers as lost
+    this.reportLostJobs();
   }
 
   /**
@@ -331,6 +332,7 @@ export class WriteBuffer {
     return new Promise<number>((resolve) => {
       const timeout = setTimeout(() => {
         this.stopped = true;
+        this.reportLostJobs();
         resolve(-1); // Timed out
       }, timeoutMs);
 
@@ -340,12 +342,31 @@ export class WriteBuffer {
         this.stopped = true;
         resolve(flushed);
       } catch {
-        // Flush failed, but we tried
+        // Flush failed - clear any backoff timer that flush() scheduled
+        if (this.backoffTimer) {
+          clearTimeout(this.backoffTimer);
+          this.backoffTimer = null;
+        }
         clearTimeout(timeout);
         this.stopped = true;
+        this.reportLostJobs();
         resolve(0);
       }
     });
+  }
+
+  /** Report any remaining buffered jobs as lost via onCriticalError */
+  private reportLostJobs(): void {
+    const remaining = this.activeBuffer.concat(this.flushBuffer);
+    if (remaining.length > 0 && this.onCriticalError) {
+      this.onCriticalError(
+        remaining,
+        this.lastError ?? new Error('Flush failed during shutdown'),
+        this.retryCount
+      );
+      this.activeBuffer = [];
+      this.flushBuffer = [];
+    }
   }
 
   /** Get current retry state (for monitoring) */

@@ -10,6 +10,7 @@
 
 import { Queue, Worker } from '../../src/client';
 
+const TCP_PORT = parseInt(process.env.TCP_PORT ?? '16789');
 const TIMEOUT_MS = 10000;
 
 async function sleep(ms: number): Promise<void> {
@@ -47,14 +48,14 @@ async function main() {
         return { ok: true };
       },
       {
-        connection: { host: 'localhost', port: 6789, poolSize: 2 },
+        connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
         concurrency: 1,
         heartbeatInterval: 0,
       }
     );
 
     const queue = new Queue(queueName, {
-      connection: { host: 'localhost', port: 6789, poolSize: 2 },
+      connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
     });
 
     await sleep(200);
@@ -91,14 +92,14 @@ async function main() {
         return { ok: true };
       },
       {
-        connection: { host: 'localhost', port: 6789, poolSize: 2 },
+        connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
         concurrency: 1,
         heartbeatInterval: 0,
       }
     );
 
     const queue = new Queue(pushQueueName, {
-      connection: { host: 'localhost', port: 6789, poolSize: 2 },
+      connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
     });
 
     await sleep(200);
@@ -131,14 +132,14 @@ async function main() {
         return { ok: true };
       },
       {
-        connection: { host: 'localhost', port: 6789, poolSize: 2 },
+        connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
         concurrency: 5,
         heartbeatInterval: 0,
       }
     );
 
     const queue = new Queue(queueName, {
-      connection: { host: 'localhost', port: 6789, poolSize: 2 },
+      connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
     });
 
     await sleep(200);
@@ -178,7 +179,7 @@ async function main() {
             return { ok: true };
           },
           {
-            connection: { host: 'localhost', port: 6789, poolSize: 2 },
+            connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
             concurrency: 2,
             heartbeatInterval: 0,
           }
@@ -187,7 +188,7 @@ async function main() {
     }
 
     const queue = new Queue(queueName, {
-      connection: { host: 'localhost', port: 6789, poolSize: 2 },
+      connection: { host: 'localhost', port: TCP_PORT, poolSize: 2 },
     });
 
     await sleep(300);
