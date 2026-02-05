@@ -386,9 +386,9 @@ await queue.addBulk(jobs.map(j => ({
 
 ### How can I contribute?
 
-1. Report bugs on [GitHub Issues](https://github.com/egeominotti/issues)
+1. Report bugs on [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
 2. Submit PRs for bug fixes
-3. Propose features in [Discussions](https://github.com/egeominotti/discussions)
+3. Propose features in [Discussions](https://github.com/egeominotti/bunqueue/discussions)
 4. Improve documentation
 
 ### What's the development setup?

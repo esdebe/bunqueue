@@ -204,7 +204,7 @@ Update README.md for:
 
 ## Getting Help
 
-- [GitHub Discussions](https://github.com/egeominotti/discussions)
+- [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions)
 - [Discord](https://discord.gg/bunqueue)
 - [Twitter](https://twitter.com/bunqueue)
 

@@ -18,7 +18,7 @@ bunqueue takes security seriously. This document outlines our security practices
 Please report security issues to: **security@bunqueue.dev**
 
 Or use GitHub's private vulnerability reporting:
-1. Go to the [Security tab](https://github.com/egeominotti/security)
+1. Go to the [Security tab](https://github.com/egeominotti/bunqueue/security)
 2. Click "Report a vulnerability"
 3. Provide details about the issue
 

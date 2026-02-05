@@ -469,14 +469,14 @@ console.assert(dlq.stats !== undefined);
 console.log('All tests passed!');
 ```
 
-Run the full test suite:
+Run the full example:
 
 ```bash
 # Terminal 1 - Start server
-bun run examples/elysia-example.ts
+bun run server.ts
 
 # Terminal 2 - Run tests
-bun run examples/elysia-test.ts
+bun test
 ```
 
 ## Features Demonstrated

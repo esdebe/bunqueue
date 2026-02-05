@@ -259,5 +259,5 @@ await queue.add('task', data, {
 
 If you encounter issues during migration:
 
-- [GitHub Issues](https://github.com/egeominotti/issues)
-- [GitHub Discussions](https://github.com/egeominotti/discussions)
+- [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
+- [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions)

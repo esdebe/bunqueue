@@ -406,8 +406,8 @@ tail -f /var/log/bunqueue.log
 
 If these solutions don't help:
 
-1. Check [GitHub Issues](https://github.com/egeominotti/issues)
-2. Search [Discussions](https://github.com/egeominotti/discussions)
+1. Check [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
+2. Search [Discussions](https://github.com/egeominotti/bunqueue/discussions)
 3. Open a new issue with:
    - bunqueue version
    - Bun version
