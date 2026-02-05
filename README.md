@@ -64,7 +64,38 @@ bun add bunqueue
 
 > Requires [Bun](https://bun.sh) runtime. Node.js is not supported.
 
-## Server Mode (Docker)
+## Two Modes
+
+bunqueue runs in two modes depending on your architecture:
+
+| | Embedded | Server (TCP) |
+|---|----------|-------------|
+| **How it works** | Queue runs inside your process | Standalone server, clients connect via TCP |
+| **Setup** | `bun add bunqueue` | `docker run` or `bunqueue start` |
+| **Performance** | 286K ops/sec | 149K ops/sec |
+| **Best for** | Single-process apps, CLIs, serverless | Multiple workers, separate producer/consumer |
+| **Scaling** | Same process only | Multiple clients across machines |
+
+### Embedded Mode
+
+Everything runs in your process. No server, no network, no setup.
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('emails', { embedded: true });
+
+const worker = new Worker('emails', async (job) => {
+  console.log('Processing:', job.data);
+  return { sent: true };
+}, { embedded: true });
+
+await queue.add('welcome', { to: 'user@example.com' });
+```
+
+### Server Mode (TCP)
+
+Run bunqueue as a standalone server. Multiple workers and producers connect via TCP.
 
 ```bash
 # Start with persistent data
@@ -79,26 +110,12 @@ Connect from your app:
 import { Queue, Worker } from 'bunqueue/client';
 
 const queue = new Queue('tasks', { connection: { host: 'localhost', port: 6789 } });
+
 const worker = new Worker('tasks', async (job) => {
   return { done: true };
 }, { connection: { host: 'localhost', port: 6789 } });
 
 await queue.add('process', { data: 'hello' });
-```
-
-## Quick Example
-
-```typescript
-import { Queue, Worker } from 'bunqueue/client';
-
-const queue = new Queue('emails', { embedded: true });
-
-const worker = new Worker('emails', async (job) => {
-  console.log('Processing:', job.data);
-  return { sent: true };
-}, { embedded: true });
-
-await queue.add('welcome', { to: 'user@example.com' });
 ```
 
 ## Performance
