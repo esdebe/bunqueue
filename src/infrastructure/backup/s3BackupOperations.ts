@@ -8,6 +8,22 @@ import { backupLog } from '../../shared/logger';
 import { VERSION } from '../../shared/version';
 import type { S3BackupConfig, BackupResult, BackupMetadata, BackupItem } from './s3BackupConfig';
 
+/** Async gzip compress using Web Streams API (non-blocking) */
+async function gzipAsync(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as unknown as BlobPart])
+    .stream()
+    .pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Async gzip decompress using Web Streams API (non-blocking) */
+async function gunzipAsync(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as unknown as BlobPart])
+    .stream()
+    .pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 /**
  * Perform a backup to S3
  */
@@ -26,16 +42,26 @@ export async function performBackup(
       throw new Error(`Database file not found: ${config.databasePath}`);
     }
 
+    // Checkpoint WAL to ensure all data is in the main database file
+    try {
+      const { Database } = await import('bun:sqlite');
+      const db = new Database(config.databasePath);
+      db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+      db.close();
+    } catch {
+      // Ignore - database might be locked or not in WAL mode
+    }
+
     // Generate backup key with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const key = `${config.prefix}bunqueue-${timestamp}.db`;
 
     // Read database file
-    const data = await dbFile.arrayBuffer();
+    const data = await Bun.file(config.databasePath).arrayBuffer();
     const originalSize = data.byteLength;
 
     // Compress with gzip for efficient storage
-    const compressed = Bun.gzipSync(new Uint8Array(data));
+    const compressed = await gzipAsync(new Uint8Array(data));
     const compressedSize = compressed.byteLength;
 
     // Calculate checksum of original data (for integrity verification)
@@ -79,16 +105,24 @@ export async function performBackup(
  */
 export async function listBackups(config: S3BackupConfig, client: S3Client): Promise<BackupItem[]> {
   try {
-    const result = await client.list({
-      prefix: config.prefix,
-      maxKeys: 100,
-    });
+    const allContents: Array<{ key?: string; size?: number; lastModified?: Date | string }> = [];
+    let continuationToken: string | undefined;
 
-    if (!result.contents) {
-      return [];
-    }
+    do {
+      const result = await client.list({
+        prefix: config.prefix,
+        maxKeys: 100,
+        ...(continuationToken ? { continuationToken } : {}),
+      });
 
-    return result.contents
+      if (result.contents) {
+        allContents.push(...result.contents);
+      }
+
+      continuationToken = result.isTruncated ? result.nextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return allContents
       .filter(
         (item): item is typeof item & { key: string } =>
           typeof item.key === 'string' &&
@@ -97,7 +131,7 @@ export async function listBackups(config: S3BackupConfig, client: S3Client): Pro
       )
       .map((item) => {
         const lastMod = item.lastModified;
-        const lastModDate = lastMod ? new Date(lastMod as Date | string) : new Date();
+        const lastModDate = lastMod ? new Date(lastMod) : new Date();
         return {
           key: item.key,
           size: item.size ?? 0,
@@ -151,7 +185,7 @@ export async function restoreBackup(
         new Uint8Array(compressedData)[1] === 0x8b);
 
     const data = isCompressed
-      ? Bun.gunzipSync(new Uint8Array(compressedData))
+      ? await gunzipAsync(new Uint8Array(compressedData))
       : new Uint8Array(compressedData);
 
     // Verify checksum if metadata exists
@@ -163,6 +197,12 @@ export async function restoreBackup(
       if (checksum !== metadataRaw.checksum) {
         throw new Error('Backup checksum mismatch - file may be corrupted');
       }
+    }
+
+    // Validate SQLite format
+    const header = new TextDecoder().decode(data.slice(0, 16));
+    if (!header.startsWith('SQLite format 3')) {
+      throw new Error('Restored data is not a valid SQLite database');
     }
 
     // Write to database path
@@ -184,13 +224,14 @@ export async function restoreBackup(
 export async function cleanupOldBackups(config: S3BackupConfig, client: S3Client): Promise<void> {
   try {
     const backups = await listBackups(config, client);
+    const retention = Math.max(config.retention, 1);
 
-    if (backups.length <= config.retention) {
+    if (backups.length <= retention) {
       return;
     }
 
     // Sort by date (newest first) and get backups to delete
-    const toDelete = backups.slice(config.retention);
+    const toDelete = backups.slice(retention);
 
     for (const backup of toDelete) {
       try {
@@ -203,11 +244,11 @@ export async function cleanupOldBackups(config: S3BackupConfig, client: S3Client
         if (await metadataFile.exists()) {
           await client.delete(metadataKey);
         }
-      } catch {
-        // Ignore delete errors
+      } catch (error) {
+        backupLog.warn('Failed to delete old backup', { key: backup.key, error: String(error) });
       }
     }
-  } catch {
-    // Ignore cleanup errors
+  } catch (error) {
+    backupLog.error('Backup cleanup failed', { error: String(error) });
   }
 }

@@ -9,7 +9,7 @@ head:
 ---
 
 
-Automated backups to any S3-compatible storage.
+Automated backups to any S3-compatible storage with gzip compression and SHA256 integrity verification.
 
 ## Configuration
 
@@ -22,8 +22,12 @@ S3_BUCKET=my-backups
 S3_REGION=us-east-1
 S3_BACKUP_INTERVAL=21600000  # 6 hours
 S3_BACKUP_RETENTION=7         # Keep 7 backups
-S3_BACKUP_PREFIX=bunqueue/
+S3_BACKUP_PREFIX=backups/     # Default prefix
 ```
+
+:::note[AWS Environment Variables]
+AWS-style environment variables are also supported as fallbacks: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET`, `AWS_REGION`, `AWS_ENDPOINT`.
+:::
 
 ## Supported Providers
 
@@ -51,9 +55,35 @@ bunqueue backup restore <key> -f  # Force overwrite
 bunqueue backup status
 ```
 
+:::caution[Restore Safety]
+Restore requires the `--force` (`-f`) flag and will **overwrite** the current database. Always stop the server before restoring.
+:::
+
 ## Backup Contents
 
 Each backup includes:
-- SQLite database (all jobs, cron, DLQ)
-- WAL file (if exists)
-- Metadata (timestamp, version)
+- SQLite database file (all jobs, cron, DLQ), compressed with **gzip**
+- Metadata file (`.meta.json`) with timestamp, version, original size, compressed size, and SHA256 checksum
+
+## How It Works
+
+1. **Compression** — The database is compressed with gzip before upload for efficient storage
+2. **Checksum** — A SHA256 hash of the original data is computed and stored in the metadata file
+3. **Upload** — The compressed backup and metadata are uploaded to S3 as separate files
+4. **Cleanup** — Old backups exceeding the retention limit are automatically deleted
+
+## Scheduling
+
+When enabled, backups are automatically scheduled:
+
+- **Initial backup**: Runs 1 minute after server startup
+- **Periodic backups**: Runs every `S3_BACKUP_INTERVAL` milliseconds (default: 6 hours)
+- **Concurrent protection**: Only one backup can run at a time; overlapping requests are rejected
+
+## Restore Verification
+
+When restoring, bunqueue automatically:
+- Detects whether the backup is gzip-compressed (via metadata or magic bytes)
+- Decompresses the backup if needed
+- Verifies the SHA256 checksum against the metadata to ensure data integrity
+- Supports older uncompressed backups for backward compatibility

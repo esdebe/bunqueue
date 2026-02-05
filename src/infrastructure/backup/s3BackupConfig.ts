@@ -101,5 +101,12 @@ export function validateConfig(config: S3BackupConfig): { valid: boolean; errors
     errors.push('Database path is required');
   }
 
+  if (config.retention < 1) {
+    errors.push('Retention must be at least 1');
+  }
+  if (config.intervalMs < 60000) {
+    errors.push('Backup interval must be at least 60 seconds');
+  }
+
   return { valid: errors.length === 0, errors };
 }
