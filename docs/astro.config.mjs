@@ -89,7 +89,6 @@ export default defineConfig({
             { label: 'Introduction', link: '/guide/introduction/' },
             { label: 'Installation', link: '/guide/installation/' },
             { label: 'Quick Start', link: '/guide/quickstart/' },
-            { label: 'Interactive Simulator', link: '/simulator/' },
           ],
         },
         {
