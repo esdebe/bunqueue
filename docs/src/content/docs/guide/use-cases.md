@@ -1,6 +1,6 @@
 ---
 title: Use Cases
-description: Real-world examples and production patterns with bunqueue
+description: Production-ready bunqueue patterns for Bun apps. Email delivery, report generation, webhooks, image processing, payments, and multi-tenant queues.
 head:
   - tag: meta
     attrs:

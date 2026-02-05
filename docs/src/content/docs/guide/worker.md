@@ -1,6 +1,6 @@
 ---
 title: Worker API
-description: Worker class API for job processing, concurrency control, heartbeat, events, and sandboxed workers
+description: Learn bunqueue Worker API for job processing. Configure concurrency, heartbeats, batch pulling, lock-based ownership, and sandboxed workers for isolation
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
-title: Data Structures
-description: Skip lists, MinHeap, LRU cache, and priority queues powering bunqueue's high-performance job processing
+title: Core Data Structures
+description: Core data structures powering bunqueue Bun job queue. Covers 4-ary MinHeap, skip lists, LRU cache, FNV-1a hashing, and read-write locks with complexities.
 head:
   - tag: meta
     attrs:

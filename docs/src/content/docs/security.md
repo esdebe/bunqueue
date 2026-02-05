@@ -1,6 +1,6 @@
 ---
-title: Security
-description: "bunqueue security practices: token authentication, rate limiting, and vulnerability reporting"
+title: Security Best Practices
+description: Secure your bunqueue deployment with token authentication, rate limiting, network configuration, S3 backup encryption, and vulnerability reporting guidelines.
 head:
   - tag: meta
     attrs:

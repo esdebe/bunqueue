@@ -1,6 +1,6 @@
 ---
 title: Monitoring
-description: Monitor bunqueue with Prometheus metrics, Grafana dashboards, alert rules, and health endpoints
+description: Monitor bunqueue with Prometheus metrics and Grafana dashboards. Set up alerts for DLQ, failure rates, queue backlogs, and worker health endpoints
 head:
   - tag: meta
     attrs:

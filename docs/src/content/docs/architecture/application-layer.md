@@ -1,6 +1,6 @@
 ---
 title: Application Layer Architecture
-description: Operations orchestration, background task scheduling, and DLQ management flows in bunqueue
+description: Application layer architecture of bunqueue job queue. Covers PUSH/PULL/ACK operations, stall detection, dependency resolution, and DLQ management flows.
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
 title: Migration from BullMQ
-description: Step-by-step guide to migrate from BullMQ to bunqueue
+description: Migrate from BullMQ to bunqueue with minimal code changes. Drop Redis, keep your Queue and Worker API. Step-by-step guide for Bun job queues.
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
 title: Elysia Integration
-description: Add background job processing to your Elysia app with bunqueue plugin for Bun
+description: Integrate bunqueue with Elysia for background jobs in Bun. Add queues, workers, DLQ monitoring, and typed routes with plugin pattern examples.
 head:
   - tag: meta
     attrs:

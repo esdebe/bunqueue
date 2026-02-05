@@ -1,6 +1,6 @@
 ---
 title: Introduction to bunqueue
-description: High-performance SQLite job queue for Bun with zero Redis dependency and BullMQ-compatible API
+description: bunqueue is a high-performance SQLite job queue for Bun. Zero Redis dependency, BullMQ-compatible API, with stall detection, DLQ, and S3 backups
 head:
   - tag: meta
     attrs:

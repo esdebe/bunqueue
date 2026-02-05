@@ -1,6 +1,6 @@
 ---
-title: Contributing
-description: "Contribute to bunqueue: development setup, coding guidelines, testing, and pull request workflow"
+title: Contributing Guide
+description: Learn how to contribute to bunqueue - development environment setup, coding standards, testing guidelines, and pull request workflow for Bun job queue.
 head:
   - tag: meta
     attrs:

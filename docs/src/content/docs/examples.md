@@ -1,6 +1,6 @@
 ---
-title: Examples
-description: Real-world examples and patterns for bunqueue
+title: Code Examples
+description: Production-ready code examples for bunqueue - email queues, image processing pipelines, scheduled reports, webhooks, ETL workflows, and more patterns.
 head:
   - tag: meta
     attrs:

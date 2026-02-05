@@ -1,6 +1,6 @@
 ---
 title: Cron Jobs
-description: Schedule recurring background jobs with cron expressions, intervals, and timezone support in bunqueue
+description: Schedule recurring jobs in bunqueue using cron expressions or intervals. Supports IANA timezones, repeatable jobs, and both server and embedded modes
 head:
   - tag: meta
     attrs:

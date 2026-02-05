@@ -1,6 +1,6 @@
 ---
 title: Flow Producer
-description: Job chains, parallel execution, and dependency management
+description: Build complex job workflows in bunqueue with FlowProducer. Create sequential chains, parallel execution with merge, and hierarchical tree structures
 head:
   - tag: meta
     attrs:

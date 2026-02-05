@@ -1,6 +1,6 @@
 ---
 title: Cron Scheduler Architecture
-description: MinHeap-based cron scheduling system with lazy deletion and timezone support in bunqueue
+description: Cron scheduler architecture for bunqueue Bun job queue. MinHeap-based execution with O(1) lazy deletion, timezone support, and SQLite persistence.
 head:
   - tag: meta
     attrs:

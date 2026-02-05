@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Create your first job queue with bunqueue in 5 minutes using embedded or server mode
+description: Get started with bunqueue in 5 minutes. Create queues, add jobs, and process them with workers in embedded mode. Includes SQLite persistence setup
 head:
   - tag: meta
     attrs:

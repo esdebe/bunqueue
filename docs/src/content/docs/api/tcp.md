@@ -1,6 +1,6 @@
 ---
 title: TCP Protocol
-description: Binary TCP protocol specification for bunqueue with wire format, pipelining, and command reference
+description: High-performance binary TCP protocol specification for bunqueue job queue. Covers wire format, MessagePack encoding, pipelining, and all command references.
 head:
   - tag: meta
     attrs:

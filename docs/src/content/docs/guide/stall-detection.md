@@ -1,6 +1,6 @@
 ---
 title: Stall Detection
-description: Configure stall detection for automatic recovery of unresponsive jobs with heartbeat monitoring in bunqueue
+description: Configure stall detection in bunqueue to automatically recover unresponsive jobs. Set heartbeat intervals, max stalls, and grace periods for workers
 head:
   - tag: meta
     attrs:

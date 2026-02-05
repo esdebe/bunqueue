@@ -1,6 +1,6 @@
 ---
 title: Queue Group
-description: Organize related queues with namespace isolation using QueueGroup for multi-tenant applications
+description: Bunqueue QueueGroup for namespace isolation in Bun apps. Organize related queues with prefixes for multi-tenant systems and microservice domains.
 head:
   - tag: meta
     attrs:

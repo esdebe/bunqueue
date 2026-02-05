@@ -1,6 +1,6 @@
 ---
-title: Troubleshooting
-description: "Fix common bunqueue issues: SQLite locks, memory usage, timeouts, connection errors, and job failures"
+title: Troubleshooting Guide
+description: Solve common bunqueue problems including SQLite database locks, memory leaks, connection timeouts, job processing failures, and embedded mode issues.
 head:
   - tag: meta
     attrs:

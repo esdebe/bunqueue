@@ -1,6 +1,6 @@
 ---
-title: FAQ
-description: Frequently asked questions about bunqueue job queue - performance, scaling, persistence, migration from BullMQ
+title: Frequently Asked Questions
+description: Common questions about bunqueue job queue for Bun answered - performance benchmarks, scaling strategies, SQLite persistence, and BullMQ migration guide.
 head:
   - tag: meta
     attrs:

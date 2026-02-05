@@ -1,6 +1,6 @@
 ---
 title: Dead Letter Queue
-description: Advanced DLQ with metadata, auto-retry, and lifecycle management
+description: Configure bunqueue Dead Letter Queue for failed jobs. Auto-retry with backoff, expiration policies, filtering by reason, and DLQ stats for Bun apps.
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
 title: Environment Variables
-description: Complete reference for bunqueue environment variables
+description: Configure bunqueue server with environment variables. TCP/HTTP ports, SQLite path, auth tokens, S3 backup settings, and logging options for Bun.
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
 title: Queue API
-description: Queue class API for adding jobs, batch operations, priorities, delays, and deduplication in bunqueue
+description: Master bunqueue Queue API for adding jobs with priorities, delays, retries, and deduplication. Includes bulk operations, durable writes, and DLQ config
 head:
   - tag: meta
     attrs:

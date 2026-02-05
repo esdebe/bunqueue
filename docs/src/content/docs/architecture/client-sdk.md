@@ -1,6 +1,6 @@
 ---
 title: Client SDK Architecture
-description: Connection handling, job submission, and worker processing flows in bunqueue's TypeScript client
+description: Client SDK architecture for bunqueue Bun job queue. Covers TCP connection pooling, embedded vs server mode, worker heartbeats, and ACK batching flows.
 head:
   - tag: meta
     attrs:

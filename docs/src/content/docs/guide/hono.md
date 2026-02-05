@@ -1,6 +1,6 @@
 ---
 title: Hono Integration
-description: Add background job processing to your Hono app with bunqueue middleware for Bun
+description: Integrate bunqueue with Hono for background jobs in Bun. Add queues, workers, and job status endpoints with middleware pattern and graceful shutdown.
 head:
   - tag: meta
     attrs:

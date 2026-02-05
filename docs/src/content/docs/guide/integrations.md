@@ -1,6 +1,6 @@
 ---
 title: Framework Integrations
-description: Integrate bunqueue job queue with Hono, Elysia, and other Bun web frameworks
+description: Integrate bunqueue job queue with Hono and Elysia web frameworks. Learn embedded mode setup, project structure, and graceful shutdown patterns
 head:
   - tag: meta
     attrs:

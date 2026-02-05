@@ -1,6 +1,6 @@
 ---
 title: Webhooks
-description: HTTP callbacks for job events with signature verification
+description: Bunqueue webhooks for job events with HMAC-SHA256 signatures. Receive HTTP callbacks on completion, failure, progress, and stall with auto-retry.
 head:
   - tag: meta
     attrs:

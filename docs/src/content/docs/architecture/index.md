@@ -1,6 +1,6 @@
 ---
 title: Architecture Overview
-description: High-level architecture of bunqueue including sharding, TCP protocol, SQLite persistence, and background tasks
+description: High-level architecture overview of bunqueue Bun job queue. Covers auto-scaling shards, TCP protocol, SQLite WAL persistence, and background task scheduling.
 head:
   - tag: meta
     attrs:

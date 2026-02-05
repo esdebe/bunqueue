@@ -1,6 +1,6 @@
 ---
-title: Architecture
-description: Deep dive into bunqueue's internal architecture, sharding, SQLite persistence, and design decisions
+title: Architecture Overview
+description: Deep dive into bunqueue internals - sharding architecture, job lifecycle, SQLite WAL persistence, TCP protocol, lock hierarchy, and performance design decisions.
 head:
   - tag: meta
     attrs:
