@@ -3,10 +3,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/egeominotti/bunqueue/stargazers"><img src="https://img.shields.io/github/stars/egeominotti/bunqueue?style=flat" alt="GitHub Stars"></a>
+  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/dm/bunqueue" alt="npm downloads"></a>
   <a href="https://github.com/egeominotti/bunqueue/actions"><img src="https://github.com/egeominotti/bunqueue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/egeominotti/bunqueue/releases"><img src="https://img.shields.io/github/v/release/egeominotti/bunqueue" alt="Release"></a>
   <a href="https://github.com/egeominotti/bunqueue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunqueue" alt="License"></a>
-  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/v/bunqueue" alt="npm"></a>
 </p>
 
 <p align="center">
@@ -14,7 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://egeominotti.github.io/bunqueue/"><strong>Documentation</strong></a>
+  <a href="https://egeominotti.github.io/bunqueue/"><strong>Documentation</strong></a> ·
+  <a href="https://egeominotti.github.io/bunqueue/guide/benchmarks/"><strong>Benchmarks</strong></a>
 </p>
 
 ---
@@ -30,8 +32,28 @@
 
 - **BullMQ-compatible API** — Same `Queue`, `Worker`, `QueueEvents`
 - **Zero dependencies** — No Redis, no MongoDB
-- **SQLite persistence** — Survives restarts
-- **100K+ jobs/sec** — Built on Bun
+- **SQLite persistence** — Survives restarts, WAL mode for concurrent access
+- **Up to 286K ops/sec** — [Verified benchmarks](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
+
+## When to use bunqueue
+
+**Great for:**
+- Single-server deployments
+- Prototypes and MVPs
+- Moderate to high workloads (up to 286K ops/sec)
+- Teams that want to avoid Redis operational overhead
+- Embedded use cases (CLI tools, edge functions, serverless)
+
+**Not ideal for:**
+- Multi-region distributed systems requiring HA
+- Workloads that need automatic failover today
+- Systems already running Redis with existing infrastructure
+
+## Why not just use BullMQ?
+
+If you're already running Redis, BullMQ is great — battle-tested and feature-rich.
+
+bunqueue is for when you **don't want to run Redis**. SQLite with WAL mode handles surprisingly high throughput for single-node deployments (tested up to 286K ops/sec). You get persistence, priorities, delays, retries, cron jobs, and DLQ — without the operational overhead of another service.
 
 ## Install
 
@@ -56,6 +78,17 @@ const worker = new Worker('emails', async (job) => {
 await queue.add('welcome', { to: 'user@example.com' });
 ```
 
+## Performance
+
+SQLite handles surprisingly high throughput for single-node deployments:
+
+| Mode | Peak Throughput | Use Case |
+|------|-----------------|----------|
+| Embedded | 286K ops/sec | Same process |
+| TCP | 149K ops/sec | Distributed workers |
+
+> Run `bun run bench` to verify on your hardware. [Full benchmark methodology →](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
+
 ## Monitoring
 
 ```bash
@@ -74,7 +107,7 @@ docker compose --profile monitoring up -d
 - [Queue API](https://egeominotti.github.io/bunqueue/guide/queue/)
 - [Worker API](https://egeominotti.github.io/bunqueue/guide/worker/)
 - [Server Mode](https://egeominotti.github.io/bunqueue/guide/server/)
-- [Monitoring](https://egeominotti.github.io/bunqueue/guide/monitoring/)
+- [Benchmarks](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
 - [CLI Reference](https://egeominotti.github.io/bunqueue/guide/cli/)
 
 ## License
