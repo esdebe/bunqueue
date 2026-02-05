@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/banner.svg" alt="bunqueue - High-performance job queue for Bun" width="700" />
+  <img src=".github/banner.svg" alt="bunqueue" width="150" />
 </p>
 
 <p align="center">
