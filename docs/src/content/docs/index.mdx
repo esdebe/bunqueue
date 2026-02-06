@@ -51,8 +51,13 @@ import { Card, CardGrid, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlig
   </TabItem>
   <TabItem label="Server Mode">
     ```bash
-    # First, start the server
+    # Start the server
     bunqueue start --data-path ./data/queue.db
+
+    # Or with Docker
+    docker run -d -p 6789:6789 -p 6790:6790 \
+      -v bunqueue-data:/app/data \
+      ghcr.io/egeominotti/bunqueue:latest
     ```
 
     ```typescript
@@ -75,22 +80,6 @@ import { Card, CardGrid, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlig
     });
 
     worker.on('completed', (job) => console.log(`✓ ${job.id}`));
-    ```
-  </TabItem>
-  <TabItem label="Docker">
-    ```dockerfile
-    FROM oven/bun:latest
-    WORKDIR /app
-    RUN bun add bunqueue
-    COPY . .
-    CMD ["bunqueue", "start"]
-    ```
-
-    ```bash
-    docker run -p 6789:6789 -p 6790:6790 \
-      -v ./data:/app/data \
-      -e DATA_PATH=/app/data/queue.db \
-      bunqueue
     ```
   </TabItem>
 </Tabs>
