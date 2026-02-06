@@ -9,6 +9,9 @@ import { CommandError, requireArg } from './types';
 /** Build a worker subcommand */
 export function buildWorkerCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError('Missing subcommand. Use: list, register, unregister');
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {

@@ -60,10 +60,16 @@ function buildPush(args: string[]): Record<string, unknown> {
   if (priority !== undefined) cmd.priority = priority;
 
   const delay = parseNumberArg(values.delay as string | undefined, 'delay');
-  if (delay !== undefined) cmd.delay = delay;
+  if (delay !== undefined) {
+    if (delay < 0) throw new CommandError('delay must be >= 0');
+    cmd.delay = delay;
+  }
 
   const maxAttempts = parseNumberArg(values['max-attempts'] as string | undefined, 'max-attempts');
-  if (maxAttempts !== undefined) cmd.maxAttempts = maxAttempts;
+  if (maxAttempts !== undefined) {
+    if (maxAttempts < 1) throw new CommandError('max-attempts must be >= 1');
+    cmd.maxAttempts = maxAttempts;
+  }
 
   const backoff = parseNumberArg(values.backoff as string | undefined, 'backoff');
   if (backoff !== undefined) cmd.backoff = backoff;
@@ -72,7 +78,10 @@ function buildPush(args: string[]): Record<string, unknown> {
   if (ttl !== undefined) cmd.ttl = ttl;
 
   const timeout = parseNumberArg(values.timeout as string | undefined, 'timeout');
-  if (timeout !== undefined) cmd.timeout = timeout;
+  if (timeout !== undefined) {
+    if (timeout <= 0) throw new CommandError('timeout must be > 0');
+    cmd.timeout = timeout;
+  }
 
   if (values['unique-key']) cmd.uniqueKey = values['unique-key'];
   if (values['job-id']) cmd.jobId = values['job-id'];

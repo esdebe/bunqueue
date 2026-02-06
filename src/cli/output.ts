@@ -155,7 +155,7 @@ function formatWorkers(workers: Record<string, unknown>[]): string {
   return workers
     .map(
       (w) =>
-        `  ${color(str(w.id), colors.bold)}: ${str(w.name)} (${(w.queues as string[]).join(', ')})`
+        `  ${color(str(w.id), colors.bold)}: ${str(w.name)} (${Array.isArray(w.queues) ? (w.queues as string[]).join(', ') : 'none'})`
     )
     .join('\n');
 }
@@ -183,7 +183,7 @@ function formatDlqJobs(jobs: Record<string, unknown>[]): string {
   return jobs
     .map(
       (job) =>
-        `  ${color(str(job.jobId), colors.bold)}\n    Queue: ${str(job.queue)}\n    Error: ${color(str(job.error, 'Unknown'), colors.red)}\n    Failed: ${new Date(job.failedAt as number).toISOString()}`
+        `  ${color(str(job.jobId), colors.bold)}\n    Queue: ${str(job.queue)}\n    Error: ${color(str(job.error, 'Unknown'), colors.red)}\n    Failed: ${job.failedAt !== null && job.failedAt !== undefined ? new Date(job.failedAt as number).toISOString() : 'unknown'}`
     )
     .join('\n\n');
 }
@@ -198,7 +198,7 @@ function formatLogs(logs: Record<string, unknown>[]): string {
     .map((log) => {
       const levelColor =
         log.level === 'error' ? colors.red : log.level === 'warn' ? colors.yellow : colors.dim;
-      return `  [${new Date(log.timestamp as number).toISOString()}] ${color(str(log.level).toUpperCase(), levelColor)}: ${str(log.message)}`;
+      return `  [${log.timestamp !== null && log.timestamp !== undefined ? new Date(log.timestamp as number).toISOString() : 'unknown'}] ${color(str(log.level).toUpperCase(), levelColor)}: ${str(log.message)}`;
     })
     .join('\n');
 }

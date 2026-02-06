@@ -8,6 +8,9 @@ import { CommandError, requireArg, parseNumberArg } from './types';
 /** Build a rate-limit or concurrency command */
 export function buildRateLimitCommand(command: string, args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError(`Missing subcommand for ${command}. Use: set, clear`);
+  }
   const subArgs = args.slice(1);
 
   if (command === 'rate-limit') {

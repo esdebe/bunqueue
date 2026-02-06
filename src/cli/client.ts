@@ -33,18 +33,21 @@ async function sendCommand(
   command: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    socket.data.resolve = resolve;
-    socket.data.reject = reject;
-    socket.write(FrameParser.frame(pack(command)));
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (socket.data.resolve === resolve) {
-        socket.data.resolve = null;
-        socket.data.reject = null;
-        reject(new Error('Command timeout'));
-      }
+    const timeoutId = setTimeout(() => {
+      socket.data.resolve = null;
+      socket.data.reject = null;
+      reject(new Error('Command timeout'));
     }, 30000);
+
+    socket.data.resolve = (value) => {
+      clearTimeout(timeoutId);
+      resolve(value);
+    };
+    socket.data.reject = (error) => {
+      clearTimeout(timeoutId);
+      reject(error);
+    };
+    socket.write(FrameParser.frame(pack(command)));
   });
 }
 
@@ -104,6 +107,7 @@ async function connect(options: ClientOptions): Promise<{
       },
       open(sock: Socket<unknown>) {
         connected = true;
+        clearTimeout(connectionTimeoutId);
         resolve({
           socket: {
             write: (data: Uint8Array) => sock.write(data),
@@ -134,7 +138,7 @@ async function connect(options: ClientOptions): Promise<{
     });
 
     // Handle connection timeout
-    setTimeout(() => {
+    const connectionTimeoutId = setTimeout(() => {
       if (!connected) {
         reject(new Error(`Connection timeout to ${targetDesc}`));
       }
@@ -174,11 +178,12 @@ export async function executeCommand(
 
     // Execute command
     const response = await sendCommand(connection.socket, cmd);
-    console.log(formatOutput(response, command, options.json));
 
     if (!response.ok) {
+      console.error(formatOutput(response, command, options.json));
       process.exit(1);
     }
+    console.log(formatOutput(response, command, options.json));
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error(formatError(message, options.json));

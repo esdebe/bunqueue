@@ -21,7 +21,7 @@ interface GlobalOptions {
 }
 
 /** Parse global options from process.argv */
-function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] } {
+export function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] } {
   const allArgs = process.argv.slice(2);
 
   // Extract global options manually to preserve subcommand flags
@@ -41,9 +41,21 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
     if (arg === '--host' || arg === '-H') {
       host = allArgs[++i] ?? 'localhost';
     } else if (arg === '--port' || arg === '-p') {
-      port = parseInt(allArgs[++i] ?? '6789', 10);
+      const raw = allArgs[++i] ?? '6789';
+      const parsed = parseInt(raw, 10);
+      if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+        console.warn(`Warning: Invalid port "${raw}". Using default port 6789.`);
+        port = 6789;
+      } else {
+        port = parsed;
+      }
     } else if (arg === '--token' || arg === '-t') {
-      token = allArgs[++i];
+      const nextArg = allArgs[i + 1];
+      if (nextArg === undefined) {
+        console.warn('Warning: --token requires a value. Token not set.');
+      } else {
+        token = allArgs[++i];
+      }
     } else if (arg === '--json') {
       json = true;
     } else if (arg === '--help') {
@@ -53,9 +65,21 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
     } else if (arg.startsWith('--host=')) {
       host = arg.slice(7);
     } else if (arg.startsWith('--port=')) {
-      port = parseInt(arg.slice(7), 10);
+      const raw = arg.slice(7);
+      const parsed = parseInt(raw, 10);
+      if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+        console.warn(`Warning: Invalid port "${raw}". Using default port 6789.`);
+        port = 6789;
+      } else {
+        port = parsed;
+      }
     } else if (arg.startsWith('--token=')) {
-      token = arg.slice(8);
+      const val = arg.slice(8);
+      if (!val) {
+        console.warn('Warning: --token= requires a value. Token not set.');
+      } else {
+        token = val;
+      }
     } else {
       // Not a global option, pass to command
       commandArgs.push(arg);

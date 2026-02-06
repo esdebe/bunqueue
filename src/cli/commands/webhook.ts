@@ -19,6 +19,9 @@ const VALID_EVENTS = [
 /** Build a webhook subcommand */
 export function buildWebhookCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError('Missing subcommand. Use: list, add, remove');
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {

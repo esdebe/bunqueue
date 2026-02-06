@@ -12,6 +12,11 @@ const VALID_STATES = ['waiting', 'delayed', 'active', 'completed', 'failed'];
 /** Build a queue subcommand */
 export function buildQueueCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError(
+      'Missing subcommand. Use: list, pause, resume, drain, obliterate, clean, count, jobs, paused'
+    );
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {
@@ -78,6 +83,9 @@ function buildClean(args: string[]): Record<string, unknown> {
   if (grace === undefined) {
     throw new CommandError('--grace is required for clean command (time in milliseconds)');
   }
+  if (grace < 0) {
+    throw new CommandError('grace must be >= 0');
+  }
 
   const state = values.state as string | undefined;
   if (state && !VALID_STATES.includes(state)) {
@@ -130,10 +138,16 @@ function buildGetJobs(args: string[]): Record<string, unknown> {
   if (state) cmd.state = state;
 
   const limit = parseNumberArg(values.limit as string | undefined, 'limit');
-  if (limit !== undefined) cmd.limit = limit;
+  if (limit !== undefined) {
+    if (limit <= 0) throw new CommandError('limit must be > 0');
+    cmd.limit = limit;
+  }
 
   const offset = parseNumberArg(values.offset as string | undefined, 'offset');
-  if (offset !== undefined) cmd.offset = offset;
+  if (offset !== undefined) {
+    if (offset < 0) throw new CommandError('offset must be >= 0');
+    cmd.offset = offset;
+  }
 
   return cmd;
 }

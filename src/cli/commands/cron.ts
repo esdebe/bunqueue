@@ -9,6 +9,9 @@ import { CommandError, requireArg, parseJsonArg, parseNumberArg } from './types'
 /** Build a cron subcommand */
 export function buildCronCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError('Missing subcommand. Use: list, add, delete');
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {

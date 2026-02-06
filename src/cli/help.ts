@@ -45,6 +45,7 @@ JOB COMMANDS:
   job discard <id>                Discard job to DLQ
   job logs <id>                   Get job logs
   job log <id> <message>          Add log entry to job
+  job wait <id> [--timeout ms]    Wait for job completion
 
 QUEUE COMMANDS:
   queue list                      List all queues
@@ -55,6 +56,7 @@ QUEUE COMMANDS:
   queue clean <q> --grace <ms>    Clean old jobs
   queue count <queue>             Count jobs in queue
   queue jobs <queue> [--state s]  List jobs in queue
+  queue paused <queue>            Check if queue is paused
 
 RATE LIMITING:
   rate-limit set <queue> <n>      Set rate limit (jobs/second)

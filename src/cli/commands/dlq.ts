@@ -9,6 +9,9 @@ import { CommandError, requireArg, parseNumberArg } from './types';
 /** Build a DLQ subcommand */
 export function buildDlqCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError('Missing subcommand. Use: list, retry, purge');
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {

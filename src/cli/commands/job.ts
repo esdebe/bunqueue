@@ -9,6 +9,11 @@ import { CommandError, requireArg, parseJsonArg, parseNumberArg, parseBigIntArg 
 /** Build a job subcommand */
 export function buildJobCommand(args: string[]): Record<string, unknown> {
   const subcommand = args[0];
+  if (!subcommand) {
+    throw new CommandError(
+      'Missing subcommand. Use: get, state, result, cancel, progress, update, priority, promote, delay, discard, logs, log, wait'
+    );
+  }
   const subArgs = args.slice(1);
 
   switch (subcommand) {
@@ -40,7 +45,7 @@ export function buildJobCommand(args: string[]): Record<string, unknown> {
       return buildWaitJob(subArgs);
     default:
       throw new CommandError(
-        `Unknown job subcommand: ${subcommand}. Use: get, state, result, cancel, progress, update, priority, promote, delay, discard, logs, log`
+        `Unknown job subcommand: ${subcommand}. Use: get, state, result, cancel, progress, update, priority, promote, delay, discard, logs, log, wait`
       );
   }
 }
