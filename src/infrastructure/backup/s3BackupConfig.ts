@@ -25,6 +25,8 @@ export interface S3BackupConfig {
   prefix: string;
   /** Path to the SQLite database file */
   databasePath: string;
+  /** Timeout for S3 operations in milliseconds (default: 30000) */
+  timeoutMs?: number;
 }
 
 /** Backup result */

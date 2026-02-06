@@ -27,11 +27,17 @@ export type { S3BackupConfig, BackupResult } from './s3BackupConfig';
 export class S3BackupManager {
   private readonly config: S3BackupConfig;
   private readonly client: S3Client;
+  private readonly flushBeforeBackup?: () => Promise<void>;
   private backupInterval: ReturnType<typeof setInterval> | null = null;
   private initialBackupTimeout: ReturnType<typeof setTimeout> | null = null;
   private isBackupInProgress = false;
 
-  constructor(config: Partial<S3BackupConfig> & { databasePath: string }) {
+  constructor(
+    config: Partial<S3BackupConfig> & {
+      databasePath: string;
+      flushBeforeBackup?: () => Promise<void>;
+    }
+  ) {
     this.config = {
       enabled: config.enabled ?? false,
       accessKeyId: config.accessKeyId ?? '',
@@ -44,6 +50,8 @@ export class S3BackupManager {
       prefix: config.prefix ?? DEFAULTS.prefix,
       databasePath: config.databasePath,
     };
+
+    this.flushBeforeBackup = config.flushBeforeBackup;
 
     // Initialize S3 client
     this.client = new S3Client({
@@ -124,6 +132,10 @@ export class S3BackupManager {
     this.isBackupInProgress = true;
 
     try {
+      if (this.flushBeforeBackup) {
+        await this.flushBeforeBackup();
+      }
+
       const result = await performBackup(this.config, this.client);
 
       if (result.success) {

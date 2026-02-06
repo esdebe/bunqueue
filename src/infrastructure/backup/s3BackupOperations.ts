@@ -8,6 +8,104 @@ import { backupLog } from '../../shared/logger';
 import { VERSION } from '../../shared/version';
 import type { S3BackupConfig, BackupResult, BackupMetadata, BackupItem } from './s3BackupConfig';
 
+const DEFAULT_S3_TIMEOUT_MS = 30_000;
+
+/** Race a promise against a timeout; rejects with a descriptive error on timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${label} timed out after ${ms}ms`));
+      }, ms);
+    }),
+  ]);
+}
+
+/** Check if an error is transient and worth retrying */
+function isTransientError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('connection reset') ||
+    lower.includes('econnreset') ||
+    lower.includes('timeout') ||
+    lower.includes('etimedout') ||
+    lower.includes('econnrefused') ||
+    lower.includes('socket hang up') ||
+    lower.includes('network') ||
+    lower.includes('503') ||
+    lower.includes('500') ||
+    lower.includes('502') ||
+    lower.includes('504') ||
+    lower.includes('service unavailable') ||
+    lower.includes('internal server error') ||
+    lower.includes('bad gateway') ||
+    lower.includes('gateway timeout') ||
+    lower.includes('transient')
+  );
+}
+
+/** Retry an async operation with exponential backoff (500ms, 1000ms, 2000ms) */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 3,
+  baseDelayMs = 500
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isTransientError(error)) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        backupLog.warn(
+          `${label} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`,
+          { error: error instanceof Error ? error.message : String(error) }
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
+/** Verify restored database integrity via PRAGMA integrity_check */
+async function verifyDatabaseIntegrity(databasePath: string): Promise<void> {
+  const { Database } = await import('bun:sqlite');
+  let db: InstanceType<typeof Database> | null = null;
+  try {
+    db = new Database(databasePath);
+    const result = db.query('PRAGMA integrity_check').get() as { integrity_check: string } | null;
+    const status = result?.integrity_check ?? '';
+    if (status !== 'ok') {
+      throw new Error(`Database integrity check failed: ${status || 'unknown error'}`);
+    }
+  } catch (error) {
+    // Clean up the corrupt file
+    try {
+      const { unlink } = await import('fs/promises');
+      await unlink(databasePath);
+    } catch {
+      /* best effort */
+    }
+    if (error instanceof Error && error.message.includes('integrity check failed')) {
+      throw error;
+    }
+    throw new Error('Database integrity check failed: corrupt or invalid database');
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* already closed */
+    }
+  }
+}
+
 /** Async gzip compress using Web Streams API (non-blocking) */
 async function gzipAsync(data: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([data as unknown as BlobPart])
@@ -69,13 +167,16 @@ export async function performBackup(
     hasher.update(new Uint8Array(data));
     const checksum = hasher.digest('hex');
 
-    // Upload compressed backup to S3
+    // Upload compressed backup to S3 (with retry and timeout)
+    const timeoutMs = config.timeoutMs ?? DEFAULT_S3_TIMEOUT_MS;
     const s3File = client.file(key);
-    await s3File.write(compressed, {
-      type: 'application/gzip',
-    });
+    await withTimeout(
+      withRetry(() => s3File.write(compressed, { type: 'application/gzip' }), 'S3 backup upload'),
+      timeoutMs,
+      'S3 backup upload'
+    );
 
-    // Upload metadata
+    // Upload metadata (with retry for transient errors)
     const metadata: BackupMetadata = {
       timestamp: new Date().toISOString(),
       version: VERSION,
@@ -86,9 +187,17 @@ export async function performBackup(
     };
 
     const metadataKey = `${key}.meta.json`;
-    await client.file(metadataKey).write(JSON.stringify(metadata, null, 2), {
-      type: 'application/json',
-    });
+    await withTimeout(
+      withRetry(
+        () =>
+          client
+            .file(metadataKey)
+            .write(JSON.stringify(metadata, null, 2), { type: 'application/json' }),
+        'S3 metadata upload'
+      ),
+      timeoutMs,
+      'S3 metadata upload'
+    );
 
     const duration = Date.now() - startTime;
 
@@ -164,8 +273,9 @@ export async function restoreBackup(
       throw new Error(`Backup not found: ${key}`);
     }
 
-    // Download backup
-    const compressedData = await s3File.arrayBuffer();
+    // Download backup (with timeout)
+    const timeoutMs = config.timeoutMs ?? DEFAULT_S3_TIMEOUT_MS;
+    const compressedData = await withTimeout(s3File.arrayBuffer(), timeoutMs, 'S3 backup download');
 
     // Check metadata to determine if backup is compressed
     const metadataKey = `${key}.meta.json`;
@@ -207,6 +317,9 @@ export async function restoreBackup(
 
     // Write to database path
     await Bun.write(config.databasePath, data);
+
+    // Verify restored database integrity
+    await verifyDatabaseIntegrity(config.databasePath);
 
     const duration = Date.now() - startTime;
 
