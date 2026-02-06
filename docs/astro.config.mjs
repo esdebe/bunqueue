@@ -147,6 +147,7 @@ export default defineConfig({
           items: [
             { label: 'Deployment Guide', link: '/guide/deployment/' },
             { label: 'Monitoring', link: '/guide/monitoring/' },
+            { label: 'Telemetry', link: '/guide/telemetry/' },
           ],
         },
         {
