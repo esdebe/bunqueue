@@ -197,6 +197,66 @@ Logger.setLevel('debug');  // Enable verbose logging
 Logger.setLevel('error');  // Only errors
 ```
 
+## Integrations
+
+bunqueue exposes a standard Prometheus `/prometheus` endpoint and structured JSON logs. This makes it compatible out-of-the-box with all major observability platforms.
+
+### Metrics (Prometheus Scraping)
+
+| Platform | How to Connect |
+|----------|----------------|
+| **Prometheus** | Native scrape on `/prometheus` |
+| **Grafana Cloud** | Grafana Agent or Alloy scraping `/prometheus` |
+| **Axiom** | Prometheus remote write or scrape from `/prometheus` |
+| **Datadog** | Agent with `openmetrics` check on `/prometheus` |
+| **New Relic** | Prometheus remote write or `nri-prometheus` |
+| **Victoria Metrics** | Direct scrape, drop-in Prometheus replacement |
+| **Chronosphere** | Prometheus remote write |
+| **Splunk Observability** | Otel Collector with Prometheus receiver |
+
+### Log Aggregation (`LOG_FORMAT=json`)
+
+| Platform | How to Connect |
+|----------|----------------|
+| **Axiom** | Axiom agent or Fluent Bit shipping stdout JSON |
+| **Grafana Loki** | Promtail or Alloy collecting stdout JSON |
+| **Elasticsearch (ELK)** | Filebeat shipping JSON logs |
+| **Datadog Logs** | Datadog Agent collecting stdout |
+| **Splunk** | Universal Forwarder or HTTP Event Collector |
+| **CloudWatch** | CloudWatch Agent on stdout |
+
+### Example: Axiom
+
+```yaml
+# prometheus.yml - Axiom as remote write target
+remote_write:
+  - url: https://api.axiom.co/v1/integrations/prometheus
+    bearer_token: "xaat-your-axiom-token"
+    remote_timeout: 30s
+```
+
+### Example: Datadog
+
+```yaml
+# datadog agent conf.d/openmetrics.d/conf.yaml
+instances:
+  - prometheus_url: http://localhost:6790/prometheus
+    namespace: bunqueue
+    metrics:
+      - bunqueue_*
+```
+
+### Example: Grafana Cloud
+
+```yaml
+# alloy config
+prometheus.scrape "bunqueue" {
+  targets    = [{"__address__" = "localhost:6790"}]
+  metrics_path = "/prometheus"
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+```
+
 ## Architecture
 
 ### Performance Characteristics
