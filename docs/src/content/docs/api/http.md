@@ -364,7 +364,7 @@ GET /health
   "ok": true,
   "status": "healthy",
   "uptime": 3600,
-  "version": "2.1.6",
+  "version": "2.1.8",
   "queues": {
     "waiting": 150,
     "active": 12,

@@ -366,7 +366,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'theme-color',
-            content: '#ec4899',
+            content: '#db2777',
           },
         },
         // Apple touch icon

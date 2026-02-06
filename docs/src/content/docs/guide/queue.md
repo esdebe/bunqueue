@@ -199,18 +199,18 @@ For more control over deduplication behavior, use the `deduplication` option wit
 
 #### TTL-Based Deduplication
 
-By default, `jobId` deduplication is permanent (until the job is completed or removed). Use `deduplication.ttl` to make the unique key expire after a specified time:
+While `jobId` provides permanent idempotency (via `customId`), the `deduplication` option uses a separate `uniqueKey` mechanism with TTL-based expiry. The `id` field is required:
 
 ```typescript
 // TTL-based deduplication - unique key expires after 1 hour
 await queue.add('notification', { userId: '123' }, {
-  jobId: 'notify-123',
   deduplication: {
-    ttl: 3600000  // 1 hour in ms
+    id: 'notify-123',   // Required: unique deduplication key
+    ttl: 3600000        // 1 hour in ms
   }
 });
 
-// After TTL expires, the same jobId can create a new job
+// After TTL expires, the same id can create a new job
 // This is useful for rate-limiting or time-windowed deduplication
 ```
 
@@ -221,10 +221,10 @@ The `extend` strategy resets the TTL of an existing job when a duplicate is dete
 ```typescript
 // Extend strategy - reset TTL if duplicate, return existing job
 await queue.add('rate-limited-task', { action: 'sync' }, {
-  jobId: 'sync-task',
   deduplication: {
+    id: 'sync-task',   // Required: unique deduplication key
     ttl: 60000,
-    extend: true  // Extend TTL on duplicate
+    extend: true       // Extend TTL on duplicate
   }
 });
 ```
@@ -242,10 +242,10 @@ The `replace` strategy removes the existing job and inserts a new one with the u
 ```typescript
 // Replace strategy - remove old job, insert new one
 await queue.add('latest-data', { data: newData }, {
-  jobId: 'data-job',
   deduplication: {
+    id: 'data-job',    // Required: unique deduplication key
     ttl: 300000,
-    replace: true  // Replace existing job with new data
+    replace: true      // Replace existing job with new data
   }
 });
 ```
