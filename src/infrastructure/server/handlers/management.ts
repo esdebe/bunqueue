@@ -8,6 +8,8 @@ import type { Response } from '../../../domain/types/response';
 import * as resp from '../../../domain/types/response';
 import { jobId } from '../../../domain/types/job';
 import type { HandlerContext } from '../types';
+import { throughputTracker } from '../../../application/throughputTracker';
+import { latencyTracker } from '../../../application/latencyTracker';
 
 /** Handle Cancel command */
 export async function handleCancel(
@@ -80,6 +82,7 @@ export function handleDrain(
 /** Handle Stats command */
 export function handleStats(ctx: HandlerContext, reqId?: string): Response {
   const s = ctx.queueManager.getStats();
+  const rates = throughputTracker.getRates();
   return resp.stats(
     {
       queued: s.waiting,
@@ -88,8 +91,8 @@ export function handleStats(ctx: HandlerContext, reqId?: string): Response {
       dlq: s.dlq,
       completed: s.completed,
       uptime: s.uptime,
-      pushPerSec: 0,
-      pullPerSec: 0,
+      pushPerSec: rates.pushPerSec,
+      pullPerSec: rates.pullPerSec,
     },
     reqId
   );
@@ -98,14 +101,15 @@ export function handleStats(ctx: HandlerContext, reqId?: string): Response {
 /** Handle Metrics command */
 export function handleMetrics(ctx: HandlerContext, reqId?: string): Response {
   const s = ctx.queueManager.getStats();
+  const avgLatencies = latencyTracker.getAverages();
   return resp.metrics(
     {
       totalPushed: Number(s.totalPushed),
       totalPulled: Number(s.totalPulled),
       totalCompleted: Number(s.totalCompleted),
       totalFailed: Number(s.totalFailed),
-      avgLatencyMs: 0,
-      avgProcessingMs: 0,
+      avgLatencyMs: Math.round(((avgLatencies.pushMs + avgLatencies.pullMs) / 2) * 100) / 100,
+      avgProcessingMs: Math.round(avgLatencies.ackMs * 100) / 100,
       memoryUsageMb: process.memoryUsage().heapUsed / 1024 / 1024,
       sqliteSizeMb: 0,
       activeConnections: 0,

@@ -1,6 +1,6 @@
 /**
  * Logger Tests
- * Structured logging
+ * LOG_LEVEL filtering and structured logging
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
@@ -18,6 +18,7 @@ describe('Logger', () => {
     consoleWarnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {});
     Logger.disableJsonMode();
+    Logger.setLevel('debug');
   });
 
   afterEach(() => {
@@ -25,6 +26,7 @@ describe('Logger', () => {
     consoleDebugSpy.mockRestore();
     consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+    Logger.setLevel('info');
   });
 
   describe('human-readable mode', () => {
@@ -152,6 +154,84 @@ describe('Logger', () => {
       call = consoleLogSpy.mock.calls[1][0];
       const parsed = JSON.parse(call);
       expect(parsed.component).toBe('Test');
+    });
+  });
+
+  describe('LOG_LEVEL filtering', () => {
+    test('should filter debug messages when level is info', () => {
+      Logger.setLevel('info');
+      const log = createLogger('Test');
+
+      log.debug('should be filtered');
+      expect(consoleDebugSpy).not.toHaveBeenCalled();
+    });
+
+    test('should allow info messages when level is info', () => {
+      Logger.setLevel('info');
+      const log = createLogger('Test');
+
+      log.info('should pass');
+      expect(consoleLogSpy).toHaveBeenCalled();
+    });
+
+    test('should filter info and debug when level is warn', () => {
+      Logger.setLevel('warn');
+      const log = createLogger('Test');
+
+      log.debug('filtered');
+      log.info('filtered');
+      log.warn('passes');
+
+      expect(consoleDebugSpy).not.toHaveBeenCalled();
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalled();
+    });
+
+    test('should only allow error when level is error', () => {
+      Logger.setLevel('error');
+      const log = createLogger('Test');
+
+      log.debug('filtered');
+      log.info('filtered');
+      log.warn('filtered');
+      log.error('passes');
+
+      expect(consoleDebugSpy).not.toHaveBeenCalled();
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
+    test('should allow all messages when level is debug', () => {
+      Logger.setLevel('debug');
+      const log = createLogger('Test');
+
+      log.debug('passes');
+      log.info('passes');
+
+      expect(consoleDebugSpy).toHaveBeenCalled();
+      expect(consoleLogSpy).toHaveBeenCalled();
+    });
+
+    test('should work with JSON mode and level filtering', () => {
+      Logger.enableJsonMode();
+      Logger.setLevel('warn');
+      const log = createLogger('Test');
+
+      log.info('should be filtered even in JSON mode');
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+
+      log.warn('should pass in JSON mode');
+      expect(consoleLogSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('setLevel', () => {
+    test('should accept all valid levels', () => {
+      expect(() => Logger.setLevel('debug')).not.toThrow();
+      expect(() => Logger.setLevel('info')).not.toThrow();
+      expect(() => Logger.setLevel('warn')).not.toThrow();
+      expect(() => Logger.setLevel('error')).not.toThrow();
     });
   });
 });

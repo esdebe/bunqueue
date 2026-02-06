@@ -10,6 +10,41 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.3.0] - 2026-02-06
+
+### Added
+- **Latency Histograms** - Prometheus-compatible histograms for push, pull, and ack operations
+  - Fixed bucket boundaries: 0.1ms to 10,000ms (15 buckets)
+  - Full exposition format: `_bucket{le="..."}`, `_sum`, `_count`
+  - Percentile calculation (p50, p95, p99) for SLO tracking
+  - New files: `src/shared/histogram.ts`, `src/application/latencyTracker.ts`
+- **Per-Queue Metric Labels** - Prometheus labels for per-queue drill-down
+  - `bunqueue_queue_jobs_waiting{queue="..."}` (waiting, delayed, active, dlq)
+  - Enables Grafana filtering and alerting per queue name
+- **Throughput Tracker** - Real-time EMA-based rate tracking
+  - `pushPerSec`, `pullPerSec`, `completePerSec`, `failPerSec`
+  - O(1) per observation, zero GC pressure
+  - Replaces placeholder zeros in `/stats` endpoint
+  - New file: `src/application/throughputTracker.ts`
+- **LOG_LEVEL Runtime Filtering** - `LOG_LEVEL` env var now works at runtime
+  - Levels: `debug`, `info` (default), `warn`, `error`
+  - Priority-based filtering with early return
+- **39 new telemetry tests** across 5 test files:
+  - `test/histogram.test.ts` (9 tests)
+  - `test/latencyTracker.test.ts` (7 tests)
+  - `test/perQueueMetrics.test.ts` (7 tests)
+  - `test/throughputTracker.test.ts` (7 tests)
+  - `test/telemetry-e2e.test.ts` (9 E2E integration tests)
+
+### Changed
+- `/stats` endpoint now returns real throughput and latency values
+- Monitoring docs updated with per-queue metrics, histogram examples, and logging section
+- HTTP API docs updated with new Prometheus output format
+
+### Performance
+- Telemetry overhead: ~0.003% (~25ns per operation via `Bun.nanoseconds()`)
+- Benchmark results unchanged: 197K push/s (embedded), 39K push/s (TCP)
+
 ## [2.1.8] - 2026-02-06
 
 ### Fixed

@@ -14,9 +14,18 @@ export interface LogEntry {
   data?: Record<string, unknown>;
 }
 
+/** Priority map for log level filtering */
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
 /** Logger class for structured logging */
 export class Logger {
   private static jsonMode = false;
+  private static level: LogLevel = 'info';
 
   constructor(private readonly component: string) {}
 
@@ -28,6 +37,11 @@ export class Logger {
   /** Disable JSON output mode (use human-readable) */
   static disableJsonMode(): void {
     Logger.jsonMode = false;
+  }
+
+  /** Set minimum log level */
+  static setLevel(level: LogLevel): void {
+    Logger.level = level;
   }
 
   debug(message: string, data?: Record<string, unknown>): void {
@@ -47,6 +61,8 @@ export class Logger {
   }
 
   private log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
+    if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[Logger.level]) return;
+
     if (Logger.jsonMode) {
       const entry: LogEntry = {
         timestamp: new Date().toISOString(),

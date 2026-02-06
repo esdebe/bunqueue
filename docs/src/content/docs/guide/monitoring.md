@@ -53,6 +53,29 @@ curl http://localhost:6790/prometheus
 | `bunqueue_webhooks_total` | gauge | Total webhooks |
 | `bunqueue_webhooks_enabled` | gauge | Enabled webhooks |
 
+#### Per-Queue Metrics
+
+All per-queue metrics include a `queue` label for filtering and aggregation:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bunqueue_queue_jobs_waiting{queue="..."}` | gauge | Waiting jobs per queue |
+| `bunqueue_queue_jobs_delayed{queue="..."}` | gauge | Delayed jobs per queue |
+| `bunqueue_queue_jobs_active{queue="..."}` | gauge | Active jobs per queue |
+| `bunqueue_queue_jobs_dlq{queue="..."}` | gauge | DLQ jobs per queue |
+
+#### Latency Histograms
+
+Operation latency is tracked with Prometheus histograms (bucket boundaries in milliseconds):
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bunqueue_push_duration_ms` | histogram | Push operation latency |
+| `bunqueue_pull_duration_ms` | histogram | Pull operation latency |
+| `bunqueue_ack_duration_ms` | histogram | Ack operation latency |
+
+Each histogram exposes `_bucket{le="..."}`, `_sum`, and `_count` series. Default bucket boundaries: `0.1, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000` ms.
+
 ### Example Output
 
 ```
@@ -67,6 +90,21 @@ bunqueue_jobs_active 8
 # HELP bunqueue_jobs_pushed_total Total jobs pushed
 # TYPE bunqueue_jobs_pushed_total counter
 bunqueue_jobs_pushed_total 150432
+
+# Per-queue breakdown
+bunqueue_queue_jobs_waiting{queue="emails"} 30
+bunqueue_queue_jobs_waiting{queue="payments"} 12
+bunqueue_queue_jobs_active{queue="emails"} 5
+
+# Latency histograms
+# HELP bunqueue_push_duration_ms Push operation latency in ms
+# TYPE bunqueue_push_duration_ms histogram
+bunqueue_push_duration_ms_bucket{le="0.1"} 120
+bunqueue_push_duration_ms_bucket{le="0.5"} 145000
+bunqueue_push_duration_ms_bucket{le="1"} 150000
+bunqueue_push_duration_ms_bucket{le="+Inf"} 150432
+bunqueue_push_duration_ms_sum 12045.3
+bunqueue_push_duration_ms_count 150432
 ```
 
 ## Prometheus Configuration
@@ -105,11 +143,17 @@ The included dashboard provides:
 ### Throughput & Performance
 - Job throughput (pushed/pulled/completed/failed per second)
 - Queue depth over time (stacked area chart)
+- Per-queue breakdown with label filtering
 
 ### Success & Failure Analysis
 - Success rate gauge (with thresholds)
 - Failure rate gauge (5-minute window)
 - Completed vs Failed bar chart
+
+### Latency & SLOs
+- Push/Pull/Ack latency histograms (p50, p95, p99)
+- Operation latency heatmap
+- SLO compliance tracking via histogram quantiles
 
 ### Workers & Processing
 - Worker count over time
@@ -222,9 +266,22 @@ Import the dashboard JSON directly:
 3. Select Prometheus datasource
 4. Click Import
 
+## Logging
+
+Configure log level at startup via environment variable:
+
+```bash
+LOG_LEVEL=debug bun run src/main.ts    # debug, info, warn, error
+LOG_FORMAT=json bun run src/main.ts    # structured JSON output
+```
+
+Log levels are filtered at runtime. Only messages at or above the configured level are emitted (debug < info < warn < error). Default is `info`.
+
 ## Best Practices
 
 1. **Scrape interval**: Use 5-15 seconds for real-time visibility
 2. **Retention**: Keep 15+ days for trend analysis
 3. **Alerts**: Start with the included rules, tune thresholds for your workload
-4. **Labels**: Consider adding custom labels for multi-queue environments
+4. **Per-queue monitoring**: Use `{queue="..."}` labels to filter dashboards per queue
+5. **Latency SLOs**: Set alerts on histogram quantiles (e.g., `histogram_quantile(0.99, bunqueue_push_duration_ms_bucket) > 50`)
+6. **Throughput rates**: Monitor `pushPerSec` and `pullPerSec` from `/stats` for real-time throughput

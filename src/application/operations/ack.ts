@@ -11,6 +11,8 @@ import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { RWLock } from '../../shared/lock';
 import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
+import { latencyTracker } from '../latencyTracker';
+import { throughputTracker } from '../throughputTracker';
 import type { SetLike, MapLike } from '../../shared/lru';
 import {
   groupByProcShard,
@@ -55,6 +57,7 @@ export interface AckContext {
  * Acknowledge job completion
  */
 export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Promise<void> {
+  const startNs = Bun.nanoseconds();
   const procIdx = processingShardIndex(jobId);
 
   const job = await withWriteLock(ctx.processingLocks[procIdx], () => {
@@ -93,6 +96,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   }
 
   ctx.totalCompleted.value++;
+  throughputTracker.completeRate.increment();
   ctx.broadcast({
     eventType: 'completed' as EventType,
     queue: job.queue,
@@ -109,6 +113,8 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
       ctx.onRepeat(job);
     }
   }
+
+  latencyTracker.ack.observe((Bun.nanoseconds() - startNs) / 1e6);
 }
 
 /**
@@ -153,6 +159,7 @@ export async function failJob(
       ctx.jobIndex.delete(jobId);
       ctx.storage?.deleteJob(jobId);
       ctx.totalFailed.value++;
+      throughputTracker.failRate.increment();
       // Release customId when job is removed on fail
       if (job.customId && ctx.customIdMap) {
         ctx.customIdMap.delete(job.customId);
@@ -162,6 +169,7 @@ export async function failJob(
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
       ctx.storage?.saveDlqEntry(entry);
       ctx.totalFailed.value++;
+      throughputTracker.failRate.increment();
       // Release customId when job goes to DLQ
       if (job.customId && ctx.customIdMap) {
         ctx.customIdMap.delete(job.customId);

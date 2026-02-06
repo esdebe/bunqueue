@@ -18,6 +18,8 @@ import type { RWLock } from '../../shared/lock';
 import { withWriteLock } from '../../shared/lock';
 import { shardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
+import { latencyTracker } from '../latencyTracker';
+import { throughputTracker } from '../throughputTracker';
 
 /** Push operation context */
 export interface PushContext {
@@ -172,6 +174,7 @@ function insertJobToShard(
  * NOTE: customId check happens INSIDE lock to prevent race conditions
  */
 export async function pushJob(queue: string, input: JobInput, ctx: PushContext): Promise<Job> {
+  const startNs = Bun.nanoseconds();
   const idx = shardIndex(queue);
   const now = Date.now();
   let result: { job: Job; persisted: boolean } | undefined;
@@ -212,6 +215,7 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
   if (result.persisted) {
     ctx.storage?.insertJob(result.job, input.durable);
     ctx.totalPushed.value++;
+    throughputTracker.pushRate.increment();
     ctx.broadcast({
       eventType: 'pushed' as EventType,
       queue,
@@ -220,6 +224,7 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
     });
   }
 
+  latencyTracker.push.observe((Bun.nanoseconds() - startNs) / 1e6);
   return result.job;
 }
 
@@ -232,6 +237,7 @@ export async function pushJobBatch(
   inputs: JobInput[],
   ctx: PushContext
 ): Promise<JobId[]> {
+  const startNs = Bun.nanoseconds();
   const now = Date.now();
   const idx = shardIndex(queue);
   const resultIds: JobId[] = [];
@@ -271,6 +277,7 @@ export async function pushJobBatch(
   if (jobsToInsert.length > 0) {
     ctx.storage?.insertJobsBatch(jobsToInsert);
     ctx.totalPushed.value += BigInt(jobsToInsert.length);
+    throughputTracker.pushRate.increment(jobsToInsert.length);
 
     for (const job of jobsToInsert) {
       ctx.broadcast({
@@ -282,5 +289,6 @@ export async function pushJobBatch(
     }
   }
 
+  latencyTracker.push.observe((Bun.nanoseconds() - startNs) / 1e6);
   return resultIds;
 }

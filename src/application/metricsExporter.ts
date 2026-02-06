@@ -5,6 +5,8 @@
 
 import type { WorkerManager } from './workerManager';
 import type { WebhookManager } from './webhookManager';
+import type { PerQueueStats } from './statsManager';
+import { latencyTracker } from './latencyTracker';
 
 /** Stats data structure */
 export interface QueueStats {
@@ -26,7 +28,8 @@ export interface QueueStats {
 export function generatePrometheusMetrics(
   stats: QueueStats,
   workerManager: WorkerManager,
-  webhookManager: WebhookManager
+  webhookManager: WebhookManager,
+  perQueueStats?: Map<string, PerQueueStats>
 ): string {
   const workerStats = workerManager.getStats();
   const webhookStats = webhookManager.getStats();
@@ -100,6 +103,44 @@ export function generatePrometheusMetrics(
     '# TYPE bunqueue_webhooks_enabled gauge',
     `bunqueue_webhooks_enabled ${webhookStats.enabled}`,
   ];
+
+  // Per-queue metrics
+  if (perQueueStats && perQueueStats.size > 0) {
+    lines.push('');
+    lines.push('# HELP bunqueue_queue_jobs_waiting Number of waiting jobs per queue');
+    lines.push('# TYPE bunqueue_queue_jobs_waiting gauge');
+    for (const [queue, qs] of perQueueStats) {
+      lines.push(`bunqueue_queue_jobs_waiting{queue="${queue}"} ${qs.waiting}`);
+    }
+
+    lines.push('');
+    lines.push('# HELP bunqueue_queue_jobs_delayed Number of delayed jobs per queue');
+    lines.push('# TYPE bunqueue_queue_jobs_delayed gauge');
+    for (const [queue, qs] of perQueueStats) {
+      lines.push(`bunqueue_queue_jobs_delayed{queue="${queue}"} ${qs.delayed}`);
+    }
+
+    lines.push('');
+    lines.push('# HELP bunqueue_queue_jobs_active Number of active jobs per queue');
+    lines.push('# TYPE bunqueue_queue_jobs_active gauge');
+    for (const [queue, qs] of perQueueStats) {
+      lines.push(`bunqueue_queue_jobs_active{queue="${queue}"} ${qs.active}`);
+    }
+
+    lines.push('');
+    lines.push('# HELP bunqueue_queue_jobs_dlq Number of DLQ jobs per queue');
+    lines.push('# TYPE bunqueue_queue_jobs_dlq gauge');
+    for (const [queue, qs] of perQueueStats) {
+      lines.push(`bunqueue_queue_jobs_dlq{queue="${queue}"} ${qs.dlq}`);
+    }
+  }
+
+  // Append latency histograms
+  const histogramOutput = latencyTracker.toPrometheus();
+  if (histogramOutput) {
+    lines.push('');
+    lines.push(histogramOutput);
+  }
 
   return lines.join('\n');
 }

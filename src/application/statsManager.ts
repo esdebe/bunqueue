@@ -3,7 +3,7 @@
  * Provides system metrics and memory compaction utilities
  */
 
-import { SHARD_COUNT } from '../shared/hash';
+import { SHARD_COUNT, shardIndex } from '../shared/hash';
 import type { StatsContext } from './types';
 
 export interface QueueStats {
@@ -19,6 +19,13 @@ export interface QueueStats {
   uptime: number;
   cronJobs: number;
   cronPending: number;
+}
+
+export interface PerQueueStats {
+  waiting: number;
+  delayed: number;
+  active: number;
+  dlq: number;
 }
 
 export interface MemoryStats {
@@ -126,6 +133,52 @@ export function getMemoryStats(ctx: StatsContext): MemoryStats {
     temporalIndexTotal,
     delayedHeapTotal,
   };
+}
+
+/**
+ * Get per-queue statistics by iterating shards to aggregate per queue name.
+ * Uses shard hashing to look up each queue in its designated shard.
+ */
+export function getPerQueueStats(
+  ctx: StatsContext,
+  queueNames: Set<string>
+): Map<string, PerQueueStats> {
+  const result = new Map<string, PerQueueStats>();
+  const now = Date.now();
+
+  for (const name of queueNames) {
+    const idx = shardIndex(name);
+    const shard = ctx.shards[idx];
+    const queue = shard.queues.get(name);
+
+    let waiting = 0;
+    let delayed = 0;
+    if (queue) {
+      for (const job of queue.values()) {
+        if (job.runAt > now) {
+          delayed++;
+        } else {
+          waiting++;
+        }
+      }
+    }
+
+    const dlq = shard.getDlqCount(name);
+
+    result.set(name, { waiting, delayed, active: 0, dlq });
+  }
+
+  // Count active jobs per queue from all processing shards
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    for (const job of ctx.processingShards[i].values()) {
+      const entry = result.get(job.queue);
+      if (entry) {
+        entry.active++;
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

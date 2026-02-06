@@ -519,6 +519,21 @@ bunqueue_jobs_pushed_total 100000
 # HELP bunqueue_jobs_completed_total Total jobs completed
 # TYPE bunqueue_jobs_completed_total counter
 bunqueue_jobs_completed_total 98000
+
+# Per-queue metrics with labels
+bunqueue_queue_jobs_waiting{queue="emails"} 30
+bunqueue_queue_jobs_active{queue="emails"} 5
+bunqueue_queue_jobs_delayed{queue="emails"} 0
+bunqueue_queue_jobs_dlq{queue="emails"} 2
+
+# Latency histograms
+# HELP bunqueue_push_duration_ms Push operation latency in ms
+# TYPE bunqueue_push_duration_ms histogram
+bunqueue_push_duration_ms_bucket{le="0.1"} 120
+bunqueue_push_duration_ms_bucket{le="1"} 95000
+bunqueue_push_duration_ms_bucket{le="+Inf"} 100000
+bunqueue_push_duration_ms_sum 8500.2
+bunqueue_push_duration_ms_count 100000
 ...
 ```
 

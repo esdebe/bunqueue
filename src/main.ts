@@ -44,7 +44,7 @@ if (isClientCommand || hasHelpOrVersion || isStartCommand) {
 import { QueueManager } from './application/queueManager';
 import { createTcpServer } from './infrastructure/server/tcp';
 import { createHttpServer } from './infrastructure/server/http';
-import { Logger, serverLog, statsLog } from './shared/logger';
+import { Logger, serverLog, statsLog, type LogLevel } from './shared/logger';
 import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 import { VERSION } from './shared/version';
 import { S3BackupManager } from './infrastructure/backup';
@@ -249,4 +249,13 @@ function startServer(): void {
 // Enable JSON logging if requested
 if (Bun.env.LOG_FORMAT === 'json') {
   Logger.enableJsonMode();
+}
+
+// Set log level from environment
+if (Bun.env.LOG_LEVEL) {
+  const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+  const level = Bun.env.LOG_LEVEL.toLowerCase();
+  if (validLevels.includes(level as LogLevel)) {
+    Logger.setLevel(level as LogLevel);
+  }
 }

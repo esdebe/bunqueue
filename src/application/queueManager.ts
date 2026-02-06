@@ -641,8 +641,17 @@ export class QueueManager {
 
   // ============ Metrics ============
 
+  getPerQueueStats() {
+    return statsMgr.getPerQueueStats(this.contextFactory.getStatsContext(), this.queueNamesCache);
+  }
+
   getPrometheusMetrics(): string {
-    return generatePrometheusMetrics(this.getStats(), this.workerManager, this.webhookManager);
+    return generatePrometheusMetrics(
+      this.getStats(),
+      this.workerManager,
+      this.webhookManager,
+      this.getPerQueueStats()
+    );
   }
 
   // ============ Cron Operations ============

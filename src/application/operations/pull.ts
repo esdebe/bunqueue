@@ -10,6 +10,8 @@ import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { RWLock } from '../../shared/lock';
 import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
+import { latencyTracker } from '../latencyTracker';
+import { throughputTracker } from '../throughputTracker';
 
 /** Pull operation context */
 export interface PullContext {
@@ -93,6 +95,7 @@ async function moveToProcessing(job: Job, queue: string, ctx: PullContext): Prom
   ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
   ctx.storage?.markActive(job.id, job.startedAt ?? now);
   ctx.totalPulled.value++;
+  throughputTracker.pullRate.increment();
   ctx.broadcast({
     eventType: 'pulled' as EventType,
     queue,
@@ -134,6 +137,7 @@ async function moveToProcessingBatch(jobs: Job[], queue: string, ctx: PullContex
     ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
     ctx.storage?.markActive(job.id, job.startedAt ?? now);
     ctx.totalPulled.value++;
+    throughputTracker.pullRate.increment();
     ctx.broadcast({
       eventType: 'pulled' as EventType,
       queue,
@@ -151,6 +155,7 @@ export async function pullJob(
   timeoutMs: number,
   ctx: PullContext
 ): Promise<Job | null> {
+  const startNs = Bun.nanoseconds();
   const deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
   const idx = shardIndex(queue);
 
@@ -159,6 +164,7 @@ export async function pullJob(
 
     if (job) {
       await moveToProcessing(job, queue, ctx);
+      latencyTracker.pull.observe((Bun.nanoseconds() - startNs) / 1e6);
       return job;
     }
 
@@ -216,6 +222,7 @@ export async function pullJobBatch(
   timeoutMs: number,
   ctx: PullContext
 ): Promise<Job[]> {
+  const startNs = Bun.nanoseconds();
   const deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
   const idx = shardIndex(queue);
 
@@ -224,6 +231,7 @@ export async function pullJobBatch(
 
     if (jobs.length > 0) {
       await moveToProcessingBatch(jobs, queue, ctx);
+      latencyTracker.pull.observe((Bun.nanoseconds() - startNs) / 1e6);
       return jobs;
     }
 
