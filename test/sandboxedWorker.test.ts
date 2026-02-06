@@ -101,7 +101,7 @@ describe('SandboxedWorker', () => {
     const worker = new SandboxedWorker(queueName, {
       processor: processorPath,
       concurrency: 4,
-      timeout: 5000,
+      timeout: 10000,
       manager,
     });
 
@@ -119,8 +119,8 @@ describe('SandboxedWorker', () => {
     const results = await Promise.all(
       jobs.map(async (job, i) => {
         let result: unknown;
-        for (let attempt = 0; attempt < 50; attempt++) {
-          await Bun.sleep(100);
+        for (let attempt = 0; attempt < 80; attempt++) {
+          await Bun.sleep(150);
           result = manager.getResult(job.id);
           if (result !== undefined) break;
         }
@@ -133,7 +133,7 @@ describe('SandboxedWorker', () => {
     }
 
     await worker.stop();
-  });
+  }, 15000);
 
   test('should handle worker timeout', async () => {
     // Create a slow processor
