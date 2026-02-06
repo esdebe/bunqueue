@@ -15,7 +15,7 @@ Create job flows with automatic dependency management: sequential chains, parall
 ```typescript
 import { FlowProducer } from 'bunqueue/client';
 
-const flow = new FlowProducer();
+const flow = new FlowProducer({ embedded: true });
 ```
 
 ## Sequential Chain
@@ -99,7 +99,7 @@ These allow child jobs to access parent results.
 ```typescript
 import { FlowProducer, Worker } from 'bunqueue/client';
 
-const flow = new FlowProducer();
+const flow = new FlowProducer({ embedded: true });
 
 const worker = new Worker('pipeline', async (job) => {
   // Check if this job has a parent (chain scenario)
@@ -180,7 +180,7 @@ import { FlowProducer, Worker, Queue, shutdownManager } from 'bunqueue/client';
 const pipelineQueue = new Queue('pipeline', { embedded: true });
 
 // Create flow producer
-const flow = new FlowProducer();
+const flow = new FlowProducer({ embedded: true });
 
 // Create worker
 const worker = new Worker('pipeline', async (job) => {
