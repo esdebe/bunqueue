@@ -267,7 +267,7 @@ async function routeRequest(
   }
 
   // Job operations: GET/DELETE /jobs/:id
-  const jobMatch = path.match(/^\/jobs\/(\d+)$/);
+  const jobMatch = path.match(/^\/jobs\/([^/]+)$/);
   if (jobMatch) {
     const id = jobMatch[1];
     if (method === 'GET') {
@@ -283,7 +283,7 @@ async function routeRequest(
   }
 
   // Job ack: POST /jobs/:id/ack
-  const ackMatch = path.match(/^\/jobs\/(\d+)\/ack$/);
+  const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
   if (ackMatch && method === 'POST') {
     const id = ackMatch[1];
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -293,7 +293,7 @@ async function routeRequest(
   }
 
   // Job fail: POST /jobs/:id/fail
-  const failMatch = path.match(/^\/jobs\/(\d+)\/fail$/);
+  const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
   if (failMatch && method === 'POST') {
     const id = failMatch[1];
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
