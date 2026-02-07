@@ -1834,7 +1834,7 @@ describe('HTTP Server Integration', () => {
       expect(body.job).toBeDefined();
     });
 
-    test('GET /jobs/:id returns 404 for UUID-style job IDs (regex requires digits only)', async () => {
+    test('GET /jobs/:id supports UUID-style job IDs', async () => {
       const pushRes = await fetch(`${baseUrl}/queues/emails/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1843,16 +1843,14 @@ describe('HTTP Server Integration', () => {
       const pushBody = await pushRes.json();
       const jobId = pushBody.id;
 
-      // The HTTP route regex only matches /jobs/\d+ (numeric IDs)
-      // UUIDv7 IDs contain hex and hyphens, so they return 404
       const res = await fetch(`${baseUrl}/jobs/${jobId}`);
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.ok).toBe(false);
-      expect(body.error).toBe('Not found');
+      expect(body.ok).toBe(true);
+      expect(body.job.id).toBe(jobId);
     });
 
-    test('DELETE /jobs/:id returns 404 for UUID-style job IDs', async () => {
+    test('DELETE /jobs/:id supports UUID-style job IDs', async () => {
       const pushRes = await fetch(`${baseUrl}/queues/emails/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1862,13 +1860,12 @@ describe('HTTP Server Integration', () => {
       const jobId = pushBody.id;
 
       const res = await fetch(`${baseUrl}/jobs/${jobId}`, { method: 'DELETE' });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.ok).toBe(false);
-      expect(body.error).toBe('Not found');
+      expect(body.ok).toBe(true);
     });
 
-    test('POST /jobs/:id/ack returns 404 for UUID-style job IDs', async () => {
+    test('POST /jobs/:id/ack supports UUID-style job IDs', async () => {
       // Push
       await fetch(`${baseUrl}/queues/emails/jobs`, {
         method: 'POST',
@@ -1881,19 +1878,17 @@ describe('HTTP Server Integration', () => {
       const pullBody = await pullRes.json();
       const jobId = pullBody.job.id;
 
-      // Ack - UUID IDs don't match /jobs/(\d+)/ack pattern
       const res = await fetch(`${baseUrl}/jobs/${jobId}/ack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ result: { sent: true } }),
       });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.ok).toBe(false);
-      expect(body.error).toBe('Not found');
+      expect(body.ok).toBe(true);
     });
 
-    test('POST /jobs/:id/fail returns 404 for UUID-style job IDs', async () => {
+    test('POST /jobs/:id/fail supports UUID-style job IDs', async () => {
       // Push
       await fetch(`${baseUrl}/queues/emails/jobs`, {
         method: 'POST',
@@ -1906,16 +1901,14 @@ describe('HTTP Server Integration', () => {
       const pullBody = await pullRes.json();
       const jobId = pullBody.job.id;
 
-      // Fail - UUID IDs don't match /jobs/(\d+)/fail pattern
       const res = await fetch(`${baseUrl}/jobs/${jobId}/fail`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: 'something went wrong' }),
       });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.ok).toBe(false);
-      expect(body.error).toBe('Not found');
+      expect(body.ok).toBe(true);
     });
 
     test('should return 404 for unknown routes', async () => {
