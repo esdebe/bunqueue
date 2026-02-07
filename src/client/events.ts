@@ -234,7 +234,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
     return Promise.resolve();
   }
 
-  /** Close the event listener */
+  /** Close the event listener and remove all listeners */
   close(): void {
     this.running = false;
     this.ready = false;
@@ -242,7 +242,6 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    // Note: User-attached listeners are NOT removed here.
-    // Users should manage their own listeners via removeListener() or removeAllListeners().
+    this.removeAllListeners();
   }
 }

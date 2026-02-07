@@ -12,9 +12,7 @@ export interface RateLimiterConfig {
 
 const DEFAULT_CONFIG: RateLimiterConfig = {
   windowMs: parseInt(Bun.env.RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-  maxRequests: Bun.env.RATE_LIMIT_MAX_REQUESTS
-    ? parseInt(Bun.env.RATE_LIMIT_MAX_REQUESTS, 10)
-    : Infinity,
+  maxRequests: parseInt(Bun.env.RATE_LIMIT_MAX_REQUESTS ?? '10000', 10),
   cleanupIntervalMs: parseInt(Bun.env.RATE_LIMIT_CLEANUP_MS ?? '60000', 10),
 };
 

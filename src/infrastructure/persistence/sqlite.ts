@@ -26,6 +26,13 @@ export interface SqliteConfig {
   writeBufferFlushMs?: number;
 }
 
+/** Check if an error is a SQLITE_FULL (disk full) error */
+function isSqliteFullError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  return msg.includes('SQLITE_FULL') || msg.includes('database or disk is full');
+}
+
 /**
  * SQLite Storage class with write buffering for high throughput
  */
@@ -34,6 +41,9 @@ export class SqliteStorage {
   private readonly statements: Map<StatementName, ReturnType<Database['prepare']>>;
   private readonly batchManager: BatchInsertManager;
   private readonly writeBuffer: WriteBuffer;
+  private _diskFull = false;
+  private _lastDiskFullError: string | null = null;
+  private _lastDiskFullAt: number | null = null;
 
   constructor(config: SqliteConfig) {
     this.db = new Database(config.path, { create: true });
@@ -48,12 +58,58 @@ export class SqliteStorage {
       config.writeBufferSize ?? 100,
       config.writeBufferFlushMs ?? 10,
       (err, jobCount) => {
+        if (isSqliteFullError(err)) {
+          this.setDiskFull(err.message);
+        }
         storageLog.error('Write buffer flush failed', {
           jobCount,
           error: err.message,
+          diskFull: this._diskFull,
         });
       }
     );
+  }
+
+  /** Mark disk as full and log */
+  private setDiskFull(message: string): void {
+    if (!this._diskFull) {
+      storageLog.error('DISK FULL: SQLite cannot write, persistence degraded', { error: message });
+    }
+    this._diskFull = true;
+    this._lastDiskFullError = message;
+    this._lastDiskFullAt = Date.now();
+  }
+
+  /** Execute a write operation with SQLITE_FULL detection */
+  private safeWrite(fn: () => void): void {
+    try {
+      fn();
+      // Clear disk full flag on successful write
+      if (this._diskFull) {
+        this._diskFull = false;
+        this._lastDiskFullError = null;
+        storageLog.info('Disk full condition cleared - writes succeeding again');
+      }
+    } catch (err) {
+      if (isSqliteFullError(err)) {
+        this.setDiskFull(err instanceof Error ? err.message : String(err));
+      }
+      throw err;
+    }
+  }
+
+  /** Check if storage is in disk-full state */
+  get diskFull(): boolean {
+    return this._diskFull;
+  }
+
+  /** Get disk full error details */
+  getDiskFullStatus(): { diskFull: boolean; error: string | null; since: number | null } {
+    return {
+      diskFull: this._diskFull,
+      error: this._lastDiskFullError,
+      since: this._lastDiskFullAt,
+    };
   }
 
   /** Flush write buffer to disk. Returns number of jobs flushed. */
@@ -92,62 +148,76 @@ export class SqliteStorage {
 
   /** Insert job immediately (bypass buffer) */
   insertJobImmediate(job: Job): void {
-    this.statements
-      .get('insertJob')!
-      .run(
-        job.id,
-        job.queue,
-        pack(job.data),
-        job.priority,
-        job.createdAt,
-        job.runAt,
-        job.attempts,
-        job.maxAttempts,
-        job.backoff,
-        job.ttl,
-        job.timeout,
-        job.uniqueKey,
-        job.customId,
-        job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
-        job.parentId,
-        job.childrenIds.length > 0 ? pack(job.childrenIds) : null,
-        job.tags.length > 0 ? pack(job.tags) : null,
-        job.runAt > Date.now() ? 'delayed' : 'waiting',
-        job.lifo ? 1 : 0,
-        job.groupId,
-        job.removeOnComplete ? 1 : 0,
-        job.removeOnFail ? 1 : 0,
-        job.stallTimeout
-      );
+    this.safeWrite(() => {
+      this.statements
+        .get('insertJob')!
+        .run(
+          job.id,
+          job.queue,
+          pack(job.data),
+          job.priority,
+          job.createdAt,
+          job.runAt,
+          job.attempts,
+          job.maxAttempts,
+          job.backoff,
+          job.ttl,
+          job.timeout,
+          job.uniqueKey,
+          job.customId,
+          job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
+          job.parentId,
+          job.childrenIds.length > 0 ? pack(job.childrenIds) : null,
+          job.tags.length > 0 ? pack(job.tags) : null,
+          job.runAt > Date.now() ? 'delayed' : 'waiting',
+          job.lifo ? 1 : 0,
+          job.groupId,
+          job.removeOnComplete ? 1 : 0,
+          job.removeOnFail ? 1 : 0,
+          job.stallTimeout
+        );
+    });
   }
 
   markActive(jobId: JobId, startedAt: number): void {
-    this.statements.get('updateJobState')!.run('active', startedAt, jobId);
+    this.safeWrite(() => {
+      this.statements.get('updateJobState')!.run('active', startedAt, jobId);
+    });
   }
 
   markCompleted(jobId: JobId, completedAt: number): void {
-    this.statements.get('completeJob')!.run('completed', completedAt, jobId);
+    this.safeWrite(() => {
+      this.statements.get('completeJob')!.run('completed', completedAt, jobId);
+    });
   }
 
   markFailed(job: Job, error: string | null): void {
-    this.statements.get('insertDlq')!.run(job.id, job.queue, pack({ job, error }), Date.now());
+    this.safeWrite(() => {
+      this.statements.get('insertDlq')!.run(job.id, job.queue, pack({ job, error }), Date.now());
+    });
   }
 
   /** Save DLQ entry with full metadata */
   saveDlqEntry(entry: DlqEntry): void {
-    this.statements
-      .get('insertDlq')!
-      .run(entry.job.id, entry.job.queue, pack(entry), entry.enteredAt);
+    this.safeWrite(() => {
+      this.statements
+        .get('insertDlq')!
+        .run(entry.job.id, entry.job.queue, pack(entry), entry.enteredAt);
+    });
   }
 
   /** Delete DLQ entry by job ID */
   deleteDlqEntry(jobId: JobId): void {
-    this.statements.get('deleteDlqEntry')!.run(jobId);
+    this.safeWrite(() => {
+      this.statements.get('deleteDlqEntry')!.run(jobId);
+    });
   }
 
   /** Clear all DLQ entries for a queue */
   clearDlqQueue(queue: string): void {
-    this.statements.get('clearDlqQueue')!.run(queue);
+    this.safeWrite(() => {
+      this.statements.get('clearDlqQueue')!.run(queue);
+    });
   }
 
   /** Load all DLQ entries */
@@ -179,13 +249,17 @@ export class SqliteStorage {
   }
 
   updateForRetry(job: Job): void {
-    this.db
-      .prepare('UPDATE jobs SET attempts = ?, run_at = ?, state = ? WHERE id = ?')
-      .run(job.attempts, job.runAt, 'waiting', job.id);
+    this.safeWrite(() => {
+      this.db
+        .prepare('UPDATE jobs SET attempts = ?, run_at = ?, state = ? WHERE id = ?')
+        .run(job.attempts, job.runAt, 'waiting', job.id);
+    });
   }
 
   deleteJob(jobId: JobId): void {
-    this.statements.get('deleteJob')!.run(jobId);
+    this.safeWrite(() => {
+      this.statements.get('deleteJob')!.run(jobId);
+    });
   }
 
   getJob(id: JobId): Job | null {
@@ -194,7 +268,9 @@ export class SqliteStorage {
   }
 
   storeResult(jobId: JobId, result: unknown): void {
-    this.statements.get('insertResult')!.run(jobId, pack(result), Date.now());
+    this.safeWrite(() => {
+      this.statements.get('insertResult')!.run(jobId, pack(result), Date.now());
+    });
   }
 
   getResult(jobId: JobId): unknown {
@@ -282,20 +358,22 @@ export class SqliteStorage {
   // ============ Cron Operations ============
 
   saveCron(cron: CronJob): void {
-    this.statements
-      .get('insertCron')!
-      .run(
-        cron.name,
-        cron.queue,
-        pack(cron.data),
-        cron.schedule,
-        cron.repeatEvery,
-        cron.priority,
-        cron.nextRun,
-        cron.executions,
-        cron.maxLimit,
-        cron.timezone
-      );
+    this.safeWrite(() => {
+      this.statements
+        .get('insertCron')!
+        .run(
+          cron.name,
+          cron.queue,
+          pack(cron.data),
+          cron.schedule,
+          cron.repeatEvery,
+          cron.priority,
+          cron.nextRun,
+          cron.executions,
+          cron.maxLimit,
+          cron.timezone
+        );
+    });
   }
 
   loadCronJobs(): CronJob[] {
@@ -315,12 +393,16 @@ export class SqliteStorage {
   }
 
   deleteCron(name: string): void {
-    this.db.prepare('DELETE FROM cron_jobs WHERE name = ?').run(name);
+    this.safeWrite(() => {
+      this.db.prepare('DELETE FROM cron_jobs WHERE name = ?').run(name);
+    });
   }
 
   /** Update cron job execution state (executions count and next run time) */
   updateCron(name: string, executions: number, nextRun: number): void {
-    this.statements.get('updateCron')!.run(executions, nextRun, name);
+    this.safeWrite(() => {
+      this.statements.get('updateCron')!.run(executions, nextRun, name);
+    });
   }
 
   // ============ Utilities ============

@@ -44,10 +44,12 @@ export function healthEndpoint(
   const stats = queueManager.getStats();
   const uptime = process.uptime();
   const memoryUsage = process.memoryUsage();
+  const storageStatus = queueManager.getStorageStatus();
+  const isHealthy = !storageStatus.diskFull;
 
   return jsonResponse({
-    ok: true,
-    status: 'healthy',
+    ok: isHealthy,
+    status: isHealthy ? 'healthy' : 'degraded',
     uptime: Math.floor(uptime),
     version: VERSION,
     queues: {
@@ -67,6 +69,13 @@ export function healthEndpoint(
       heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
       rss: Math.round(memoryUsage.rss / 1024 / 1024),
     },
+    ...(storageStatus.diskFull && {
+      storage: {
+        diskFull: true,
+        error: storageStatus.error,
+        since: storageStatus.since,
+      },
+    }),
   });
 }
 

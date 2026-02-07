@@ -776,6 +776,12 @@ export class QueueManager {
     return statsMgr.getMemoryStats(this.contextFactory.getStatsContext());
   }
 
+  /** Get storage health status (disk full detection) */
+  getStorageStatus(): { diskFull: boolean; error: string | null; since: number | null } {
+    if (!this.storage) return { diskFull: false, error: null, since: null };
+    return this.storage.getDiskFullStatus();
+  }
+
   compactMemory(): void {
     statsMgr.compactMemory(this.contextFactory.getStatsContext());
   }

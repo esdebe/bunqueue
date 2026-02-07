@@ -92,11 +92,12 @@ describe('ProtocolRateLimiter', () => {
   describe('default config', () => {
     test('should use default values', () => {
       const defaultLimiter = new ProtocolRateLimiter();
-      // Default is Infinity (unlimited) requests per 60 seconds
-      // Test that many requests are allowed
+      // Default is 10000 requests per 60 seconds
       for (let i = 0; i < 10000; i++) {
         expect(defaultLimiter.isAllowed('client')).toBe(true);
       }
+      // Next request should be rejected (limit reached)
+      expect(defaultLimiter.isAllowed('client')).toBe(false);
       defaultLimiter.stop();
     });
   });

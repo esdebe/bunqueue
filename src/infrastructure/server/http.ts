@@ -34,6 +34,16 @@ function validateAuthToken(token: string, authTokens: Set<string>): boolean {
   return false;
 }
 
+/** Check auth and return 401 response if invalid, or null if OK */
+function checkAuth(req: Request, authTokens: Set<string>): Response | null {
+  if (authTokens.size === 0) return null;
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
+  if (!validateAuthToken(token, authTokens)) {
+    return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+  }
+  return null;
+}
+
 /** HTTP Server configuration */
 export interface HttpServerConfig {
   port?: number;
@@ -83,11 +93,15 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       return jsonResponse({ ok: true, ready: true });
     }
 
-    // Debug endpoints
+    // Debug endpoints (require auth)
     if (path === '/gc' && req.method === 'POST') {
+      const denied = checkAuth(req, authTokens);
+      if (denied) return denied;
       return gcEndpoint(queueManager);
     }
     if (path === '/heapstats' && req.method === 'GET') {
+      const denied = checkAuth(req, authTokens);
+      if (denied) return denied;
       return heapStatsEndpoint(queueManager);
     }
 
@@ -102,13 +116,8 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
     // WebSocket upgrade
     if (path === '/ws' || path.startsWith('/ws/')) {
-      // Validate auth token if authentication is required
-      if (authTokens.size > 0) {
-        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
-        if (!validateAuthToken(token, authTokens)) {
-          return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-        }
-      }
+      const denied = checkAuth(req, authTokens);
+      if (denied) return denied;
       const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
       const upgraded = server.upgrade(req, {
         data: { id: uuid(), authenticated: true, queueFilter },
@@ -118,12 +127,8 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
     // SSE endpoint
     if (path === '/events' || path.startsWith('/events/')) {
-      if (authTokens.size > 0) {
-        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
-        if (!validateAuthToken(token, authTokens)) {
-          return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-        }
-      }
+      const denied = checkAuth(req, authTokens);
+      if (denied) return denied;
       const queueFilter = path.startsWith('/events/queues/')
         ? path.slice('/events/queues/'.length)
         : null;
@@ -132,11 +137,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
     // Prometheus metrics
     if (path === '/prometheus' && req.method === 'GET') {
-      if (config.requireAuthForMetrics && authTokens.size > 0) {
-        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
-        if (!validateAuthToken(token, authTokens)) {
-          return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-        }
+      if (config.requireAuthForMetrics) {
+        const denied = checkAuth(req, authTokens);
+        if (denied) return denied;
       }
       return new Response(queueManager.getPrometheusMetrics(), {
         headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
@@ -144,11 +147,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     }
 
     // Check authentication for other endpoints
-    if (authTokens.size > 0) {
-      const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
-      if (!validateAuthToken(token, authTokens)) {
-        return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
-      }
+    {
+      const denied = checkAuth(req, authTokens);
+      if (denied) return denied;
     }
 
     // Generate unique clientId for HTTP request (stateless, but needed for job ownership tracking)
