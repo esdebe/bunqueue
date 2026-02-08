@@ -21,6 +21,7 @@ import type {
   JobStateType,
 } from '../types';
 import { FORCE_EMBEDDED } from './helpers';
+import { AddBatcher } from './addBatcher';
 
 // Import operation modules
 import * as addOps from './operations/add';
@@ -46,6 +47,7 @@ export class Queue<T = unknown> {
   private readonly embedded: boolean;
   private readonly tcpPool: TcpConnectionPool | null;
   private readonly useSharedPool: boolean;
+  private readonly addBatcher: AddBatcher<unknown> | null;
 
   constructor(name: string, opts: QueueOptions = {}) {
     this.name = name;
@@ -55,6 +57,7 @@ export class Queue<T = unknown> {
     if (this.embedded) {
       this.tcpPool = null;
       this.useSharedPool = false;
+      this.addBatcher = null;
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
       const poolSize = connOpts.poolSize ?? 4;
@@ -82,6 +85,20 @@ export class Queue<T = unknown> {
           maxInFlight: connOpts.maxInFlight,
         });
         this.useSharedPool = false;
+      }
+
+      // Initialize auto-batcher for TCP mode
+      const autoBatch = opts.autoBatch;
+      if (autoBatch?.enabled === false) {
+        this.addBatcher = null;
+      } else {
+        this.addBatcher = new AddBatcher(
+          {
+            maxSize: autoBatch?.maxSize ?? 50,
+            maxDelayMs: autoBatch?.maxDelayMs ?? 5,
+          },
+          (jobs) => addOps.addBulk(this.addCtx, jobs)
+        );
       }
     }
   }
@@ -154,6 +171,10 @@ export class Queue<T = unknown> {
 
   // ============ Add Operations ============
   add(name: string, data: T, opts?: JobOptions): Promise<Job<T>> {
+    // Bypass batcher for durable jobs or when batcher is not active
+    if (this.addBatcher && !opts?.durable) {
+      return this.addBatcher.enqueue(name, data as unknown, opts) as Promise<Job<T>>;
+    }
     return addOps.add(this.addCtx, name, data, opts);
   }
   addBulk(jobs: Array<{ name: string; data: T; opts?: JobOptions }>): Promise<Job<T>[]> {
@@ -502,12 +523,17 @@ export class Queue<T = unknown> {
   }
 
   // ============ Connection ============
-  disconnect() {
+  async disconnect(): Promise<void> {
+    if (this.addBatcher) {
+      await this.addBatcher.flush();
+      await this.addBatcher.waitForInFlight();
+      this.addBatcher.stop();
+    }
     this.close();
-    return Promise.resolve();
   }
 
   close(): void {
+    this.addBatcher?.stop();
     if (this.tcpPool) {
       if (this.useSharedPool) releaseSharedPool(this.tcpPool);
       else this.tcpPool.close();

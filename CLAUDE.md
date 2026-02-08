@@ -222,6 +222,28 @@ queue.setDlqConfig({ autoRetry: true, maxAge: 604800000, maxEntries: 10000 });
 const entries = queue.getDlq({ reason: 'timeout' });
 queue.retryDlq();
 queue.purgeDlq();
+
+// Auto-batching (TCP mode, enabled by default)
+// Transparently batches concurrent add() calls into PUSHB commands.
+// Strategy: flush immediately if idle, buffer during in-flight flush.
+// Sequential await has zero overhead; concurrent adds get ~3x speedup.
+const queue2 = new Queue('jobs', {
+  autoBatch: { maxSize: 50, maxDelayMs: 5 },  // defaults
+});
+// Sequential: no penalty, each add() sends immediately
+for (const item of items) {
+  await queue2.add('task', item); // same speed as without batching
+}
+// Concurrent: adds batch into a single PUSHB round-trip (~3x faster)
+await Promise.all([
+  queue2.add('a', { x: 1 }),
+  queue2.add('b', { x: 2 }),
+  queue2.add('c', { x: 3 }),
+]);
+// Durable jobs bypass the batcher (sent as individual PUSH):
+await queue2.add('critical', data, { durable: true });
+// Disable auto-batching:
+const queue3 = new Queue('jobs', { autoBatch: { enabled: false } });
 ```
 
 ## Job Options
@@ -274,10 +296,11 @@ bun run bench                      # Benchmarks
 
 ## Performance
 
-| Mode               | Throughput     | Data Loss Risk |
-| ------------------ | -------------- | -------------- |
-| Buffered (default) | ~100k jobs/sec | Up to 10ms     |
-| Durable            | ~10k jobs/sec  | None           |
+| Mode               | Throughput      | Data Loss Risk |
+| ------------------ | --------------- | -------------- |
+| Buffered (default) | ~100k jobs/sec  | Up to 10ms     |
+| Durable            | ~10k jobs/sec   | None           |
+| Auto-batch (TCP)   | ~145k ops/s (concurrent), ~10k ops/s (sequential) | None (same as PUSH/PUSHB) |
 
 ## Debug Endpoints
 
