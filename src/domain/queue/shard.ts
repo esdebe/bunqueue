@@ -8,6 +8,8 @@
  * - LimiterManager: rate limiting + concurrency
  * - DependencyTracker: job dependency tracking
  * - TemporalManager: temporal index + delayed job tracking
+ * - WaiterManager: job availability notifications
+ * - ShardCounters: running counters for O(1) stats
  */
 
 import type { Job, JobId } from '../types/job';
@@ -22,16 +24,11 @@ import { DlqShard } from './dlqShard';
 import { LimiterManager } from './limiterManager';
 import { DependencyTracker } from './dependencyTracker';
 import { TemporalManager } from './temporalManager';
+import { WaiterManager } from './waiterManager';
+import { ShardCounters, type ShardStats } from './shardCounters';
 
-/** Shard statistics counters for O(1) stats retrieval */
-export interface ShardStats {
-  /** Total jobs in all queues (waiting + delayed) */
-  queuedJobs: number;
-  /** Jobs with runAt > now at time of push */
-  delayedJobs: number;
-  /** Total jobs in DLQ */
-  dlqJobs: number;
-}
+// Re-export for backward compatibility
+export type { ShardStats } from './shardCounters';
 
 /**
  * Shard contains:
@@ -60,85 +57,35 @@ export class Shard {
   /** Temporal manager for index and delayed jobs */
   private readonly temporalManager = new TemporalManager();
 
-  /** Running counters for O(1) stats - updated on every operation */
-  private readonly stats: ShardStats = {
-    queuedJobs: 0,
-    delayedJobs: 0,
-    dlqJobs: 0,
-  };
+  /** Waiter manager for job availability notifications */
+  private readonly waiterManager = new WaiterManager();
+
+  /** Running counters for O(1) stats */
+  private readonly counters: ShardCounters;
 
   /** Active FIFO groups per queue */
   readonly activeGroups = new Map<string, Set<string>>();
 
-  /** Waiter entry with cancellation flag for O(1) cleanup */
-  private readonly waiters: Array<{ resolve: () => void; cancelled: boolean }> = [];
-
-  /** Threshold for triggering full waiters cleanup */
-  private static readonly WAITERS_CLEANUP_THRESHOLD = 1000;
-
-  /** Pending notification flag - set when notify() is called with no waiters */
-  private pendingNotification = false;
-
   constructor() {
+    this.counters = new ShardCounters(this.temporalManager);
     this.dlqManager = new DlqShard({
       incrementDlq: () => {
-        this.incrementDlq();
+        this.counters.incrementDlq();
       },
       decrementDlq: (count) => {
-        this.decrementDlq(count);
+        this.counters.decrementDlq(count);
       },
     });
   }
 
-  /** Notify that jobs are available - wakes first non-cancelled waiter */
+  // ============ Waiter Management (delegated) ============
+
   notify(): void {
-    // Clean up leading cancelled waiters first
-    while (this.waiters.length > 0 && this.waiters[0].cancelled) {
-      this.waiters.shift();
-    }
-
-    // Wake the first active waiter
-    const waiter = this.waiters.shift();
-    if (waiter && !waiter.cancelled) {
-      waiter.resolve();
-    } else {
-      // No active waiter - set pending flag so next waitForJob returns immediately
-      this.pendingNotification = true;
-    }
-
-    // Periodic full cleanup when array grows too large
-    if (this.waiters.length > Shard.WAITERS_CLEANUP_THRESHOLD) {
-      this.cleanupWaiters();
-    }
+    this.waiterManager.notify();
   }
 
-  /** Remove all cancelled waiters from the array */
-  private cleanupWaiters(): void {
-    const active = this.waiters.filter((w) => !w.cancelled);
-    this.waiters.length = 0;
-    this.waiters.push(...active);
-  }
-
-  /** Wait for a job to become available (with timeout) */
   waitForJob(timeoutMs: number): Promise<void> {
-    if (timeoutMs <= 0) return Promise.resolve();
-
-    // Check for pending notification - if set, clear it and return immediately
-    if (this.pendingNotification) {
-      this.pendingNotification = false;
-      return Promise.resolve();
-    }
-
-    return new Promise<void>((resolve) => {
-      const waiter = { resolve, cancelled: false };
-      const cleanup = () => {
-        if (waiter.cancelled) return;
-        waiter.cancelled = true;
-        resolve();
-      };
-      this.waiters.push(waiter);
-      setTimeout(cleanup, timeoutMs);
-    });
+    return this.waiterManager.waitForJob(timeoutMs);
   }
 
   // ============ Queue Operations ============
@@ -166,7 +113,7 @@ export class Shard {
 
   resume(name: string): void {
     this.limiterManager.resume(name);
-    this.notify();
+    this.waiterManager.notify();
   }
 
   // ============ Unique Key Management (delegated) ============
@@ -256,7 +203,6 @@ export class Shard {
     return this.limiterManager.getStateMap();
   }
 
-  /** Clear limiter data for a queue (rate limits, concurrency) */
   clearQueueLimiters(queue: string): void {
     this.limiterManager.deleteQueue(queue);
   }
@@ -348,7 +294,6 @@ export class Shard {
     return this.dlqManager.add(job, reason, error);
   }
 
-  /** Restore an existing DlqEntry (for recovery from persistence) */
   restoreDlqEntry(queue: string, entry: DlqEntry): void {
     this.dlqManager.restoreEntry(queue, entry);
   }
@@ -414,10 +359,10 @@ export class Shard {
     return counts;
   }
 
-  // ============ Running Counters (O(1) Stats) ============
+  // ============ Running Counters (delegated) ============
 
   getStats(): ShardStats {
-    return { ...this.stats };
+    return this.counters.getStats();
   }
 
   getInternalSizes(): {
@@ -428,7 +373,7 @@ export class Shard {
     waiters: number;
   } {
     const sizes = this.temporalManager.getSizes();
-    return { ...sizes, waiters: this.waiters.length };
+    return { ...sizes, waiters: this.waiterManager.length };
   }
 
   incrementQueued(
@@ -438,46 +383,31 @@ export class Shard {
     queue?: string,
     runAt?: number
   ): void {
-    this.stats.queuedJobs++;
-    if (isDelayed) {
-      this.stats.delayedJobs++;
-      if (runAt !== undefined) {
-        this.temporalManager.addDelayed(jobId, runAt);
-      }
-    }
-    if (createdAt !== undefined && queue !== undefined) {
-      this.temporalManager.addToIndex(createdAt, jobId, queue);
-    }
+    this.counters.incrementQueued(jobId, isDelayed, createdAt, queue, runAt);
   }
 
   decrementQueued(jobId: JobId): void {
-    this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - 1);
-    if (this.temporalManager.removeDelayed(jobId)) {
-      this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - 1);
-    }
+    this.counters.decrementQueued(jobId);
   }
 
   incrementDlq(): void {
-    this.stats.dlqJobs++;
+    this.counters.incrementDlq();
   }
 
   decrementDlq(count: number = 1): void {
-    this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - count);
+    this.counters.decrementDlq(count);
   }
 
   refreshDelayedCount(now: number): void {
-    const readyCount = this.temporalManager.refreshDelayed(now);
-    this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - readyCount);
+    this.counters.refreshDelayedCount(now);
   }
 
   resetQueuedCounters(): void {
-    this.stats.queuedJobs = 0;
-    this.stats.delayedJobs = 0;
-    this.temporalManager.clearDelayed();
+    this.counters.resetQueuedCounters();
   }
 
   resetDlqCounter(): void {
-    this.stats.dlqJobs = 0;
+    this.counters.resetDlqCounter();
   }
 
   // ============ Temporal Index (delegated) ============
@@ -524,8 +454,8 @@ export class Shard {
     }
     q.clear();
     this.temporalManager.clearIndexForQueue(queue);
-    this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - count);
-    this.stats.delayedJobs = this.temporalManager.delayedCount;
+    this.counters.adjustQueued(-count);
+    this.counters.syncDelayedCount();
     return { count, jobIds };
   }
 
@@ -535,15 +465,15 @@ export class Shard {
       for (const job of q.values()) {
         this.temporalManager.removeDelayed(job.id);
       }
-      this.stats.queuedJobs = Math.max(0, this.stats.queuedJobs - q.size);
+      this.counters.adjustQueued(-q.size);
     }
 
     const dlqCount = this.dlqManager.deleteQueue(queue);
     if (dlqCount > 0) {
-      this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - dlqCount);
+      this.counters.adjustDlq(-dlqCount);
     }
 
-    this.stats.delayedJobs = this.temporalManager.delayedCount;
+    this.counters.syncDelayedCount();
     this.temporalManager.clearIndexForQueue(queue);
 
     this.queues.delete(queue);

@@ -10,6 +10,35 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.4.1] - 2026-02-12
+
+### Changed
+- **Codebase refactoring** - Split 6 large files exceeding 300-line limit into smaller focused modules
+  - `src/shared/lru.ts` (643 lines) → barrel re-export + 5 modules: `lruMap.ts`, `lruSet.ts`, `boundedSet.ts`, `boundedMap.ts`, `ttlMap.ts`
+  - `src/client/jobConversion.ts` (499 lines) → 269 lines + `jobConversionTypes.ts`, `jobConversionHelpers.ts`
+  - `src/domain/queue/shard.ts` (554 lines) → 484 lines + `waiterManager.ts`, `shardCounters.ts`
+  - `src/application/queueManager.ts` (820 lines) → 774 lines (moved `getQueueJobCounts` to `statsManager.ts`)
+  - `src/client/worker/worker.ts` (843 lines) → 596 lines + `workerRateLimiter.ts`, `workerHeartbeat.ts`, `workerPull.ts`
+- All barrel re-exports preserve backward compatibility — zero breaking changes
+- 12 new files created, 6 files modified
+
+## [2.4.0] - 2026-02-11
+
+### Added
+- **Auto-batching for `queue.add()` over TCP** - Transparently batches concurrent `add()` calls into `PUSHB` commands
+  - Zero overhead for sequential `await` usage (flush immediately when idle)
+  - ~3x speedup for concurrent adds (buffers during in-flight flush)
+  - Configurable: `autoBatch: { maxSize: 50, maxDelayMs: 5 }` (defaults)
+  - Durable jobs bypass the batcher (sent as individual PUSH)
+  - Disable with `autoBatch: { enabled: false }`
+- **306 new tests** covering previously untested modules
+
+## [2.3.1] - 2026-02-08
+
+### Fixed
+- **Non-numeric job IDs** - Allow non-numeric job IDs in HTTP routes
+- Updated HTTP route tests to match non-numeric job ID support
+
 ## [2.3.0] - 2026-02-06
 
 ### Added

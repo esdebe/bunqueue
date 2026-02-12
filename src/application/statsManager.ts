@@ -182,6 +182,62 @@ export function getPerQueueStats(
 }
 
 /**
+ * Get job counts for a specific queue
+ */
+export function getQueueJobCounts(
+  queueName: string,
+  ctx: StatsContext
+): {
+  waiting: number;
+  delayed: number;
+  active: number;
+  completed: number;
+  failed: number;
+} {
+  const idx = shardIndex(queueName);
+  const shard = ctx.shards[idx];
+  const queue = shard.queues.get(queueName);
+  const now = Date.now();
+
+  // Count waiting vs delayed jobs in the queue
+  let waiting = 0;
+  let delayed = 0;
+  if (queue) {
+    for (const job of queue.values()) {
+      if (job.runAt > now) {
+        delayed++;
+      } else {
+        waiting++;
+      }
+    }
+  }
+
+  // Count active jobs (processing) for this queue
+  let active = 0;
+  for (const procShard of ctx.processingShards) {
+    for (const job of procShard.values()) {
+      if (job.queue === queueName) {
+        active++;
+      }
+    }
+  }
+
+  // Count completed jobs for this queue
+  let completed = 0;
+  for (const [jobId, loc] of ctx.jobIndex) {
+    if (loc.type === 'completed' && ctx.completedJobs.has(jobId)) {
+      // We don't store queueName in completed location, so this is approximate
+      completed++;
+    }
+  }
+
+  // Count failed (DLQ) jobs for this queue
+  const failed = shard.getDlq(queueName).length;
+
+  return { waiting, delayed, active, completed, failed };
+}
+
+/**
  * Force compact all collections to reduce memory usage.
  * Use after large batch operations or when memory pressure is high.
  */
