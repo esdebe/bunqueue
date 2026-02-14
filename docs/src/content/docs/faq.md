@@ -235,9 +235,19 @@ await queue.add('task', data, {
   attempts: 5,        // Max attempts
   backoff: 1000       // Base delay in ms (doubles each retry)
 });
+
+// Or with advanced config
+await queue.add('task', data, {
+  attempts: 5,
+  backoffConfig: {
+    type: 'exponential',  // or 'fixed'
+    delay: 1000,
+    maxDelay: 300000,     // Cap at 5 minutes (default: 1 hour)
+  }
+});
 ```
 
-Retry delays: 1s → 2s → 4s → 8s → 16s
+Retry delays follow exponential backoff with **jitter** (±50%) to prevent thundering herd. Example base delays: `~1s → ~2s → ~4s → ~8s → ~16s` (actual values vary due to jitter). Delays are capped at 1 hour by default (configurable via `maxDelay`).
 
 ### What is the Dead Letter Queue?
 

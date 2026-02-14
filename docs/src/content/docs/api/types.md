@@ -466,8 +466,16 @@ interface BackoffOptions {
   type: 'fixed' | 'exponential';
   /** Base delay in milliseconds */
   delay: number;
+  /** Maximum delay cap in milliseconds (default: 3,600,000 = 1 hour) */
+  maxDelay?: number;
 }
 ```
+
+All backoff delays include automatic **jitter** to prevent thundering herd:
+- **Exponential**: ±50% jitter around the computed delay
+- **Fixed**: ±20% jitter around the configured delay
+
+Delays are capped at `maxDelay` (default: 1 hour). This prevents runaway delays at high attempt counts.
 
 ### KeepJobs
 

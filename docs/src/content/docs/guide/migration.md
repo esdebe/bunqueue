@@ -177,13 +177,19 @@ backoff: 1000 // Shorthand: base delay with exponential backoff
 bunqueue supports both `fixed` and `exponential` backoff types, matching BullMQ's behavior:
 
 **Exponential** (`type: 'exponential'`):
-- Attempt 1 fails → wait 1000ms (1s)
-- Attempt 2 fails → wait 2000ms (2s)
-- Attempt 3 fails → wait 4000ms (4s)
-- Formula: `delay * 2^(attempt-1)`
+- Attempt 1 fails → wait ~1000ms
+- Attempt 2 fails → wait ~2000ms
+- Attempt 3 fails → wait ~4000ms
+- Formula: `delay * 2^(attempt-1)` with ±50% jitter
 
 **Fixed** (`type: 'fixed'`):
-- Every retry waits the same delay (e.g., 5000ms each time)
+- Every retry waits approximately the same delay (e.g., ~5000ms each time, ±20% jitter)
+
+All delays include automatic **jitter** to prevent thundering herd when many jobs retry simultaneously. Delays are capped at 1 hour by default (configurable via `maxDelay`).
+
+```typescript
+backoff: { type: 'exponential', delay: 1000, maxDelay: 300000 } // Cap at 5 min
+```
 
 You can also pass a plain number as shorthand for exponential backoff with that base delay.
 :::

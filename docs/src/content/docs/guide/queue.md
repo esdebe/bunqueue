@@ -613,7 +613,8 @@ Retrying all completed jobs can re-queue a large number of jobs at once. Conside
 | `priority` | `number` | `0` | Higher = processed first |
 | `delay` | `number` | `0` | Delay in ms before processing |
 | `attempts` | `number` | `3` | Max retry attempts |
-| `backoff` | `number` | `1000` | Backoff base in ms (exponential) |
+| `backoff` | `number` | `1000` | Backoff base in ms (exponential, jitter applied) |
+| `backoffConfig` | `object` | - | Advanced backoff: `{ type, delay, maxDelay? }` |
 | `timeout` | `number` | - | Processing timeout in ms |
 | `jobId` | `string` | - | Custom ID for deduplication (BullMQ-style idempotent) |
 | `deduplication` | `object` | - | Advanced deduplication config (`ttl`, `extend`, `replace`) |
