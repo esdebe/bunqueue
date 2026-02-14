@@ -8,281 +8,204 @@ head:
       property: 'og:image'
       content: 'https://bunqueue.dev/og-image.png'
 hero:
-  tagline: The fastest job queue for Bun. Zero Redis. Zero infrastructure dependencies. Production ready.
+  tagline: "The job queue that ships with everything.<br/><strong>No Redis. No infrastructure. Just Bun.</strong>"
   image:
     file: ../../assets/hero.svg
   actions:
     - text: Get Started
       link: /guide/introduction/
       icon: right-arrow
-      variant: primary
+      variant: minimal
     - text: GitHub
       link: https://github.com/egeominotti/bunqueue
       icon: github
       variant: minimal
+    - text: npm
+      link: https://www.npmjs.com/package/bunqueue
+      icon: external
+      variant: minimal
 ---
 
-import { Card, CardGrid, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+<div class="hp-install-wrap">
+  <div class="hp-install">
+    <span class="hp-install-dollar">$</span>
+    <span>bun add bunqueue</span>
+  </div>
+</div>
 
-## Quick Start
+<div class="hp-stats">
+  <div class="hp-stat">
+    <div class="hp-stat-value">150K+</div>
+    <div class="hp-stat-label">ops/sec</div>
+  </div>
+  <div class="hp-stat-divider" />
+  <div class="hp-stat">
+    <div class="hp-stat-value">&lt;1ms</div>
+    <div class="hp-stat-label">p99 latency</div>
+  </div>
+  <div class="hp-stat-divider" />
+  <div class="hp-stat">
+    <div class="hp-stat-value">~50MB</div>
+    <div class="hp-stat-label">memory</div>
+  </div>
+  <div class="hp-stat-divider" />
+  <div class="hp-stat">
+    <div class="hp-stat-value">0</div>
+    <div class="hp-stat-label">external deps</div>
+  </div>
+</div>
 
-<Tabs>
-  <TabItem label="Embedded Mode">
-    ```bash
-    bun add bunqueue
-    ```
-
-    ```typescript
-    import { Queue, Worker } from 'bunqueue/client';
-
-    // Create a queue
-    const queue = new Queue('emails', { embedded: true });
-
-    // Add jobs
-    await queue.add('welcome', {
-      to: 'user@example.com',
-      template: 'welcome'
-    });
-
-    // Process jobs
-    const worker = new Worker('emails', async (job) => {
-      await sendEmail(job.data);
-      return { sent: true };
-    }, { embedded: true });
-
-    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
-    ```
-  </TabItem>
-  <TabItem label="Server Mode">
-    ```bash
-    bun add bunqueue
-    ```
-
-    ```bash
-    # Start the server
-    bunqueue start --data-path ./data/queue.db
-
-    # Or with Docker
-    docker run -d -p 6789:6789 -p 6790:6790 \
-      -v bunqueue-data:/app/data \
-      ghcr.io/egeominotti/bunqueue:latest
-    ```
-
-    ```typescript
-    // Then, in your application
-    import { Queue, Worker } from 'bunqueue/client';
-
-    // Create a queue (connects to localhost:6789)
-    const queue = new Queue('emails');
-
-    // Add jobs
-    await queue.add('welcome', {
-      to: 'user@example.com',
-      template: 'welcome'
-    });
-
-    // Process jobs
-    const worker = new Worker('emails', async (job) => {
-      await sendEmail(job.data);
-      return { sent: true };
-    });
-
-    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
-    ```
-  </TabItem>
-</Tabs>
-
----
-
-## Why bunqueue?
-
-<CardGrid>
-  <Card title="Blazing Fast" icon="rocket">
-    Built on Bun's native SQLite with WAL mode. Optimized data structures deliver sub-millisecond latency at scale.
-  </Card>
-  <Card title="Zero Infrastructure Dependencies" icon="approve-check-circle">
-    No Redis, no external services. Just Bun and SQLite. Deploy anywhere in seconds.
-  </Card>
-  <Card title="Production Ready" icon="approve-check">
-    Stall detection, dead letter queues, automatic retries, rate limiting, and S3 backups built-in.
-  </Card>
-  <Card title="BullMQ Compatible" icon="puzzle">
-    Familiar API for easy migration. Drop-in replacement for most BullMQ use cases.
-  </Card>
-</CardGrid>
-
----
-
-## Deployment Modes
-
-bunqueue offers two deployment modes to fit your architecture. Choose based on your use case.
-
-<CardGrid>
-  <Card title="Embedded Mode" icon="seti:db">
-    Run bunqueue directly inside your application process. Zero network overhead, instant setup.
-
-    **Best for:**
-    - Single-process applications
-    - Serverless / Edge functions
-    - Prototyping and development
-    - Simple background job processing
-  </Card>
-  <Card title="TCP Server Mode" icon="server">
-    Run bunqueue as a standalone server. Multiple clients connect via TCP protocol.
-
-    **Best for:**
-    - Microservices architecture
-    - Multiple worker processes
-    - Language-agnostic clients (HTTP/TCP API)
-    - Centralized job management
-  </Card>
-</CardGrid>
-
-### Mode Comparison
-
-| Aspect | Embedded | TCP Server |
-|--------|----------|------------|
-| **Setup** | Zero config | Run `bunqueue start` |
-| **Network** | None (in-process) | TCP :6789 / HTTP :6790 |
-| **Option** | `embedded: true` | Default (no option) |
-| **Persistence** | `DATA_PATH` env var | `--data-path` flag |
-| **Scaling** | Single process | Multiple clients |
-| **Latency** | Lowest (~μs) | Low (~ms) |
-
-### Embedded Mode
-
-```typescript
+```typescript title="app.ts"
 import { Queue, Worker } from 'bunqueue/client';
 
-// Both Queue and Worker must have embedded: true
-const queue = new Queue('tasks', { embedded: true });
+const queue = new Queue('emails', { embedded: true });
 
-const worker = new Worker('tasks', async (job) => {
-  return await processJob(job.data);
-}, { embedded: true });
-```
+await queue.add('welcome', {
+  to: 'user@example.com',
+  subject: 'Welcome aboard!',
+  template: 'onboarding',
+});
 
-### TCP Server Mode
+const worker = new Worker('emails', async (job) => {
+  await sendEmail(job.data);
+  await job.updateProgress(100);
+  return { sent: true };
+}, { embedded: true, concurrency: 5 });
 
-```bash
-# Terminal 1: Start the server
-bunqueue start --data-path ./data/queue.db
-```
+worker.on('completed', (job, result) => {
+  console.log(`Done: ${job.id}`, result);
+});
 
-```typescript
-// Terminal 2: Your application connects to the server
-import { Queue, Worker } from 'bunqueue/client';
-
-// No embedded option = connects to localhost:6789
-const queue = new Queue('tasks');
-const worker = new Worker('tasks', async (job) => {
-  return await processJob(job.data);
+worker.on('failed', (job, err) => {
+  console.error(`Failed: ${job.id}`, err.message);
 });
 ```
 
-:::caution[Mode Mismatch]
-Queue and Worker must use the **same mode**. Mixing embedded Queue with TCP Worker (or vice versa) causes connection timeouts.
-:::
-
-<div style="text-align: center; margin-top: 1rem;">
-  <a href="/guide/introduction/" style="color: var(--sl-color-text-accent);">
-    Learn more about deployment modes →
-  </a>
+<div class="hp-section-header" style="margin-top: 5rem;">
+  <span class="hp-badge">Why bunqueue</span>
+  <h2 class="hp-heading">Built different</h2>
+  <p class="hp-subtitle">Everything you need for production workloads. Nothing you don't.</p>
 </div>
 
----
-
-## Performance
-
-Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
-
-<CardGrid>
-  <Card title="50-150K ops/sec" icon="star">
-    Push throughput with batch operations
-  </Card>
-  <Card title="&lt; 1ms p99" icon="stopwatch">
-    Sub-millisecond latency
-  </Card>
-  <Card title="~50MB base" icon="laptop">
-    Minimal memory footprint
-  </Card>
-  <Card title="&lt; 100ms" icon="seti:clock">
-    Cold start time
-  </Card>
-</CardGrid>
-
-<div style="text-align: center; margin-top: 1rem;">
-  <a href="/guide/benchmarks/" style="color: var(--sl-color-text-accent);">
-    Run benchmarks yourself →
-  </a>
+<div class="hp-bento">
+  <div class="hp-bento-card hp-bento-wide">
+    <h3>Zero External Dependencies</h3>
+    <p>No Redis, no RabbitMQ, no Kafka. Just Bun's native SQLite with WAL mode. Deploy anywhere in seconds &mdash; your entire queue infrastructure is a single file.</p>
+  </div>
+  <div class="hp-bento-card">
+    <h3>Blazing Fast</h3>
+    <p>150K+ ops/sec with sub-millisecond latency. Sharded priority queues scale with your CPU cores.</p>
+  </div>
+  <div class="hp-bento-card">
+    <h3>Production Ready</h3>
+    <p>Stall detection, dead letter queues, retries with backoff, rate limiting, S3 backups. All built-in.</p>
+  </div>
+  <div class="hp-bento-card hp-bento-wide">
+    <h3>Drop-in BullMQ Replacement</h3>
+    <p>Familiar Queue and Worker API. Migrate from BullMQ in minutes, not days. Same patterns, same mental model, 32x better performance.</p>
+  </div>
+  <div class="hp-bento-card">
+    <h3>Full TypeScript</h3>
+    <p>End-to-end type safety with comprehensive generics. Your IDE autocompletes everything.</p>
+  </div>
+  <div class="hp-bento-card">
+    <h3>Cron &amp; Scheduling</h3>
+    <p>Cron expressions, delayed jobs, repeatable tasks. Schedule anything with timezone support.</p>
+  </div>
 </div>
 
----
+<div class="hp-section-header" style="margin-top: 5rem;">
+  <span class="hp-badge">Deployment</span>
+  <h2 class="hp-heading">Two modes, one API</h2>
+  <p class="hp-subtitle">Run embedded in your process or as a standalone TCP server. Same code, different scale.</p>
+</div>
 
-## Features
+<div class="hp-modes">
+  <div class="hp-mode-card">
+    <div class="hp-mode-tag">Embedded</div>
+    <h3>In-process queue</h3>
+    <p>Zero network overhead. Perfect for single-process apps, serverless, and prototyping.</p>
+    <ul>
+      <li>Zero config setup</li>
+      <li>No network latency</li>
+      <li>Microsecond operations</li>
+      <li>Single process only</li>
+    </ul>
+  </div>
+  <div class="hp-mode-card">
+    <div class="hp-mode-tag">TCP Server</div>
+    <h3>Standalone server</h3>
+    <p>Multi-client architecture over TCP. Built for microservices and distributed workers.</p>
+    <ul>
+      <li>Multiple client connections</li>
+      <li>HTTP + TCP APIs</li>
+      <li>CLI management</li>
+      <li>Horizontal scaling</li>
+    </ul>
+  </div>
+</div>
 
-<CardGrid>
-  <Card title="Priority Queues" icon="bars">
-    Process high-priority jobs first with configurable priority levels.
-  </Card>
-  <Card title="Delayed Jobs" icon="stopwatch">
-    Schedule jobs to run at a specific time or after a delay.
-  </Card>
-  <Card title="Retries & Backoff" icon="approve-check-circle">
-    Automatic retries with exponential backoff on failure.
-  </Card>
-  <Card title="Rate Limiting" icon="setting">
-    Control job processing rate per queue or globally.
-  </Card>
-  <Card title="Stall Detection" icon="warning">
-    Automatic recovery of jobs that become unresponsive.
-  </Card>
-  <Card title="Dead Letter Queue" icon="error">
-    Advanced DLQ with metadata, filtering, and auto-retry.
-  </Card>
-  <Card title="Cron Jobs" icon="seti:clock">
-    Schedule recurring jobs with cron expressions or intervals.
-  </Card>
-  <Card title="Parent-Child Flows" icon="document">
-    Create job hierarchies with dependencies.
-  </Card>
-  <Card title="Progress Tracking" icon="up-caret">
-    Real-time progress updates and job logs.
-  </Card>
-  <Card title="Webhooks" icon="external">
-    HTTP callbacks for job events.
-  </Card>
-  <Card title="S3 Backup" icon="cloud">
-    Automated backups to any S3-compatible storage.
-  </Card>
-  <Card title="Prometheus Metrics" icon="laptop">
-    Built-in metrics endpoint for monitoring.
-  </Card>
-</CardGrid>
+<div class="hp-section-header" style="margin-top: 5rem;">
+  <span class="hp-badge">Features</span>
+  <h2 class="hp-heading">Everything included</h2>
+</div>
 
----
+<div class="hp-features">
+  <div class="hp-feature-item">
+    <strong>Priority Queues</strong>
+    <span>Process critical jobs first</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Delayed Jobs</strong>
+    <span>Schedule for later</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Retries &amp; Backoff</strong>
+    <span>Automatic error recovery</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Rate Limiting</strong>
+    <span>Per-queue throttling</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Stall Detection</strong>
+    <span>Auto-recover stuck jobs</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Dead Letter Queue</strong>
+    <span>Never lose a failed job</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Cron Jobs</strong>
+    <span>Recurring schedules</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Parent-Child Flows</strong>
+    <span>Job dependencies</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Progress Tracking</strong>
+    <span>Real-time updates</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Webhooks</strong>
+    <span>HTTP event callbacks</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>S3 Backup</strong>
+    <span>Disaster recovery</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>Prometheus</strong>
+    <span>Built-in metrics</span>
+  </div>
+</div>
 
-## Enterprise Ready
-
-<CardGrid>
-  <LinkCard
-    title="High Availability"
-    description="SQLite WAL mode with S3 backup for disaster recovery."
-    href="/guide/backup/"
-  />
-  <LinkCard
-    title="Observability"
-    description="Prometheus metrics, structured logs, and webhooks."
-    href="/guide/webhooks/"
-  />
-  <LinkCard
-    title="Security"
-    description="Token-based authentication and rate limiting."
-    href="/guide/rate-limiting/"
-  />
-  <LinkCard
-    title="TypeScript"
-    description="Full type safety with comprehensive type definitions."
-    href="/api/http/"
-  />
-</CardGrid>
+<div class="hp-cta">
+  <h2 class="hp-heading">Ready to ditch Redis?</h2>
+  <p class="hp-subtitle">Get started with bunqueue in under a minute.</p>
+  <div class="hp-cta-actions">
+    <a href="/guide/introduction/" class="hp-cta-primary">Get Started</a>
+    <a href="/guide/comparison/" class="hp-cta-secondary">bunqueue vs BullMQ</a>
+  </div>
+</div>
