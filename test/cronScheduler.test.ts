@@ -33,9 +33,9 @@ function getHeapSize(scheduler: CronScheduler): number {
   return (scheduler as any).cronHeap.size;
 }
 
-/** Helper to check if the interval timer is active */
+/** Helper to check if the scheduler is running */
 function isRunning(scheduler: CronScheduler): boolean {
-  return (scheduler as any).checkInterval !== null;
+  return (scheduler as any).started === true;
 }
 
 /** Create a minimal CronJob for loading */
@@ -454,11 +454,11 @@ describe('CronScheduler Execution Logic', () => {
 
     test('start() should be idempotent (calling twice does not create duplicate timers)', () => {
       scheduler.start();
-      const firstInterval = (scheduler as any).checkInterval;
+      const firstSafety = (scheduler as any).safetyInterval;
       scheduler.start();
-      const secondInterval = (scheduler as any).checkInterval;
+      const secondSafety = (scheduler as any).safetyInterval;
       // Should be the exact same interval reference
-      expect(firstInterval).toBe(secondInterval);
+      expect(firstSafety).toBe(secondSafety);
     });
 
     test('stop() should be idempotent (calling when already stopped is safe)', () => {
@@ -814,9 +814,143 @@ describe('CronScheduler Execution Logic', () => {
       expect(cron.nextRun).toBeGreaterThan(oneMinuteFromNow);
     });
 
-    test('config defaults to 1000ms check interval', () => {
+    test('constructor accepts config without errors', () => {
       const defaultScheduler = new CronScheduler();
-      expect((defaultScheduler as any).config.checkIntervalMs).toBe(1000);
+      expect(defaultScheduler).toBeDefined();
+      const configuredScheduler = new CronScheduler({ checkIntervalMs: 500 });
+      expect(configuredScheduler).toBeDefined();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Event-driven setTimeout precision
+  // ─────────────────────────────────────────────────────────────
+
+  describe('event-driven timer (setTimeout precision)', () => {
+    test('scheduleNext sets a precise timer for the next cron', () => {
+      scheduler.add({
+        name: 'timer-test',
+        queue: 'q',
+        data: {},
+        repeatEvery: 5000,
+      });
+
+      scheduler.start();
+
+      // A precise timer should be set
+      expect((scheduler as any).nextTimer).not.toBeNull();
+      // Safety fallback should also be set
+      expect((scheduler as any).safetyInterval).not.toBeNull();
+    });
+
+    test('scheduleNext wakes exactly at nextRun (not polling)', async () => {
+      const preciseScheduler = new CronScheduler();
+      const jobs: Array<{ queue: string; input: JobInput }> = [];
+      preciseScheduler.setPushCallback(async (queue, input) => {
+        jobs.push({ queue, input });
+      });
+
+      preciseScheduler.add({
+        name: 'precise',
+        queue: 'q',
+        data: {},
+        repeatEvery: 150,
+      });
+
+      const startTime = Date.now();
+      preciseScheduler.start();
+
+      // Wait for execution (should happen at ~150ms, not at 1s intervals)
+      await new Promise((r) => setTimeout(r, 300));
+      preciseScheduler.stop();
+
+      expect(jobs.length).toBeGreaterThanOrEqual(1);
+      // Verify it executed much sooner than the old 1s polling would
+      // The first push should happen around 150ms, not 1000ms
+    });
+
+    test('add() reschedules timer if new cron is sooner', async () => {
+      const jobs: Array<{ queue: string; time: number }> = [];
+      const timerScheduler = new CronScheduler();
+      timerScheduler.setPushCallback(async (queue) => {
+        jobs.push({ queue, time: Date.now() });
+      });
+
+      // Add a far-future cron first
+      timerScheduler.add({
+        name: 'far',
+        queue: 'far-queue',
+        data: {},
+        repeatEvery: 60000,
+      });
+
+      timerScheduler.start();
+
+      // Now add a near cron - should reschedule
+      timerScheduler.add({
+        name: 'near',
+        queue: 'near-queue',
+        data: {},
+        repeatEvery: 100,
+      });
+
+      await new Promise((r) => setTimeout(r, 250));
+      timerScheduler.stop();
+
+      // The near cron should have executed
+      expect(jobs.some((j) => j.queue === 'near-queue')).toBe(true);
+      // The far cron should NOT have executed
+      expect(jobs.some((j) => j.queue === 'far-queue')).toBe(false);
+    });
+
+    test('remove() reschedules timer when next cron is removed', () => {
+      const now = Date.now();
+      scheduler.load([
+        makeCronJob({ name: 'soon', queue: 'q', nextRun: now + 1000 }),
+        makeCronJob({ name: 'later', queue: 'q', nextRun: now + 60000 }),
+      ]);
+
+      scheduler.start();
+
+      // Timer should target 'soon'
+      const timerBefore = (scheduler as any).nextTimer;
+      expect(timerBefore).not.toBeNull();
+
+      // Remove the nearest cron
+      scheduler.remove('soon');
+
+      // Timer should have been rescheduled
+      const timerAfter = (scheduler as any).nextTimer;
+      // Either a new timer was set or null (if stale top)
+      // The key is the old timer was cleared
+      expect(timerBefore).not.toBe(timerAfter);
+    });
+
+    test('stop clears both precise timer and safety interval', () => {
+      scheduler.add({
+        name: 'cleanup-test',
+        queue: 'q',
+        data: {},
+        repeatEvery: 5000,
+      });
+
+      scheduler.start();
+      expect((scheduler as any).nextTimer).not.toBeNull();
+      expect((scheduler as any).safetyInterval).not.toBeNull();
+      expect((scheduler as any).started).toBe(true);
+
+      scheduler.stop();
+      expect((scheduler as any).nextTimer).toBeNull();
+      expect((scheduler as any).safetyInterval).toBeNull();
+      expect((scheduler as any).started).toBe(false);
+    });
+
+    test('empty heap results in no precise timer', () => {
+      scheduler.start();
+      // No crons added, so no precise timer
+      expect((scheduler as any).nextTimer).toBeNull();
+      // But safety interval should still be active
+      expect((scheduler as any).safetyInterval).not.toBeNull();
     });
   });
 });

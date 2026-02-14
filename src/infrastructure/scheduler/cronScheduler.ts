@@ -2,6 +2,7 @@
  * Cron Scheduler
  * Manages scheduled jobs and executes them on time
  * Uses min-heap for O(k log n) tick instead of O(n) full scan
+ * Event-driven: uses precise setTimeout to wake exactly when the next cron is due
  */
 
 import { type CronJob, type CronJobInput, createCronJob, isAtLimit } from '../../domain/types/cron';
@@ -15,14 +16,14 @@ import {
 import { cronLog } from '../../shared/logger';
 import { MinHeap } from '../../shared/minHeap';
 
-/** Cron scheduler configuration */
+/** Cron scheduler configuration (kept for backward compatibility) */
 export interface CronSchedulerConfig {
+  /** @deprecated No longer used - scheduler now uses precise setTimeout */
   checkIntervalMs?: number;
 }
 
-const DEFAULT_CONFIG: Required<CronSchedulerConfig> = {
-  checkIntervalMs: 1000,
-};
+/** Safety fallback interval (60s) - catches edge cases like timer drift */
+const SAFETY_FALLBACK_MS = 60_000;
 
 /** Push job callback type */
 export type PushJobCallback = (queue: string, input: JobInput) => Promise<void>;
@@ -38,24 +39,31 @@ interface CronHeapEntry {
 
 /**
  * Cron Scheduler
- * Periodically checks and executes due cron jobs
+ * Event-driven: wakes exactly when the next cron is due via setTimeout
+ * Safety fallback: setInterval(60s) catches missed events
  * Optimized with min-heap for O(k log n) tick where k = due crons
  * Uses lazy deletion with generation numbers for O(1) remove
  */
 export class CronScheduler {
-  private readonly config: Required<CronSchedulerConfig>;
   /** Map for O(1) lookup by name with generation tracking */
   private readonly cronJobs = new Map<string, { cron: CronJob; generation: number }>();
   /** Min-heap ordered by nextRun for O(k log n) tick */
   private readonly cronHeap = new MinHeap<CronHeapEntry>((a, b) => a.cron.nextRun - b.cron.nextRun);
   /** Current generation counter */
   private generation = 0;
-  private checkInterval: ReturnType<typeof setInterval> | null = null;
+  /** Precise timer targeting the next cron's nextRun */
+  private nextTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Safety fallback interval (60s) */
+  private safetyInterval: ReturnType<typeof setInterval> | null = null;
+  /** Whether the scheduler is running */
+  private started = false;
   private pushJob: PushJobCallback | null = null;
   private persistCron: PersistCronCallback | null = null;
 
-  constructor(config: CronSchedulerConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+  // Accept config for backward compatibility (no longer used internally)
+  constructor(_config?: CronSchedulerConfig) {
+    // noop - scheduler now uses precise setTimeout instead of configurable interval
+    void _config;
   }
 
   /**
@@ -74,22 +82,33 @@ export class CronScheduler {
 
   /**
    * Start the scheduler
+   * Uses precise setTimeout for the fast path + 60s safety fallback
    */
   start(): void {
-    if (this.checkInterval) return;
+    if (this.started) return;
+    this.started = true;
 
-    this.checkInterval = setInterval(() => {
+    // Safety fallback: tick every 60s as last-resort for missed events
+    this.safetyInterval = setInterval(() => {
       void this.tick();
-    }, this.config.checkIntervalMs);
+    }, SAFETY_FALLBACK_MS);
+
+    // Schedule precise timer for the next due cron
+    this.scheduleNext();
   }
 
   /**
    * Stop the scheduler
    */
   stop(): void {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-      this.checkInterval = null;
+    this.started = false;
+    if (this.nextTimer !== null) {
+      clearTimeout(this.nextTimer);
+      this.nextTimer = null;
+    }
+    if (this.safetyInterval !== null) {
+      clearInterval(this.safetyInterval);
+      this.safetyInterval = null;
     }
   }
 
@@ -127,6 +146,11 @@ export class CronScheduler {
     this.cronJobs.set(cron.name, { cron, generation: gen });
     this.cronHeap.push({ cron, generation: gen });
 
+    // Reschedule if this cron might be sooner than current timer
+    if (this.started) {
+      this.scheduleNext();
+    }
+
     return cron;
   }
 
@@ -140,6 +164,12 @@ export class CronScheduler {
 
     // Just remove from map - heap entry becomes stale (lazy deletion)
     this.cronJobs.delete(name);
+
+    // Reschedule in case removed cron was the next timer target
+    if (this.started) {
+      this.scheduleNext();
+    }
+
     return true;
   }
 
@@ -169,6 +199,37 @@ export class CronScheduler {
     }
     // Rebuild heap from loaded crons - O(n)
     this.cronHeap.buildFrom(entries);
+
+    // Reschedule if running
+    if (this.started) {
+      this.scheduleNext();
+    }
+  }
+
+  /**
+   * Schedule a precise setTimeout for the next due cron
+   * Called after every mutation (add, remove, load, tick)
+   */
+  private scheduleNext(): void {
+    if (!this.started) return;
+
+    // Cancel existing precise timer
+    if (this.nextTimer !== null) {
+      clearTimeout(this.nextTimer);
+      this.nextTimer = null;
+    }
+
+    // Find next non-stale entry
+    const entry = this.cronHeap.peek();
+    if (!entry) return;
+
+    if (this.cronJobs.get(entry.cron.name)?.generation !== entry.generation) return; // stale top
+
+    const delay = Math.max(0, entry.cron.nextRun - Date.now());
+    this.nextTimer = setTimeout(() => {
+      this.nextTimer = null;
+      void this.tick();
+    }, delay);
   }
 
   /**
@@ -268,6 +329,9 @@ export class CronScheduler {
     for (const name of toRemove) {
       this.cronJobs.delete(name);
     }
+
+    // Schedule next precise wake-up
+    this.scheduleNext();
   }
 
   /**

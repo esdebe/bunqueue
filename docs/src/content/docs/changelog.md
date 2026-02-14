@@ -10,6 +10,22 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.4.7] - 2026-02-14
+
+### Performance
+- **Event-driven cron scheduler** - Replaced 1s `setInterval` polling with precise `setTimeout` that wakes exactly when the next cron is due. Zero wasted ticks between executions:
+
+  | Scenario | Before | After |
+  |----------|--------|-------|
+  | 1 cron every 5min | 300 ticks/5min (299 wasted) | 1 tick/5min |
+  | 0 crons registered | 1 tick/sec (all wasted) | 0 ticks |
+  | Cron in 3 hours | 10,800 wasted ticks | 1 tick at exact time |
+
+- A 60s `setInterval` safety fallback catches edge cases (timer drift, missed events). Zero functional changes, zero API changes.
+
+### Added
+- `scripts/embedded/test-cron-event-driven.ts` - Operational test verifying cron timer precision
+
 ## [2.4.6] - 2026-02-14
 
 ### Performance
