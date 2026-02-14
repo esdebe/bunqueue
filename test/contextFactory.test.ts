@@ -1008,7 +1008,7 @@ describe('ContextFactory', () => {
       expect(bgCtx.config.maxCustomIds).toBe(50_000);
       expect(bgCtx.config.cleanupIntervalMs).toBe(10_000);
       expect(bgCtx.config.jobTimeoutCheckMs).toBe(5_000);
-      expect(bgCtx.config.dependencyCheckMs).toBe(100);
+      expect(bgCtx.config.dependencyCheckMs).toBe(30_000);
       expect(bgCtx.config.stallCheckMs).toBe(5_000);
       expect(bgCtx.config.dlqMaintenanceMs).toBe(60_000);
     });
