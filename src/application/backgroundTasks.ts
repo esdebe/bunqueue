@@ -6,6 +6,7 @@
 import { queueLog } from '../shared/logger';
 import { shardIndex } from '../shared/hash';
 import { FailureReason } from '../domain/types/dlq';
+import { calculateBackoff } from '../domain/types/job';
 import * as dlqOps from './dlqManager';
 import { checkExpiredLocks } from './lockManager';
 import { cleanup } from './cleanupTasks';
@@ -259,8 +260,8 @@ export function recover(ctx: BackgroundContext): void {
         ctx.storage.saveDlqEntry(entry);
         ctx.storage.deleteJob(job.id);
       } else {
-        // Retry: put back in queue with backoff
-        job.runAt = now + job.backoff * Math.pow(2, job.attempts - 1);
+        // Retry: put back in queue with backoff (uses backoffConfig if present)
+        job.runAt = now + calculateBackoff(job);
         shard.getQueue(job.queue).push(job);
         const isDelayed = job.runAt > now;
         shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);

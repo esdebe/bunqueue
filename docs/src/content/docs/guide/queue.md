@@ -70,7 +70,12 @@ const job = await queue.add('job-name', data, {
   priority: 10,           // Higher = processed first
   delay: 5000,            // Delay in ms before processing
   attempts: 5,            // Max retry attempts (default: 3)
-  backoff: 2000,          // Backoff between retries (default: 1000ms)
+  backoff: 2000,          // Backoff between retries (default: 1000ms, jitter applied)
+  backoffConfig: {        // Advanced backoff configuration
+    type: 'exponential',  // 'fixed' or 'exponential'
+    delay: 2000,          // Base delay in ms
+    maxDelay: 60000,      // Max cap in ms (default: 3,600,000 = 1 hour)
+  },
   timeout: 30000,         // Job timeout in ms
   jobId: 'custom-id',     // Custom job ID for deduplication (BullMQ-style)
   removeOnComplete: true, // Remove job data after completion

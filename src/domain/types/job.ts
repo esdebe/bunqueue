@@ -57,7 +57,12 @@ export interface BackoffConfig {
   readonly type: 'fixed' | 'exponential';
   /** Base delay in milliseconds */
   readonly delay: number;
+  /** Maximum delay in milliseconds (default: 3600000 = 1 hour) */
+  readonly maxDelay?: number;
 }
+
+/** Default maximum backoff delay: 1 hour */
+export const DEFAULT_MAX_BACKOFF = 3_600_000;
 
 /** Core job structure */
 export interface Job {
@@ -393,19 +398,28 @@ export function isTimedOut(job: Job, now: number = Date.now()): boolean {
   return now > job.startedAt + job.timeout;
 }
 
-/** Calculate next retry delay with backoff strategy */
+/** Calculate next retry delay with backoff strategy, jitter, and max cap */
 export function calculateBackoff(job: Job): number {
+  const maxDelay = job.backoffConfig?.maxDelay ?? DEFAULT_MAX_BACKOFF;
+
   if (job.backoffConfig) {
-    // Use configured backoff strategy
     if (job.backoffConfig.type === 'fixed') {
-      return job.backoffConfig.delay;
+      // Fixed backoff with ±20% jitter
+      const base = job.backoffConfig.delay;
+      const jittered = base * (0.8 + Math.random() * 0.4);
+      return Math.min(jittered, maxDelay);
     } else {
-      // Exponential backoff
-      return job.backoffConfig.delay * Math.pow(2, job.attempts);
+      // Exponential backoff with ±50% jitter
+      const base = job.backoffConfig.delay * Math.pow(2, job.attempts);
+      const jittered = base * (0.5 + Math.random());
+      return Math.min(jittered, maxDelay);
     }
   }
-  // Default: exponential backoff with base delay
-  return job.backoff * Math.pow(2, job.attempts);
+
+  // Default: exponential backoff with ±50% jitter and max cap
+  const base = job.backoff * Math.pow(2, job.attempts);
+  const jittered = base * (0.5 + Math.random());
+  return Math.min(jittered, maxDelay);
 }
 
 /** Check if job can retry */

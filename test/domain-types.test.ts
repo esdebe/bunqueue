@@ -519,18 +519,30 @@ describe('job.ts', () => {
 
   describe('calculateBackoff', () => {
     test('should use default exponential backoff when no config', () => {
-      // Default: backoff * 2^attempts
+      // Default: backoff * 2^attempts with ±50% jitter
       const j = makeJob({ backoff: 1000, backoffConfig: null, attempts: 0 });
-      expect(calculateBackoff(j)).toBe(1000); // 1000 * 2^0 = 1000
+      // Base = 1000 * 2^0 = 1000, jittered range: [500, 1500]
+      let val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(500);
+      expect(val).toBeLessThanOrEqual(1500);
 
       j.attempts = 1;
-      expect(calculateBackoff(j)).toBe(2000); // 1000 * 2^1 = 2000
+      // Base = 2000, range: [1000, 3000]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(1000);
+      expect(val).toBeLessThanOrEqual(3000);
 
       j.attempts = 2;
-      expect(calculateBackoff(j)).toBe(4000); // 1000 * 2^2 = 4000
+      // Base = 4000, range: [2000, 6000]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(2000);
+      expect(val).toBeLessThanOrEqual(6000);
 
       j.attempts = 3;
-      expect(calculateBackoff(j)).toBe(8000); // 1000 * 2^3 = 8000
+      // Base = 8000, range: [4000, 12000]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(4000);
+      expect(val).toBeLessThanOrEqual(12000);
     });
 
     test('should use fixed backoff config', () => {
@@ -539,10 +551,16 @@ describe('job.ts', () => {
         backoffConfig: { type: 'fixed', delay: 3000 },
         attempts: 0,
       });
-      expect(calculateBackoff(j)).toBe(3000);
+      // Fixed 3000 with ±20% jitter: [2400, 3600]
+      let val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(2400);
+      expect(val).toBeLessThanOrEqual(3600);
 
       j.attempts = 5;
-      expect(calculateBackoff(j)).toBe(3000); // Always the same for fixed
+      // Still near 3000 regardless of attempts (fixed type)
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(2400);
+      expect(val).toBeLessThanOrEqual(3600);
     });
 
     test('should use exponential backoff config', () => {
@@ -551,16 +569,28 @@ describe('job.ts', () => {
         backoffConfig: { type: 'exponential', delay: 500 },
         attempts: 0,
       });
-      expect(calculateBackoff(j)).toBe(500); // 500 * 2^0
+      // Base = 500 * 2^0 = 500, jittered range: [250, 750]
+      let val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(250);
+      expect(val).toBeLessThanOrEqual(750);
 
       j.attempts = 1;
-      expect(calculateBackoff(j)).toBe(1000); // 500 * 2^1
+      // Base = 1000, range: [500, 1500]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(500);
+      expect(val).toBeLessThanOrEqual(1500);
 
       j.attempts = 2;
-      expect(calculateBackoff(j)).toBe(2000); // 500 * 2^2
+      // Base = 2000, range: [1000, 3000]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(1000);
+      expect(val).toBeLessThanOrEqual(3000);
 
       j.attempts = 4;
-      expect(calculateBackoff(j)).toBe(8000); // 500 * 2^4
+      // Base = 8000, range: [4000, 12000]
+      val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(4000);
+      expect(val).toBeLessThanOrEqual(12000);
     });
 
     test('should grow exponentially for high attempt counts', () => {
@@ -569,7 +599,10 @@ describe('job.ts', () => {
         backoffConfig: { type: 'exponential', delay: 100 },
         attempts: 10,
       });
-      expect(calculateBackoff(j)).toBe(100 * Math.pow(2, 10)); // 102400
+      // Base = 100 * 2^10 = 102400, jittered range: [51200, 153600]
+      const val = calculateBackoff(j);
+      expect(val).toBeGreaterThanOrEqual(51200);
+      expect(val).toBeLessThanOrEqual(153600);
     });
   });
 
