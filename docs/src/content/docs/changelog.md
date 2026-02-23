@@ -10,6 +10,35 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.1] - 2026-02-23
+
+### Fixed
+- **MCP error handling** — All 66 tool handlers now wrapped with `withErrorHandler` that catches backend exceptions and returns structured `{ error: "message" }` responses with `isError: true` instead of raw stack traces
+- **MCP TCP connection** — `createBackend()` is now async and properly awaits TCP connection. Previously used fire-and-forget (`void backend.connect()`) which silently swallowed connection failures
+- **MCP not-found responses** — `bunqueue_get_job`, `bunqueue_get_job_by_custom_id`, `bunqueue_get_progress`, and `bunqueue_get_cron` now return `isError: true` when resource is not found
+
+### Added
+- `src/mcp/tools/withErrorHandler.ts` — Reusable error boundary for MCP tool handlers
+- 39 new MCP backend tests (75 total) — webhooks, worker management, monitoring, batch operations, heartbeat, progress, full lifecycle
+
+## [2.5.0] - 2026-02-21
+
+### Changed
+- **MCP server rewrite** — Upgraded from custom implementation to official `@modelcontextprotocol/sdk` (v1.26.0) for full protocol compliance
+- **66 tools** organized across 10 domain-specific files (jobTools, jobMgmtTools, consumptionTools, queueTools, dlqTools, cronTools, rateLimitTools, webhookTools, workerMgmtTools, monitoringTools)
+- **5 MCP resources** for read-only AI context (stats, queues, crons, workers, webhooks)
+- **Dual-mode backend** — Embedded (direct SQLite) and TCP (remote server) via `McpBackend` adapter interface
+
+### Added
+- TCP mode for MCP server — connect to remote bunqueue server via `BUNQUEUE_MODE=tcp`
+- AI agent documentation and use cases
+- MCP configuration guides for Claude Desktop, Claude Code, Cursor, and Windsurf
+
+## [2.4.8] - 2026-02-16
+
+### Fixed
+- **`getJobs({ state: 'completed' })`** now correctly returns completed jobs instead of empty results
+
 ## [2.4.7] - 2026-02-14
 
 ### Performance

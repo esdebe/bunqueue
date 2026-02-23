@@ -10,7 +10,7 @@ head:
 
 import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
 
-bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 66 tools, 5 resources, zero configuration.
+bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 66 tools, 5 resources, zero configuration. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
 
 ## What is MCP?
 
@@ -141,7 +141,7 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | `bunqueue_add_job` | Add a job to a queue |
 | `bunqueue_add_jobs_bulk` | Add multiple jobs in one call |
 | `bunqueue_get_job` | Get job details by ID |
-| `bunqueue_get_job_state` | Get current state (waiting/active/completed/failed) |
+| `bunqueue_get_job_state` | Get current state (waiting/delayed/active/completed/failed) |
 | `bunqueue_get_job_result` | Get the result of a completed job |
 | `bunqueue_cancel_job` | Cancel a waiting or delayed job |
 | `bunqueue_promote_job` | Promote delayed job to waiting |
@@ -262,6 +262,22 @@ Resources provide read-only context that AI assistants can access:
 | `bunqueue://workers` | Active workers |
 | `bunqueue://webhooks` | Registered webhooks |
 
+## Error Handling
+
+All 66 tools return structured error responses. When a tool encounters an error (backend exception, connection failure, invalid operation), it returns:
+
+```json
+{
+  "error": "Human-readable error message"
+}
+```
+
+With the MCP `isError: true` flag set, so AI clients can detect failures programmatically.
+
+**Not-found responses** for `bunqueue_get_job`, `bunqueue_get_job_by_custom_id`, `bunqueue_get_progress`, and `bunqueue_get_cron` also return `isError: true` when the requested resource doesn't exist.
+
+No raw stack traces or internal details are ever exposed to AI clients.
+
 ## Example Prompts
 
 ### Adding Jobs
@@ -359,7 +375,7 @@ Here's a full workflow using Claude with bunqueue MCP:
   "name": "daily-digest",
   "queue": "emails",
   "schedule": "0 9 * * *",
-  "nextRun": "2026-01-31T09:00:00.000Z"
+  "nextRun": "2026-02-24T09:00:00.000Z"
 }
 ```
 
