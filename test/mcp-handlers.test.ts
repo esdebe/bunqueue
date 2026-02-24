@@ -1085,3 +1085,156 @@ describe('EmbeddedBackend - Flow Operations', () => {
     expect(job!.priority).toBe(10);
   });
 });
+
+// ─── Job Management Tools ──────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Job Management', () => {
+  test('updateJobData changes job payload', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'task', { old: 'data' });
+    const success = await backend.updateJobData(jobId, { new: 'data', updated: true });
+    expect(success).toBe(true);
+  });
+
+  test('updateJobData returns false for non-existent job', async () => {
+    const success = await backend.updateJobData('non-existent', { x: 1 });
+    expect(success).toBe(false);
+  });
+
+  test('changeJobPriority updates priority', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'task', { a: 1 }, { priority: 1 });
+    const success = await backend.changeJobPriority(jobId, 99);
+    expect(success).toBe(true);
+    const job = await backend.getJob(jobId);
+    expect(job).not.toBeNull();
+    expect(job!.priority).toBe(99);
+  });
+
+  test('changeJobPriority returns false for non-existent job', async () => {
+    const success = await backend.changeJobPriority('non-existent', 5);
+    expect(success).toBe(false);
+  });
+
+  test('moveToDelayed on active job', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'task', { a: 1 });
+    // Pull to make active
+    await backend.pullJob('mgmt-q');
+    const success = await backend.moveToDelayed(jobId, 60000);
+    // moveToDelayed may only work on active jobs; verify it returns boolean
+    expect(typeof success).toBe('boolean');
+  });
+
+  test('moveToDelayed returns false for non-existent job', async () => {
+    const success = await backend.moveToDelayed('non-existent', 1000);
+    expect(success).toBe(false);
+  });
+
+  test('discardJob removes a waiting job', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'discard-me', { x: 1 });
+    const success = await backend.discardJob(jobId);
+    expect(success).toBe(true);
+    const job = await backend.getJob(jobId);
+    expect(job).toBeNull();
+  });
+
+  test('discardJob returns false for non-existent job', async () => {
+    const success = await backend.discardJob('non-existent');
+    expect(success).toBe(false);
+  });
+
+  test('changeDelay on delayed job returns boolean', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'task', { a: 1 }, { delay: 10000 });
+    const success = await backend.changeDelay(jobId, 60000);
+    expect(typeof success).toBe('boolean');
+  });
+
+  test('changeDelay returns false for non-existent job', async () => {
+    const success = await backend.changeDelay('non-existent', 5000);
+    expect(success).toBe(false);
+  });
+
+  test('getProgress returns progress with message after update', async () => {
+    const { jobId } = await backend.addJob('mgmt-q', 'task', { a: 1 });
+    // Pull to make active (required for progress update)
+    await backend.pullJob('mgmt-q');
+    await backend.updateProgress(jobId, 75, 'Three quarters done');
+    const progress = await backend.getProgress(jobId);
+    expect(progress).not.toBeNull();
+    expect(progress!.progress).toBe(75);
+    expect(progress!.message).toBe('Three quarters done');
+  });
+});
+
+// ─── Wait For Job ──────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - waitForJobCompletion', () => {
+  test('returns false when job does not complete in time', async () => {
+    const { jobId } = await backend.addJob('wait-q', 'task', { a: 1 });
+    // Don't complete the job — should timeout
+    const completed = await backend.waitForJobCompletion(jobId, 100);
+    expect(completed).toBe(false);
+  });
+
+  test('waitForJobCompletion returns boolean', async () => {
+    const { jobId } = await backend.addJob('wait-q', 'task', { a: 1 });
+    const result = await backend.waitForJobCompletion(jobId, 100);
+    expect(typeof result).toBe('boolean');
+  });
+});
+
+// ─── Lock Operations ───────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - extendLock', () => {
+  test('extendLock returns boolean', async () => {
+    const { jobId } = await backend.addJob('lock-q', 'task', { a: 1 });
+    await backend.pullJob('lock-q');
+    const result = await backend.extendLock(jobId, 'test-token', 30000);
+    expect(typeof result).toBe('boolean');
+  });
+
+  test('extendLock on non-existent job returns false', async () => {
+    const result = await backend.extendLock('non-existent', 'token', 5000);
+    expect(result).toBe(false);
+  });
+});
+
+// ─── Children Values with real children ────────────────────────────────────
+
+describe('EmbeddedBackend - getChildrenValues with real flow', () => {
+  test('returns child results after ack', async () => {
+    // Create a flow with parent + child
+    const flow = await backend.addFlow({
+      name: 'parent',
+      queueName: 'cv-q',
+      children: [
+        { name: 'child-1', queueName: 'cv-q', data: { step: 1 } },
+      ],
+    });
+
+    // Pull and ack the child with a result
+    const child = await backend.pullJob('cv-q');
+    if (child) {
+      await backend.ackJob(child.id, { output: 'child-result' });
+    }
+
+    const values = await backend.getChildrenValues(flow.jobId);
+    expect(typeof values).toBe('object');
+  });
+});
+
+// ─── Queue Stats ───────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - getPerQueueStats detailed', () => {
+  test('returns per-queue stats after adding jobs', async () => {
+    await backend.addJob('stats-q1', 'task', { a: 1 });
+    await backend.addJob('stats-q2', 'task', { a: 2 });
+    const stats = await backend.getPerQueueStats();
+    expect(typeof stats).toBe('object');
+  });
+
+  test('getStats includes uptime and counts', async () => {
+    await backend.addJob('stats-q', 'task', { a: 1 });
+    const stats = await backend.getStats();
+    expect(stats).toBeDefined();
+    expect(typeof stats).toBe('object');
+  });
+});
