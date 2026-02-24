@@ -5,24 +5,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/egeominotti/bunqueue/stargazers"><img src="https://img.shields.io/github/stars/egeominotti/bunqueue?style=flat" alt="GitHub Stars"></a>
-  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/v/bunqueue" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/dm/bunqueue" alt="npm downloads"></a>
-  <a href="https://github.com/egeominotti/bunqueue/actions"><img src="https://github.com/egeominotti/bunqueue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/types-TypeScript-blue?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/runtime-Bun-f472b6?logo=bun&logoColor=white" alt="Bun">
-  <a href="https://bundlephobia.com/package/bunqueue"><img src="https://img.shields.io/bundlephobia/minzip/bunqueue" alt="Bundle Size"></a>
-  <a href="https://github.com/egeominotti/bunqueue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunqueue" alt="License"></a>
+  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/v/bunqueue?style=flat-square" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/dm/bunqueue?style=flat-square" alt="npm downloads"></a>
+  <a href="https://github.com/egeominotti/bunqueue/actions"><img src="https://img.shields.io/github/actions/workflow/status/egeominotti/bunqueue/ci.yml?style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://github.com/egeominotti/bunqueue/stargazers"><img src="https://img.shields.io/github/stars/egeominotti/bunqueue?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/egeominotti/bunqueue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunqueue?style=flat-square" alt="License"></a>
 </p>
 
 <p align="center">
-  <strong>High-performance job queue for Bun. Built for AI agents and automation.<br/>Zero external dependencies. MCP-native.</strong>
+  High-performance job queue for Bun. Built for AI agents and automation.<br/>
+  Zero external dependencies. MCP-native. TypeScript-first.
 </p>
 
 <p align="center">
-  <a href="https://bunqueue.dev/"><strong>Documentation</strong></a> ·
-  <a href="https://bunqueue.dev/guide/benchmarks/"><strong>Benchmarks</strong></a> ·
-  <a href="https://github.com/egeominotti/bunqueue/stargazers"><strong>Star on GitHub</strong></a>
+  <a href="https://bunqueue.dev/">Documentation</a> &middot;
+  <a href="https://bunqueue.dev/guide/benchmarks/">Benchmarks</a> &middot;
+  <a href="https://github.com/egeominotti/bunqueue/stargazers">Star on GitHub</a>
 </p>
 
 ---
