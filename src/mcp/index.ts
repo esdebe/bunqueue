@@ -56,6 +56,7 @@ import { registerRateLimitTools } from './tools/rateLimitTools';
 import { registerWebhookTools } from './tools/webhookTools';
 import { registerWorkerMgmtTools } from './tools/workerMgmtTools';
 import { registerMonitoringTools } from './tools/monitoringTools';
+import { registerPrompts } from './prompts';
 
 async function main() {
   const backend = await createBackend();
@@ -66,7 +67,7 @@ async function main() {
     version: VERSION,
   });
 
-  // Register all tools (66 total)
+  // Register all tools (66 total) and prompts (3)
   registerJobTools(server, backend);
   registerJobMgmtTools(server, backend);
   registerConsumptionTools(server, backend);
@@ -78,8 +79,9 @@ async function main() {
   registerWorkerMgmtTools(server, backend);
   registerMonitoringTools(server, backend);
 
-  // Register resources
+  // Register resources and prompts
   registerResources(server, backend);
+  registerPrompts(server, backend);
 
   // Graceful shutdown — allow backend and transport to flush before exit
   const shutdown = async () => {

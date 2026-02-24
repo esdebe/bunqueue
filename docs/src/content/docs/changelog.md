@@ -10,6 +10,21 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.3] - 2026-02-24
+
+### Added
+- **3 MCP Prompts** for AI agents — pre-built diagnostic templates:
+  - `bunqueue_health_report` — comprehensive server health report with severity levels
+  - `bunqueue_debug_queue` — deep diagnostic of a specific queue
+  - `bunqueue_incident_response` — step-by-step triage playbook for "jobs not processing"
+
+### Fixed
+- **MCP graceful shutdown** — `server.close()` now awaited before exit
+- **MCP `getStorageStatus()` TCP** — verifies server reachability instead of returning hardcoded response
+- **MCP `getChildrenValues()` TCP** — parallel fetch with `Promise.all` instead of sequential N+1
+- **MCP resource error format** — includes `isError: true` consistent with tool errors
+- **MCP pool size** — configurable via `BUNQUEUE_POOL_SIZE` env var (default: 2)
+
 ## [2.5.2] - 2026-02-24
 
 ### Fixed

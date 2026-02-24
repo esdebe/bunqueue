@@ -802,3 +802,151 @@ describe('Resource error format - isError flag', () => {
     expect(parsed.error).toBe('connection failed');
   });
 });
+
+// ─── MCP Prompts Data Gathering ──────────────────────────────────────────
+
+describe('MCP Prompts - health_report data gathering', () => {
+  test('all required backend methods return valid data', async () => {
+    await backend.addJob('health-q', 'j1', { x: 1 });
+    await backend.registerWorker('health-worker', ['health-q']);
+
+    const [stats, storage, queues, workers, crons, memory] = await Promise.all([
+      backend.getStats(),
+      backend.getStorageStatus(),
+      backend.listQueues(),
+      backend.listWorkers(),
+      backend.listCrons(),
+      backend.getMemoryStats(),
+    ]);
+
+    expect(typeof stats).toBe('object');
+    expect(typeof storage.diskFull).toBe('boolean');
+    expect(Array.isArray(queues)).toBe(true);
+    expect(queues).toContain('health-q');
+    expect(workers.length).toBeGreaterThan(0);
+    expect(Array.isArray(crons)).toBe(true);
+    expect(typeof memory).toBe('object');
+  });
+
+  test('per-queue counts are gatherable for all queues', async () => {
+    await backend.addJob('hr-q1', 'j', {});
+    await backend.addJob('hr-q2', 'j', {});
+
+    const queues = await backend.listQueues();
+    const details = await Promise.all(
+      queues.map(async (q) => ({
+        name: q,
+        counts: await backend.getJobCounts(q),
+        paused: await backend.isPaused(q),
+      }))
+    );
+
+    expect(details.length).toBeGreaterThanOrEqual(2);
+    for (const d of details) {
+      expect(d.counts).toHaveProperty('waiting');
+      expect(typeof d.paused).toBe('boolean');
+    }
+  });
+
+  test('all gathered data is JSON-serializable', async () => {
+    await backend.addJob('serial-q', 'j', {});
+    const stats = await backend.getStats();
+    const memory = await backend.getMemoryStats();
+    const storage = await backend.getStorageStatus();
+
+    expect(() => JSON.stringify(stats)).not.toThrow();
+    expect(() => JSON.stringify(memory)).not.toThrow();
+    expect(() => JSON.stringify(storage)).not.toThrow();
+  });
+});
+
+describe('MCP Prompts - debug_queue data gathering', () => {
+  test('all diagnostic data is gatherable for a queue', async () => {
+    await backend.addJob('debug-q', 'j1', {}, { priority: 5 });
+    await backend.addJob('debug-q', 'j2', {}, { priority: 10 });
+
+    const [counts, paused, dlqEntries, activeJobs, priorities] = await Promise.all([
+      backend.getJobCounts('debug-q'),
+      backend.isPaused('debug-q'),
+      backend.getDlq('debug-q', 10),
+      backend.getJobs('debug-q', { state: 'active' }),
+      backend.getCountsPerPriority('debug-q'),
+    ]);
+
+    expect(counts.waiting).toBe(2);
+    expect(paused).toBe(false);
+    expect(Array.isArray(dlqEntries)).toBe(true);
+    expect(Array.isArray(activeJobs)).toBe(true);
+    expect(typeof priorities).toBe('object');
+  });
+
+  test('works on empty/nonexistent queue', async () => {
+    const counts = await backend.getJobCounts('nonexistent-debug-q');
+    expect(counts.waiting).toBe(0);
+    expect(counts.active).toBe(0);
+    expect(counts.failed).toBe(0);
+  });
+
+  test('total job count calculation is correct', async () => {
+    await backend.addJob('total-q', 'j1', {});
+    await backend.addJob('total-q', 'j2', {});
+    await backend.addJob('total-q', 'j3', {});
+
+    const counts = await backend.getJobCounts('total-q');
+    const total =
+      counts.waiting + counts.delayed + counts.active + counts.completed + counts.failed;
+    expect(total).toBe(3);
+  });
+});
+
+describe('MCP Prompts - incident_response data gathering', () => {
+  test('identifies paused queues as problematic', async () => {
+    await backend.addJob('incident-q', 'j1', {});
+    await backend.pauseQueue('incident-q');
+
+    const paused = await backend.isPaused('incident-q');
+    expect(paused).toBe(true);
+  });
+
+  test('identifies stuck queues (waiting > 0, active = 0)', async () => {
+    await backend.addJob('stuck-q', 'j1', {});
+
+    const counts = await backend.getJobCounts('stuck-q');
+    const isStuck = counts.waiting > 0 && counts.active === 0;
+    expect(isStuck).toBe(true);
+  });
+
+  test('gathers worker and stats data', async () => {
+    const [workers, stats] = await Promise.all([
+      backend.listWorkers(),
+      backend.getStats(),
+    ]);
+
+    expect(Array.isArray(workers)).toBe(true);
+    expect(typeof stats).toBe('object');
+  });
+
+  test('filters problematic queues correctly', async () => {
+    await backend.addJob('ok-q', 'j', {});
+    await backend.addJob('bad-q', 'j', {});
+    await backend.pauseQueue('bad-q');
+
+    const queues = ['ok-q', 'bad-q'];
+    const diagnostics = await Promise.all(
+      queues.map(async (q) => ({
+        name: q,
+        counts: await backend.getJobCounts(q),
+        paused: await backend.isPaused(q),
+        dlqEntries: (await backend.getDlq(q, 5)).length,
+      }))
+    );
+
+    const problematic = diagnostics.filter(
+      (q) => q.paused || q.dlqEntries > 0 || (q.counts.waiting > 0 && q.counts.active === 0)
+    );
+
+    // Both are problematic: bad-q is paused, ok-q has waiting>0 with active=0
+    expect(problematic.length).toBe(2);
+    expect(problematic.find((q) => q.name === 'bad-q')?.paused).toBe(true);
+  });
+});

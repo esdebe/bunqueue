@@ -278,6 +278,24 @@ With the MCP `isError: true` flag set, so AI clients can detect failures program
 
 No raw stack traces or internal details are ever exposed to AI clients.
 
+## MCP Prompts
+
+bunqueue includes 3 built-in MCP prompts — pre-built templates that guide AI agents through complex diagnostic workflows.
+
+### `bunqueue_health_report`
+
+Generates a comprehensive health report with severity levels (OK/WARNING/CRITICAL). Gathers system stats, storage status, per-queue job counts, worker health, cron jobs, and memory usage in a single call.
+
+### `bunqueue_debug_queue`
+
+Deep diagnostic of a specific queue. Takes a `queue` argument and gathers job state breakdown, pause status, DLQ entries, active jobs, and priority distribution.
+
+### `bunqueue_incident_response`
+
+Incident response playbook for "jobs not processing". Takes an optional `queue` argument. Identifies backed-up queues, checks worker health, flags problematic queues (paused, stuck, or with DLQ entries), and provides a step-by-step triage checklist.
+
+---
+
 ## Example Prompts
 
 ### Adding Jobs
