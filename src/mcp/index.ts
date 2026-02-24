@@ -57,6 +57,8 @@ import { registerWebhookTools } from './tools/webhookTools';
 import { registerWorkerMgmtTools } from './tools/workerMgmtTools';
 import { registerMonitoringTools } from './tools/monitoringTools';
 import { registerFlowTools } from './tools/flowTools';
+import { registerHandlerTools } from './tools/handlerTools';
+import { HttpHandlerRegistry } from './httpHandler';
 import { registerPrompts } from './prompts';
 
 async function main() {
@@ -68,7 +70,9 @@ async function main() {
     version: VERSION,
   });
 
-  // Register all tools (70 total) and prompts (3)
+  const handlerRegistry = new HttpHandlerRegistry();
+
+  // Register all tools (73 total) and prompts (3)
   registerJobTools(server, backend);
   registerJobMgmtTools(server, backend);
   registerConsumptionTools(server, backend);
@@ -80,6 +84,7 @@ async function main() {
   registerWorkerMgmtTools(server, backend);
   registerMonitoringTools(server, backend);
   registerFlowTools(server, backend);
+  registerHandlerTools(server, handlerRegistry);
 
   // Register resources and prompts
   registerResources(server, backend);
@@ -88,6 +93,7 @@ async function main() {
   // Graceful shutdown — allow backend and transport to flush before exit
   const shutdown = async () => {
     try {
+      handlerRegistry.shutdown();
       backend.shutdown();
       await server.close();
     } catch {

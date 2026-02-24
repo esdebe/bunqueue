@@ -1,6 +1,6 @@
 ---
 title: MCP Server for AI Agents
-description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 70 tools, 3 prompts, 5 resources for complete queue management.
+description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 73 tools, 3 prompts, 5 resources for complete queue management.
 head:
   - tag: meta
     attrs:
@@ -13,8 +13,8 @@ import { Tabs, TabItem, Aside, Badge, Card, CardGrid } from '@astrojs/starlight/
 bunqueue includes an **MCP (Model Context Protocol)** server that gives AI agents **complete control** over your job queues. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
 
 <CardGrid>
-  <Card title="70 Tools" icon="puzzle">
-    Job lifecycle, queue control, cron, DLQ, rate limiting, webhooks, monitoring, workflows
+  <Card title="73 Tools" icon="puzzle">
+    Job lifecycle, queue control, cron, DLQ, rate limiting, webhooks, monitoring, workflows, HTTP handlers
   </Card>
   <Card title="3 Prompts" icon="rocket">
     Health report, queue debug, incident response
@@ -55,7 +55,7 @@ That's it. Your AI agent now has access to 70 queue management tools.
            ▼
 ┌──────────────────────────────┐
 │     bunqueue MCP Server      │
-│  70 tools · 3 prompts · 5 resources  │
+│  73 tools · 3 prompts · 5 resources  │
 └──────────┬───────────────────┘
            │
      ┌─────┴─────┐
@@ -167,7 +167,7 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | **Best for**     | Local dev, single-machine    | Production, shared queues        |
 | **Data**         | `./data/bunq.db`             | Remote server handles storage    |
 
-## Available Tools <Badge text="70 tools" variant="success" />
+## Available Tools <Badge text="73 tools" variant="success" />
 
 ### Job Operations (11 tools)
 
@@ -294,6 +294,44 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | `bunqueue_add_flow_bulk_then` | Fan-out/fan-in: parallel jobs → final merge job |
 | `bunqueue_get_flow` | Retrieve a flow tree with full dependency graph |
 
+### HTTP Handlers (3 tools)
+
+Auto-process jobs via HTTP requests. The AI agent registers a handler on a queue, and the MCP server spawns an embedded Worker that calls the HTTP endpoint for every job.
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_register_handler` | Register an HTTP handler on a queue and start auto-processing |
+| `bunqueue_unregister_handler` | Remove handler and stop its worker |
+| `bunqueue_list_handlers` | List all active HTTP handlers |
+
+<Aside type="tip">
+Combine with `bunqueue_add_cron` for recurring tasks. Example: register a handler on "meteo" queue, then create a cron that pushes jobs every 10 seconds. The handler auto-processes each job via HTTP.
+</Aside>
+
+**Example: "Check weather every 10 seconds"**
+
+```bash
+$ claude
+
+> Register a handler on "meteo" queue that calls the OpenWeather API
+
+✓ bunqueue_register_handler
+  queue: "meteo"
+  method: GET
+  url: "https://api.openweathermap.org/data/2.5/weather?q=Milan&appid=xxx"
+  Worker started.
+
+> Create a cron that pushes a job to "meteo" every 10 seconds
+
+✓ bunqueue_add_cron
+  name: "check-meteo"
+  queue: "meteo"
+  schedule: "*/10 * * * * *"
+
+# Now every 10s: cron creates job → worker calls API → result saved
+# Agent can check results anytime with bunqueue_get_job_result
+```
+
 ## MCP Prompts <Badge text="3 prompts" variant="caution" />
 
 Pre-built diagnostic templates that guide AI agents through complex workflows.
@@ -318,7 +356,7 @@ Read-only context that AI agents can access at any time:
 
 ## Error Handling
 
-All 70 tools return structured error responses with the MCP `isError: true` flag:
+All 73 tools return structured error responses with the MCP `isError: true` flag:
 
 ```json
 {
