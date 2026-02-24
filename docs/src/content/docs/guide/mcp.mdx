@@ -1,6 +1,6 @@
 ---
 title: MCP Server for AI Agents
-description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 70 tools for complete queue management via natural language.
+description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 70 tools, 3 prompts, 5 resources for complete queue management.
 head:
   - tag: meta
     attrs:
@@ -8,34 +8,77 @@ head:
       content: https://bunqueue.dev/og/integrations.png
 ---
 
-import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Badge, Card, CardGrid } from '@astrojs/starlight/components';
 
-bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 70 tools, 5 resources, zero configuration. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
+bunqueue includes an **MCP (Model Context Protocol)** server that gives AI agents **complete control** over your job queues. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
 
-## What is MCP?
+<CardGrid>
+  <Card title="70 Tools" icon="puzzle">
+    Job lifecycle, queue control, cron, DLQ, rate limiting, webhooks, monitoring, workflows
+  </Card>
+  <Card title="3 Prompts" icon="rocket">
+    Health report, queue debug, incident response
+  </Card>
+  <Card title="5 Resources" icon="document">
+    Read-only context: stats, queues, crons, workers, webhooks
+  </Card>
+  <Card title="2 Modes" icon="setting">
+    Embedded (SQLite) or TCP (remote server)
+  </Card>
+</CardGrid>
 
-MCP is an open protocol that enables AI assistants to interact with external tools and services. With bunqueue's MCP server, you can:
+## Quick Start
 
-- Add, pull, ack, and fail jobs using natural language
-- Monitor queue health, memory, and Prometheus metrics
-- Configure cron jobs, rate limits, and concurrency
-- Debug failed jobs in the DLQ
-- Manage workers, webhooks, and locks
-- Full pull/ack/fail cycle for job consumption
-
-<Aside type="tip">
-MCP works with Claude Desktop, Claude Code (CLI), Cursor, Windsurf, and any MCP-compatible client.
-</Aside>
-
-## Installation
-
-The MCP server is included with bunqueue. No additional installation required.
+Get bunqueue MCP running in under 60 seconds:
 
 ```bash
+# 1. Install
 bun add bunqueue
+
+# 2. Add to your AI client
+claude mcp add bunqueue -- bunx bunqueue-mcp
+
+# 3. Ask your agent
+# "Add a job to the emails queue with data {to: 'user@test.com', subject: 'Welcome'}"
+```
+
+That's it. Your AI agent now has access to 70 queue management tools.
+
+## Architecture
+
+```
+┌──────────────────────────────┐
+│  AI Agent (Claude, Cursor…)  │
+│  "Add a job to emails queue" │
+└──────────┬───────────────────┘
+           │ MCP Protocol (stdio)
+           ▼
+┌──────────────────────────────┐
+│     bunqueue MCP Server      │
+│  70 tools · 3 prompts · 5 resources  │
+└──────────┬───────────────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+┌─────────┐ ┌─────────┐
+│Embedded │ │  TCP    │
+│ SQLite  │ │ Client  │
+└─────────┘ └────┬────┘
+                  │
+                  ▼
+            ┌──────────┐
+            │ bunqueue │
+            │  Server  │
+            └──────────┘
 ```
 
 ## Configuration
+
+### Claude Code (CLI)
+
+```bash
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
 
 ### Claude Desktop
 
@@ -81,15 +124,7 @@ bun add bunqueue
 </TabItem>
 </Tabs>
 
-### Claude Code (CLI)
-
-```bash
-claude mcp add bunqueue -- bunx bunqueue-mcp
-```
-
 ### Cursor / Windsurf
-
-Add to your MCP settings:
 
 ```json
 {
@@ -259,9 +294,19 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | `bunqueue_add_flow_bulk_then` | Fan-out/fan-in: parallel jobs → final merge job |
 | `bunqueue_get_flow` | Retrieve a flow tree with full dependency graph |
 
+## MCP Prompts <Badge text="3 prompts" variant="caution" />
+
+Pre-built diagnostic templates that guide AI agents through complex workflows.
+
+| Prompt | Args | Description |
+|--------|------|-------------|
+| `bunqueue_health_report` | none | Comprehensive health report with severity levels (OK/WARNING/CRITICAL). Covers system stats, storage, queues, workers, crons, memory |
+| `bunqueue_debug_queue` | `queue` | Deep diagnostic of a specific queue: job state breakdown, pause status, DLQ, active jobs, priority distribution |
+| `bunqueue_incident_response` | `queue?` | Incident response playbook for "jobs not processing". Step-by-step triage with specific tool recommendations |
+
 ## MCP Resources <Badge text="5 resources" variant="note" />
 
-Resources provide read-only context that AI assistants can access:
+Read-only context that AI agents can access at any time:
 
 | Resource URI | Description |
 |-------------|-------------|
@@ -273,7 +318,7 @@ Resources provide read-only context that AI assistants can access:
 
 ## Error Handling
 
-All 70 tools return structured error responses. When a tool encounters an error (backend exception, connection failure, invalid operation), it returns:
+All 70 tools return structured error responses with the MCP `isError: true` flag:
 
 ```json
 {
@@ -281,172 +326,60 @@ All 70 tools return structured error responses. When a tool encounters an error 
 }
 ```
 
-With the MCP `isError: true` flag set, so AI clients can detect failures programmatically.
+Not-found responses for `bunqueue_get_job`, `bunqueue_get_job_by_custom_id`, `bunqueue_get_progress`, and `bunqueue_get_cron` also return `isError: true`. No raw stack traces or internal details are ever exposed.
 
-**Not-found responses** for `bunqueue_get_job`, `bunqueue_get_job_by_custom_id`, `bunqueue_get_progress`, and `bunqueue_get_cron` also return `isError: true` when the requested resource doesn't exist.
+## Example: Claude Code Session
 
-No raw stack traces or internal details are ever exposed to AI clients.
+A real workflow using Claude Code with bunqueue MCP connected to a remote server via TCP:
 
-## MCP Prompts
+```bash
+# Setup: connect MCP to your running bunqueue server
+$ claude mcp add bunqueue -- bunx bunqueue-mcp \
+    --env BUNQUEUE_MODE=tcp \
+    --env BUNQUEUE_HOST=your-server.com \
+    --env BUNQUEUE_PORT=6789
 
-bunqueue includes 3 built-in MCP prompts — pre-built templates that guide AI agents through complex diagnostic workflows.
+$ claude
 
-### `bunqueue_health_report`
+> Add 3 jobs to the "notifications" queue: push, email, sms
 
-Generates a comprehensive health report with severity levels (OK/WARNING/CRITICAL). Gathers system stats, storage status, per-queue job counts, worker health, cron jobs, and memory usage in a single call.
+✓ bunqueue_add_jobs_bulk
+  Added 3 jobs to "notifications" queue:
+  - Job 019c0e14-a1b2 (push)
+  - Job 019c0e14-a1b3 (email)
+  - Job 019c0e14-a1b4 (sms)
 
-### `bunqueue_debug_queue`
+> Create a cron to clean expired sessions every hour
 
-Deep diagnostic of a specific queue. Takes a `queue` argument and gathers job state breakdown, pause status, DLQ entries, active jobs, and priority distribution.
+✓ bunqueue_add_cron
+  Created "cleanup-sessions" → schedule: "0 * * * *"
+  Next run: 2026-02-24T20:00:00.000Z
 
-### `bunqueue_incident_response`
+> Set rate limit to 50/sec on notifications and show me the queue status
 
-Incident response playbook for "jobs not processing". Takes an optional `queue` argument. Identifies backed-up queues, checks worker health, flags problematic queues (paused, stuck, or with DLQ entries), and provides a step-by-step triage checklist.
+✓ bunqueue_set_rate_limit → notifications: 50 jobs/sec
+✓ bunqueue_get_job_counts
 
----
+  notifications queue:
+  ┌──────────┬───────┐
+  │ waiting  │     3 │
+  │ active   │     0 │
+  │ completed│    87 │
+  │ failed   │     0 │
+  │ dlq      │     0 │
+  └──────────┴───────┘
 
-## Example Prompts
+> Are there any failed jobs across all queues?
 
-### Adding Jobs
+✓ bunqueue_get_dlq
+  No DLQ entries found. All queues healthy.
 
-```
-"Add a job to the emails queue to send a welcome email to user@example.com"
-```
+> Create a workflow: validate payment → send receipt → update inventory
 
-```
-"Add 100 jobs to the image-processing queue with URLs from this list..."
-```
-
-### Queue Management
-
-```
-"Show me all queues and how many jobs are waiting"
-```
-
-```
-"Pause the payments queue - we have an issue"
-```
-
-```
-"Drain all waiting jobs from the notifications queue"
-```
-
-### Monitoring & Debugging
-
-```
-"What are the current queue stats?"
-```
-
-```
-"Show me failed jobs in the orders queue"
-```
-
-```
-"Retry all jobs in the DLQ for the emails queue"
-```
-
-```
-"Show me memory usage and Prometheus metrics"
-```
-
-### Cron Jobs
-
-```
-"Create a cron job that runs every hour to clean up old sessions"
-```
-
-```
-"List all scheduled cron jobs"
-```
-
-### Worker Management
-
-```
-"List all active workers and their processing stats"
-```
-
-```
-"Set rate limit to 50 jobs/sec on the api-calls queue"
-```
-
-### Job Consumption
-
-```
-"Pull 5 jobs from the tasks queue and show me their data"
-```
-
-```
-"Mark job abc-123 as completed with result {processed: true}"
-```
-
-## Complete Example
-
-Here's a full workflow using Claude with bunqueue MCP:
-
-**You:** "I need to set up an email queue system"
-
-**Claude:** *Creates queue, adds test job via `bunqueue_add_job`*
-
-```json
-{
-  "jobId": "019c0e14-19ed-7000-9c72-d81ae9d00938"
-}
-```
-
-**You:** "Add a cron job to send daily digest emails at 9 AM"
-
-**Claude:** *Uses `bunqueue_add_cron`*
-
-```json
-{
-  "name": "daily-digest",
-  "queue": "emails",
-  "schedule": "0 9 * * *",
-  "nextRun": "2026-02-24T09:00:00.000Z"
-}
-```
-
-**You:** "Set rate limit to 10 emails per second"
-
-**Claude:** *Uses `bunqueue_set_rate_limit`*
-
-**You:** "What's the current status?"
-
-**Claude:** *Uses `bunqueue_get_stats` + `bunqueue_get_per_queue_stats`*
-
-```json
-{
-  "waiting": 5,
-  "active": 2,
-  "completed": 143,
-  "dlq": 1,
-  "cronJobs": 1,
-  "uptime": 3600
-}
-```
-
-## Data Persistence
-
-The MCP server uses SQLite for persistence. Default location:
-
-```
-./data/bunq.db
-```
-
-Configure with environment variable:
-
-```json
-{
-  "mcpServers": {
-    "bunqueue": {
-      "command": "bunx",
-      "args": ["bunqueue-mcp"],
-      "env": {
-        "DATA_PATH": "/var/lib/queue.db"
-      }
-    }
-  }
-}
+✓ bunqueue_add_flow_chain
+  Created sequential pipeline:
+  validate-payment → send-receipt → update-inventory
+  Root job: 019c0e14-c3d4
 ```
 
 ## Processing Jobs
@@ -454,8 +387,6 @@ Configure with environment variable:
 <Aside type="caution">
 The MCP server **manages** queues. You need a separate Worker to **process** jobs.
 </Aside>
-
-Run a worker alongside the MCP server:
 
 ```typescript
 // worker.ts
@@ -509,15 +440,6 @@ Make sure a Worker is running:
 
 ```bash
 bun run worker.ts
-```
-
-### Data not persisting
-
-Check file permissions:
-
-```bash
-ls -la ./data/
-# Should show bunq.db with write permissions
 ```
 
 ### Claude not seeing tools
