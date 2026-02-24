@@ -1,29 +1,43 @@
 ---
-title: MCP Server for AI Agents
-description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 73 tools, 3 prompts, 5 resources for complete queue management.
+title: MCP Server for AI Agents — Job Queue Control via Model Context Protocol
+description: Connect AI agents to bunqueue via MCP. 73 tools for job scheduling, cron, DLQ, rate limiting, HTTP handlers, workflows, and monitoring. Works with Claude Desktop, Claude Code, Cursor, Windsurf.
 head:
   - tag: meta
     attrs:
       property: og:image
       content: https://bunqueue.dev/og/integrations.png
+  - tag: meta
+    attrs:
+      property: og:title
+      content: bunqueue MCP Server — AI Agent Job Queue Control
+  - tag: meta
+    attrs:
+      property: og:description
+      content: 73 MCP tools for AI agents. Schedule jobs, manage queues, auto-process via HTTP handlers, monitor everything. Zero config setup.
+  - tag: meta
+    attrs:
+      name: keywords
+      content: MCP, Model Context Protocol, AI agent, job queue, task scheduler, Claude, Cursor, Windsurf, bunqueue, cron jobs, HTTP handlers, dead letter queue, rate limiting
 ---
 
 import { Tabs, TabItem, Aside, Badge, Card, CardGrid, Steps } from '@astrojs/starlight/components';
 
-bunqueue ships with a built-in **MCP server** that gives AI agents full programmatic control over job queues, scheduling, monitoring, and execution. No glue code. No REST wrappers. One command to connect.
+bunqueue ships with a built-in **MCP (Model Context Protocol)** server that gives AI agents full programmatic control over job queues, scheduling, monitoring, and execution.
+
+MCP is the open standard that allows AI agents like Claude, Cursor, and Windsurf to interact with external tools. bunqueue implements the MCP server specification using the official `@modelcontextprotocol/sdk`, exposing every queue feature as a tool that agents can call directly. No REST wrappers, no glue code, no middleware. One command to connect, and your agent has a complete job queue system at its disposal.
 
 <CardGrid>
   <Card title="73 Tools" icon="puzzle">
-    Jobs, queues, cron, DLQ, rate limiting, webhooks, workflows, HTTP handlers, monitoring
+    Full job lifecycle, queue control, cron scheduling, DLQ management, rate limiting, webhooks, workflows, HTTP handlers, monitoring
   </Card>
   <Card title="3 Prompts" icon="rocket">
-    Health report, queue debug, incident response
+    Pre-built diagnostic workflows: health report, queue debug, incident response
   </Card>
   <Card title="5 Resources" icon="document">
-    Live stats, queues, crons, workers, webhooks
+    Read-only live context: server stats, queue states, cron schedules, workers, webhooks
   </Card>
   <Card title="2 Modes" icon="setting">
-    Embedded (local SQLite) or TCP (remote server)
+    Embedded (local SQLite, zero config) or TCP (connect to a remote bunqueue server)
   </Card>
 </CardGrid>
 
@@ -47,24 +61,28 @@ bunqueue ships with a built-in **MCP server** that gives AI agents full programm
 
 3. **Start using it**
 
-   Ask your agent: *"Add a job to the emails queue"* — it works immediately.
+   Ask your agent: *"Add a job to the emails queue"* — it works immediately. The MCP server starts as a child process, communicates via stdio, and the agent can call any of the 73 tools.
 
 </Steps>
 
 <Aside type="tip">
-  That's all. Your agent now has access to 73 tools for queue management, scheduling, monitoring, and automated job processing.
+  That's all. No server to start, no database to configure. In embedded mode, bunqueue creates a local SQLite database automatically. Your agent can immediately add jobs, create cron schedules, set rate limits, register HTTP handlers, and monitor everything.
 </Aside>
 
 ---
 
 ## How It Works
 
+The MCP server runs as a subprocess spawned by your AI client. It communicates via **stdio** using the JSON-RPC protocol defined by the MCP specification. When the agent calls a tool (e.g. `bunqueue_add_job`), the MCP server executes the operation against the queue backend and returns the result.
+
+The server supports two backend modes: **embedded** (direct SQLite access in the same process) and **TCP** (connects to a remote bunqueue server). In embedded mode, everything runs locally with zero configuration. In TCP mode, the MCP server acts as a client that forwards operations to your production bunqueue instance.
+
 ```
 ┌──────────────────────────────────────┐
 │  AI Agent (Claude, Cursor, Windsurf) │
 │  "Schedule a cleanup job every hour" │
 └──────────────────┬───────────────────┘
-                   │ stdio (MCP Protocol)
+                   │ stdio (JSON-RPC)
                    ▼
 ┌──────────────────────────────────────┐
 │         bunqueue MCP Server          │
@@ -75,13 +93,17 @@ bunqueue ships with a built-in **MCP server** that gives AI agents full programm
 │  │  SQLite  │      │  (remote)    │  │
 │  └──────────┘      └──────┬───────┘  │
 └──────────────────────────┼───────────┘
-                           │
+                           │ TCP :6789
                            ▼
                     ┌──────────────┐
                     │   bunqueue   │
                     │    Server    │
                     └──────────────┘
 ```
+
+**Embedded mode** is ideal for local development, single-machine deployments, and CLI tools. The MCP server manages its own SQLite database with WAL mode for concurrent access.
+
+**TCP mode** connects to a running bunqueue server, allowing your agent to manage production queues shared across multiple workers and services.
 
 ---
 
@@ -182,7 +204,11 @@ Connect to a running bunqueue server instead of local SQLite:
 
 ## HTTP Handlers
 
-The killer feature for AI agents. Register a URL on a queue, and bunqueue auto-processes every job by making HTTP calls. No external worker. No deployment. The agent controls everything.
+HTTP handlers solve a fundamental problem: an AI agent can schedule jobs and manage queues, but it cannot run a persistent worker process to actually execute those jobs. HTTP handlers bridge this gap.
+
+When the agent calls `bunqueue_register_handler`, the MCP server spawns an **embedded Worker** inside its own process. This Worker continuously pulls jobs from the specified queue and, for each job, makes an HTTP request to the registered endpoint. The HTTP response is saved as the job result. If the HTTP call fails (non-2xx status or timeout), the job is marked as failed and follows the standard retry/DLQ flow.
+
+This means the agent can set up a fully autonomous pipeline — schedule recurring jobs with cron, auto-process them via HTTP, and check results later — without writing any code or deploying any external service.
 
 ```
 ┌──────────┐     ┌───────────┐     ┌────────────┐     ┌────────────┐
@@ -197,17 +223,32 @@ The killer feature for AI agents. Register a URL on a queue, and bunqueue auto-p
                                    └────────────┘
 ```
 
+The embedded Worker inherits all standard Worker features: heartbeat, stall detection, retry with backoff, and dead letter queue. It processes jobs sequentially (concurrency 1) to avoid overwhelming the target endpoint.
+
 <CardGrid>
   <Card title="bunqueue_register_handler" icon="add-document">
-    Register an HTTP handler on a queue. Spawns a worker that auto-processes jobs via HTTP requests.
+    Register an HTTP handler on a queue. Specify URL, method, optional headers, body template, and timeout. Spawns a Worker that starts processing immediately.
   </Card>
   <Card title="bunqueue_unregister_handler" icon="close">
-    Remove a handler and stop its worker.
+    Remove a handler from a queue and gracefully stop its Worker. Jobs already in the queue remain untouched.
   </Card>
   <Card title="bunqueue_list_handlers" icon="list-format">
-    List all active HTTP handlers and their worker status.
+    List all active HTTP handlers with their configuration and Worker status (running or stopped).
   </Card>
 </CardGrid>
+
+### Handler configuration
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `queue` | Yes | Queue name to attach the handler to |
+| `url` | Yes | HTTP endpoint URL to call for each job |
+| `method` | Yes | `GET`, `POST`, `PUT`, or `DELETE` |
+| `headers` | No | Custom HTTP headers (e.g. `Authorization`, `X-Api-Key`) |
+| `body` | No | Fixed request body template for POST/PUT. If omitted, the job's data payload is sent |
+| `timeoutMs` | No | Request timeout in milliseconds (default: 30000, range: 1000-120000) |
+
+For `POST` and `PUT` requests, the Worker sends the job's data as JSON body by default. If a `body` template is provided, it overrides the job data. `GET` and `DELETE` requests do not send a body.
 
 ### Example: Weather monitoring every 10 seconds
 
@@ -229,12 +270,12 @@ $ claude
   queue: "meteo"
   repeatEvery: 10000
 
-# Every 10s: cron → job → HTTP call → result saved
-# Check anytime with bunqueue_get_job_result
+# Every 10s: cron creates a job → Worker pulls it → GET request to API →
+# response saved as job result → agent can check with bunqueue_get_job_result
 ```
 
 <Aside type="tip">
-  HTTP handlers support `GET`, `POST`, `PUT`, `DELETE` with custom headers, request body templates, and configurable timeouts (1-120 seconds).
+  Handlers persist as long as the MCP server process is running. If the agent session ends, the MCP server shuts down and all handlers are stopped. Re-register them in the next session if needed.
 </Aside>
 
 ---
@@ -448,33 +489,68 @@ $ claude
 
 ## Processing Jobs
 
-Two approaches depending on your use case:
+Jobs sit in queues until something processes them. Two approaches:
 
-<CardGrid>
-  <Card title="HTTP Handlers" icon="external">
-    Register a URL, bunqueue calls it for every job. No code, no deployment. Best for API calls, webhooks, monitoring.
-  </Card>
-  <Card title="External Worker" icon="seti:typescript">
-    Deploy a Worker process with custom logic. Best for database writes, file processing, business logic.
-  </Card>
-</CardGrid>
+### Option A: HTTP Handlers (no code, agent-managed)
 
-### External Worker example
+The agent registers an HTTP endpoint on a queue via `bunqueue_register_handler`. The MCP server spawns an embedded Worker that automatically pulls jobs and makes HTTP requests to that endpoint. The response is saved as the job result.
 
-For processing that requires custom code:
+No external process, no deployment, no code. The agent controls the entire lifecycle: register, schedule with cron, monitor results, unregister.
+
+```
+Agent registers handler → MCP spawns Worker → Worker pulls jobs →
+Worker calls HTTP endpoint → Response saved as job result
+```
+
+**When to use:** API polling, webhook forwarding, external service calls, health checks, monitoring endpoints. Any use case where the processing logic is just an HTTP call.
+
+```bash
+# Agent conversation example
+> Register a POST handler on "webhooks" that calls https://api.example.com/ingest
+
+✓ Worker started. Every job in "webhooks" will be sent via POST.
+
+> Add a cron to push a job every 30 seconds
+
+✓ Cron "webhook-trigger" created. Jobs auto-processed via HTTP.
+```
+
+### Option B: External Worker (custom logic)
+
+For processing that requires custom code (database writes, file processing, business logic), deploy a separate Worker process. The agent orchestrates (add jobs, schedule crons, monitor progress), the Worker executes.
 
 ```typescript
 import { Worker } from 'bunqueue/client';
 
 new Worker('emails', async (job) => {
   const { to, subject, body } = job.data;
-  await job.updateProgress(50, 'Sending...');
+
+  await job.updateProgress(25, 'Validating recipient...');
+  await validateEmail(to);
+
+  await job.updateProgress(50, 'Sending email...');
   await sendEmail(to, subject, body);
+
+  await job.log(`Email sent to ${to}`);
   return { sent: true, timestamp: Date.now() };
 }, { embedded: true });
 ```
 
-The agent orchestrates (add jobs, schedule crons, monitor). The Worker executes.
+```bash
+bun run worker.ts
+```
+
+**When to use:** Email sending, image processing, database operations, ML inference, complex business logic — anything that needs code execution beyond a simple HTTP call.
+
+### Comparison
+
+|                    | HTTP Handlers                     | External Worker                  |
+| ------------------ | --------------------------------- | -------------------------------- |
+| **Setup**          | Zero — agent registers via MCP    | Deploy a Worker process          |
+| **Processing**     | HTTP request to an endpoint       | Custom TypeScript function       |
+| **Managed by**     | AI agent (register/unregister)    | Developer (deploy/maintain)      |
+| **Use case**       | API calls, webhooks, monitoring   | Business logic, DB writes, files |
+| **Code required**  | None                              | Yes (Worker definition)          |
 
 ---
 
