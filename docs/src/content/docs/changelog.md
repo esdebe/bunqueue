@@ -10,6 +10,28 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.6] - 2026-02-27
+
+### Added
+- **3 new TCP commands** for MCP protocol optimization (73 tools total):
+  - `CronGet` — fetch a single cron job by name instead of listing all and filtering client-side
+  - `GetChildrenValues` — batch-fetch children return values in a single command instead of N+1 queries
+  - `StorageStatus` — return real disk/storage health from the server instead of hardcoded `diskFull: false`
+- 9 new tests for the 3 TCP commands (`test/tcp-new-commands.test.ts`)
+
+### Fixed
+- **MCP TCP `getCron(name)`** — now uses dedicated `CronGet` command instead of fetching all crons and filtering client-side
+- **MCP TCP `getChildrenValues(id)`** — now uses dedicated `GetChildrenValues` command instead of 1 + 2N queries (GetJob parent + GetResult/GetJob per child)
+- **MCP TCP `getStorageStatus()`** — now uses dedicated `StorageStatus` command instead of returning hardcoded `{ diskFull: false }`
+
+## [2.5.5] - 2026-02-26
+
+### Fixed
+- **TCP client auth state corruption** — `TcpClient.doConnect()` set `connected = true` before `authenticate()` completed. If authentication failed, the client remained in a corrupted state (`connected = true` with no valid session), causing subsequent operations to silently fail. Connection state is now set only after successful authentication, with proper cleanup on failure.
+
+### Docs
+- SEO overhaul — keyword-rich titles, optimized descriptions, AI keywords, sitemap priorities
+
 ## [2.5.4] - 2026-02-24
 
 ### Added
