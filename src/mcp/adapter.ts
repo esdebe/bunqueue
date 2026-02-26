@@ -780,30 +780,9 @@ export class TcpBackend implements McpBackend {
   }
 
   async getChildrenValues(parentJobId: string) {
-    // TCP doesn't have a direct batch command for this; fetch children in parallel
-    const res = await this.send({ cmd: 'GetJob', id: parentJobId });
-    if (!res.job) return {};
-    const job = res.job as Record<string, unknown>;
-    const childrenIds = (job.childrenIds as string[]) ?? [];
-    if (childrenIds.length === 0) return {};
-    const results: Record<string, unknown> = {};
-    const entries = await Promise.all(
-      childrenIds.map(async (childId) => {
-        const [childRes, childJob] = await Promise.all([
-          this.send({ cmd: 'GetResult', id: childId }),
-          this.send({ cmd: 'GetJob', id: childId }),
-        ]);
-        if (childRes.result !== undefined) {
-          const queue = (childJob.job as Record<string, unknown>)?.queue ?? '';
-          return [`${queue}:${childId}`, childRes.result] as const;
-        }
-        return null;
-      })
-    );
-    for (const entry of entries) {
-      if (entry) results[entry[0]] = entry[1];
-    }
-    return results;
+    const res = await this.send({ cmd: 'GetChildrenValues', id: parentJobId });
+    const data = res.data as Record<string, unknown> | undefined;
+    return (data?.values ?? {}) as Record<string, unknown>;
   }
 
   async getJobByCustomId(customId: string) {
@@ -988,9 +967,9 @@ export class TcpBackend implements McpBackend {
   }
 
   async getCron(name: string): Promise<SerializedCron | null> {
-    const res = await this.send({ cmd: 'CronList' });
-    const crons = (res.crons as Array<Record<string, unknown>>) ?? [];
-    const c = crons.find((cr) => cr.name === name);
+    const res = await this.send({ cmd: 'CronGet', name });
+    if (!res.ok) return null;
+    const c = res.cron as Record<string, unknown>;
     if (!c) return null;
     return {
       name: c.name as string,
@@ -1107,14 +1086,12 @@ export class TcpBackend implements McpBackend {
   }
 
   async getStorageStatus() {
-    // TCP mode: query server health endpoint for real storage status
-    try {
-      await this.send({ cmd: 'Stats' });
-      return { diskFull: false, error: null };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { diskFull: false, error: message };
-    }
+    const res = await this.send({ cmd: 'StorageStatus' });
+    const data = res.data as Record<string, unknown> | undefined;
+    return {
+      diskFull: (data?.diskFull as boolean) ?? false,
+      error: (data?.error as string | null) ?? null,
+    };
   }
 
   async addFlow(flow: FlowJobInput): Promise<FlowNodeResult> {

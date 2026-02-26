@@ -25,6 +25,7 @@ import {
   handleGetCountsPerPriority,
   handleGetJobByCustomId,
   handleGetJobs,
+  handleGetChildrenValues,
 } from './handlers/query';
 
 import {
@@ -36,11 +37,12 @@ import {
   handleDrain,
   handleStats,
   handleMetrics,
+  handleStorageStatus,
 } from './handlers/management';
 
 import { handleDlq, handleRetryDlq, handlePurgeDlq, handleRetryCompleted } from './handlers/dlq';
 
-import { handleCron, handleCronDelete, handleCronList } from './handlers/cron';
+import { handleCron, handleCronGet, handleCronDelete, handleCronList } from './handlers/cron';
 
 import {
   handleUpdate,
@@ -130,6 +132,8 @@ export async function routeQueryCommand(
       return handleCount(cmd, ctx, reqId);
     case 'GetProgress':
       return handleGetProgress(cmd, ctx, reqId);
+    case 'GetChildrenValues':
+      return handleGetChildrenValues(cmd, ctx, reqId);
     default:
       return null;
   }
@@ -243,6 +247,8 @@ export function routeCronCommand(
   switch (cmd.cmd) {
     case 'Cron':
       return handleCron(cmd, ctx, reqId);
+    case 'CronGet':
+      return handleCronGet(cmd, ctx, reqId);
     case 'CronDelete':
       return handleCronDelete(cmd, ctx, reqId);
     case 'CronList':
@@ -292,6 +298,8 @@ export function routeMonitoringCommand(
       return handleRemoveWebhook(cmd, ctx, reqId);
     case 'ListWebhooks':
       return handleListWebhooks(cmd, ctx, reqId);
+    case 'StorageStatus':
+      return handleStorageStatus(cmd, ctx, reqId);
     default:
       return null;
   }

@@ -1,6 +1,6 @@
 /**
  * Cron Command Handlers
- * Cron, CronDelete, CronList
+ * Cron, CronGet, CronDelete, CronList
  */
 
 import type { Command } from '../../../domain/types/command';
@@ -40,6 +40,32 @@ export function handleCron(
   } catch (err) {
     return resp.error(err instanceof Error ? err.message : 'Failed to add cron', reqId);
   }
+}
+
+/** Handle CronGet command - get single cron job by name */
+export function handleCronGet(
+  cmd: Extract<Command, { cmd: 'CronGet' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const cron = ctx.queueManager.getCron(cmd.name);
+  if (!cron) {
+    return resp.error('Cron job not found', reqId);
+  }
+  return {
+    ok: true,
+    cron: {
+      name: cron.name,
+      queue: cron.queue,
+      schedule: cron.schedule,
+      repeatEvery: cron.repeatEvery,
+      nextRun: cron.nextRun,
+      executions: cron.executions,
+      maxLimit: cron.maxLimit,
+      timezone: cron.timezone,
+    },
+    reqId,
+  } as Response;
 }
 
 /** Handle CronDelete command - delete cron job */

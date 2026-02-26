@@ -98,6 +98,16 @@ export function handleStats(ctx: HandlerContext, reqId?: string): Response {
   );
 }
 
+/** Handle StorageStatus command - get real disk/storage health */
+export function handleStorageStatus(
+  _cmd: Extract<Command, { cmd: 'StorageStatus' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const status = ctx.queueManager.getStorageStatus();
+  return resp.data({ diskFull: status.diskFull, error: status.error, since: status.since }, reqId);
+}
+
 /** Handle Metrics command */
 export function handleMetrics(ctx: HandlerContext, reqId?: string): Response {
   const s = ctx.queueManager.getStats();

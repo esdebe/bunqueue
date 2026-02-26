@@ -1,6 +1,6 @@
 /**
  * Query Command Handlers
- * GetJob, GetState, GetResult, GetJobCounts, GetJobByCustomId, GetJobs
+ * GetJob, GetState, GetResult, GetJobCounts, GetJobByCustomId, GetJobs, GetChildrenValues
  */
 
 import type { Command } from '../../../domain/types/command';
@@ -84,4 +84,18 @@ export function handleGetJobs(
   });
 
   return resp.jobs(jobs, reqId);
+}
+
+/** Handle GetChildrenValues command - batch get children values for a parent job */
+export async function handleGetChildrenValues(
+  cmd: Extract<Command, { cmd: 'GetChildrenValues' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    const values = await ctx.queueManager.getChildrenValues(jobId(cmd.id));
+    return resp.data({ values }, reqId);
+  } catch {
+    return resp.data({ values: {} }, reqId);
+  }
 }

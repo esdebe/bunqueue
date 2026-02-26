@@ -379,6 +379,25 @@ export interface PrometheusCommand extends BaseCommand {
   readonly cmd: 'Prometheus';
 }
 
+// ============ New Query/Monitoring Commands ============
+
+/** Get a single cron job by name */
+export interface CronGetCommand extends BaseCommand {
+  readonly cmd: 'CronGet';
+  readonly name: string;
+}
+
+/** Batch get children values for a parent job */
+export interface GetChildrenValuesCommand extends BaseCommand {
+  readonly cmd: 'GetChildrenValues';
+  readonly id: string;
+}
+
+/** Get real storage/disk health status */
+export interface StorageStatusCommand extends BaseCommand {
+  readonly cmd: 'StorageStatus';
+}
+
 // ============ Auth Commands ============
 
 export interface AuthCommand extends BaseCommand {
@@ -456,6 +475,9 @@ export type Command =
   | StatsCommand
   | MetricsCommand
   | PrometheusCommand
+  | CronGetCommand
+  | GetChildrenValuesCommand
+  | StorageStatusCommand
   | AuthCommand
   | HelloCommand;
 
