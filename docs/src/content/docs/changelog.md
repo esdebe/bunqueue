@@ -10,6 +10,20 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.7] - 2026-03-01
+
+### Added
+- **SandboxedWorker TCP mode** — SandboxedWorker now supports connecting to a remote bunqueue server via TCP, enabling crash-isolated job processing in server deployments (systemd, Docker). Pass `connection` option to enable it.
+- **SandboxedWorker EventEmitter** — SandboxedWorker now extends EventEmitter with full event support: `ready`, `active`, `completed`, `failed`, `progress`, `error`, `closed` (matching regular Worker API).
+- **QueueOps adapter** (`src/client/sandboxed/queueOps.ts`) — unified interface for embedded and TCP queue operations, keeping SandboxedWorker code clean and dual-mode.
+- **TCP heartbeat for SandboxedWorker** — automatic lock renewal via `JobHeartbeat` commands for active jobs in TCP mode (configurable via `heartbeatInterval`).
+- TCP integration test for SandboxedWorker (`scripts/tcp/test-sandboxed-worker.ts`)
+- 8 new unit tests for SandboxedWorker events and TCP constructor
+
+### Docs
+- Updated Worker guide with SandboxedWorker TCP mode section and events documentation
+- Updated CPU-Intensive Workers guide with SandboxedWorker TCP example
+
 ## [2.5.6] - 2026-02-27
 
 ### Added
