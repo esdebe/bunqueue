@@ -52,6 +52,18 @@ https://api.example.com/webhooks/emails    emails   all
 https://api.example.com/webhooks/failures  *        job.failed,job.stalled
 ```
 
+### Enable/Disable Webhook
+
+```bash
+# Disable a webhook without removing it
+bunqueue webhook set-enabled wh_abc123 false
+
+# Re-enable the webhook
+bunqueue webhook set-enabled wh_abc123 true
+```
+
+Disabling a webhook stops event delivery but preserves the configuration. This is useful for temporarily pausing webhook notifications during maintenance.
+
 ### Remove Webhook
 
 ```bash

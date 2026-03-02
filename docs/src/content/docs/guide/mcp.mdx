@@ -105,6 +105,10 @@ The server supports two backend modes: **embedded** (direct SQLite access in the
 
 **TCP mode** connects to a running bunqueue server, allowing your agent to manage production queues shared across multiple workers and services.
 
+<Aside type="note" title="TCP Mode Parity (v2.6.0)">
+  All 73 MCP tools are fully functional in TCP mode. This includes `extend_lock`, `change_delay`, `clear_job_logs`, `set_webhook_enabled`, `compact_memory`, and batch lock extension. The `job_heartbeat` tool also supports a custom `duration` parameter to extend lock TTL for a specific period.
+</Aside>
+
 ---
 
 ## Configuration
@@ -318,9 +322,9 @@ $ claude
 | `bunqueue_ack_job` | Acknowledge job completion with result |
 | `bunqueue_ack_job_batch` | Batch acknowledge multiple jobs |
 | `bunqueue_fail_job` | Mark a job as failed |
-| `bunqueue_job_heartbeat` | Send heartbeat for active job |
+| `bunqueue_job_heartbeat` | Send heartbeat for active job (supports custom `duration` for lock extension) |
 | `bunqueue_job_heartbeat_batch` | Batch heartbeat for multiple jobs |
-| `bunqueue_extend_lock` | Extend lock on an active job |
+| `bunqueue_extend_lock` | Extend lock on an active job with a specific duration |
 
 ### Queue Control <Badge text="11" variant="note" />
 

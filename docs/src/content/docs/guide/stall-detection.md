@@ -61,6 +61,8 @@ When a job stalls, one of these actions is taken:
 1. **Retry** - Job is re-queued with incremented stall count
 2. **Move to DLQ** - Job exceeds `maxStalls` and is moved to Dead Letter Queue
 
+When a job is retried after a stall or lock expiry, its internal counters (queued count, shard stats) are updated correctly and waiting workers are notified immediately. This means requeued jobs are picked up without delay.
+
 ## Events
 
 ```typescript

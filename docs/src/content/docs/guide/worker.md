@@ -196,6 +196,7 @@ When `useLocks: true` (default), workers use BullMQ-style lock tokens:
 - Workers must provide the token when acknowledging/failing jobs
 - Prevents job theft between workers
 - Lock is renewed via heartbeats
+- Heartbeats support a custom `duration` parameter to extend the lock for a specific TTL instead of using the default
 
 :::note[When Locks Matter]
 Locks are essential in **server mode** with multiple workers connecting via TCP. They prevent:

@@ -99,6 +99,10 @@ When using FlowProducer, bunqueue automatically injects special properties into 
 These allow child jobs to access parent results. All fields are fully typed via the `FlowJobData` interface — IntelliSense works automatically inside Worker processors.
 :::
 
+:::tip[Persistence]
+Parent-child relationships set via `updateJobParent` are persisted to SQLite. Both the parent's `childrenIds` and the child's `__parentId` survive server restarts. This ensures flow dependency graphs remain intact across process restarts when using durable storage.
+:::
+
 ### `FlowJobData` Type
 
 The `FlowJobData` interface is automatically intersected with your job data type `T` in Worker callbacks. You can also import it explicitly:
