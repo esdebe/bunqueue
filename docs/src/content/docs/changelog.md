@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.1] - 2026-03-03
+
+### Fixed
+- **`Queue#upsertJobScheduler` ignoring timezone** — The `RepeatOpts` interface was missing the `timezone` field, causing a TypeScript error when setting it. Additionally, embedded mode hardcoded `timezone: 'UTC'` and TCP mode did not forward timezone to the server. Now properly accepts and passes through IANA timezone strings (e.g., `"Europe/Rome"`, `"America/New_York"`). ([#22](https://github.com/egeominotti/bunqueue/issues/22))
+
+### Added
+- Regression test for scheduler timezone passthrough (`test/bug-22-scheduler-timezone.test.ts`)
+
 ## [2.6.0] - 2026-03-03
 
 ### Added
