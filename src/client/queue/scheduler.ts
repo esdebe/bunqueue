@@ -54,7 +54,9 @@ export async function upsertJobScheduler(
     manager.addCron({
       name: schedulerId,
       queue: ctx.name,
-      data: jobTemplate?.data ?? {},
+      data: jobTemplate?.name
+        ? { name: jobTemplate.name, ...((jobTemplate.data ?? {}) as object) }
+        : (jobTemplate?.data ?? {}),
       schedule: cronPattern,
       repeatEvery,
       timezone: repeatOpts.timezone ?? 'UTC',
@@ -70,7 +72,9 @@ export async function upsertJobScheduler(
     cmd: 'Cron',
     name: schedulerId,
     queue: ctx.name,
-    data: jobTemplate?.data ?? {},
+    data: jobTemplate?.name
+      ? { name: jobTemplate.name, ...((jobTemplate.data ?? {}) as object) }
+      : (jobTemplate?.data ?? {}),
     schedule: cronPattern,
     repeatEvery,
     timezone: repeatOpts.timezone,
