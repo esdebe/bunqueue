@@ -10,6 +10,22 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.2] - 2026-03-03
+
+### Fixed
+- **`job.name` always `'default'` for scheduled jobs** — When jobs were created via `Queue#upsertJobScheduler`, the `name` from `jobTemplate` was not embedded in the cron job data. The worker fell back to `'default'`. Now embeds the name in data, matching `Queue.add()` behavior. ([Discussion #23](https://github.com/egeominotti/bunqueue/discussions/23))
+
+### Added
+- Regression test for scheduler job name passthrough (`test/bug-23-scheduler-job-name.test.ts`)
+
+### Docs
+- Added SandboxedWorker Options Reference table
+- Added SandboxedWorker Event Reference table with types
+- Clarified which events are not available on SandboxedWorker (`stalled`, `drained`, `cancelled`)
+- Added tip about increasing `maxMemory` for large file processing
+- Fixed missing `await` on `worker.start()` calls
+- Improved Worker vs SandboxedWorker comparison table
+
 ## [2.6.1] - 2026-03-03
 
 ### Fixed
