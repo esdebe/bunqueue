@@ -214,9 +214,11 @@ jobs:
           git push
 
       - name: Publish to npm
-        run: bun publish --no-interactive
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          bun publish --no-interactive
         env:
-          NPM_CONFIG_//registry.npmjs.org/:_authToken: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ============================================
   # Create Release (only on main)
