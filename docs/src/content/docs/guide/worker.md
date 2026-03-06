@@ -291,7 +291,7 @@ await worker.start();
 | `autoRestart` | `boolean` | `true` | Auto-restart crashed workers |
 | `maxRestarts` | `number` | `10` | Max restart attempts per worker |
 | `pollInterval` | `number` | `10` | Job poll interval in ms |
-| `heartbeatInterval` | `number` | `0` (embedded) / `10000` (TCP) | Lock renewal interval in ms |
+| `heartbeatInterval` | `number` | `5000` (embedded) / `10000` (TCP) | Heartbeat interval for stall detection / lock renewal |
 | `connection` | `ConnectionOptions` | — | TCP connection config (omit for embedded) |
 
 ### TCP Mode
@@ -328,11 +328,16 @@ export default async (job: {
   data: any;
   queue: string;
   attempts: number;
+  parentId?: string;
   progress: (value: number) => void;
+  log: (message: string) => void;
+  fail: (error: string | Error) => void;
 }) => {
+  job.log('Starting heavy computation');
   job.progress(50);
   const result = await heavyComputation(job.data);
   job.progress(100);
+  job.log('Computation finished');
   return result;
 };
 ```
@@ -349,7 +354,7 @@ export default async (job: {
 
 ### SandboxedWorker Events
 
-SandboxedWorker supports 7 events. Note that `stalled`, `drained`, and `cancelled` are **not available** — these are only on the regular Worker.
+SandboxedWorker supports 8 events. Note that `stalled`, `drained`, and `cancelled` are **not available** — these are only on the regular Worker.
 
 ```typescript
 worker.on('ready', () => {
@@ -372,6 +377,10 @@ worker.on('progress', (job, progress) => {
   console.log(`Job ${job.id} progress: ${progress}%`);
 });
 
+worker.on('log', (job, message) => {
+  console.log(`Job ${job.id} log: ${message}`);
+});
+
 worker.on('error', (error) => {
   console.error('Worker error:', error);
 });
@@ -390,6 +399,7 @@ worker.on('closed', () => {
 | `completed` | `(job: Job, result: unknown)` | Job completed successfully |
 | `failed` | `(job: Job, error: Error)` | Job failed, timed out, or worker crashed |
 | `progress` | `(job: Job, progress: number)` | Job progress updated (0-100) |
+| `log` | `(job: Job, message: string)` | Log message from processor via `job.log()` |
 | `error` | `(error: Error)` | Worker-level error (dispatch failure, heartbeat error, crash) |
 | `closed` | `()` | Worker pool stopped |
 

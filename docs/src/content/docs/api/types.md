@@ -934,7 +934,7 @@ interface SandboxedWorkerOptions {
   /** Number of worker processes (default: 1) */
   concurrency?: number;
 
-  /** Job timeout in ms (default: 30000) */
+  /** Job timeout in ms (default: 30000, 0 = disabled) */
   timeout?: number;
 
   /** Max memory per worker in MB (default: 256, uses smol mode if <= 64) */
@@ -948,6 +948,12 @@ interface SandboxedWorkerOptions {
 
   /** Poll interval in ms when no workers are idle (default: 10) */
   pollInterval?: number;
+
+  /** Heartbeat interval in ms (default: 5000 embedded, 10000 TCP) */
+  heartbeatInterval?: number;
+
+  /** TCP connection options (omit for embedded mode) */
+  connection?: ConnectionOptions;
 }
 ```
 

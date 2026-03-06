@@ -125,6 +125,25 @@ Filter DLQ by stalled reason:
 const stalledJobs = queue.getDlq({ reason: 'stalled' });
 ```
 
+## SandboxedWorker
+
+SandboxedWorker automatically sends heartbeats in both embedded and TCP mode. In embedded mode, `heartbeatInterval` defaults to `5000ms`, keeping `lastHeartbeat` fresh so long-running jobs are not falsely detected as stalled.
+
+```typescript
+const worker = new SandboxedWorker('heavy-jobs', {
+  processor: './processor.ts',
+  timeout: 0,              // Disable worker-level timeout for long jobs
+  heartbeatInterval: 5000, // Default in embedded mode (keeps stall detection happy)
+});
+```
+
+:::tip[Long-running SandboxedWorker jobs]
+If your jobs run longer than the default `stallInterval` (30s), you have three options:
+1. **Increase `stallInterval`** — `queue.setStallConfig({ stallInterval: 300000 })` (5 minutes)
+2. **Call `progress()` periodically** — Each call refreshes `lastHeartbeat`
+3. **Disable stall detection** — `queue.setStallConfig({ enabled: false })`
+:::
+
 :::tip[Related Guides]
 - [Dead Letter Queue](/guide/dlq/) - Where stalled jobs end up after max retries
 - [Worker API](/guide/worker/) - Configure heartbeat intervals

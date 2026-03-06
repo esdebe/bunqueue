@@ -10,6 +10,33 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.5] - 2026-03-06
+
+### Fixed
+- **SandboxedWorker `log` event not emitted** — The processor's `job.log()` method stored logs via `addLog()` but the SandboxedWorker never emitted a `'log'` event. Listeners registered with `.on('log', ...)` were never called. Now properly emits `(job, message)` on each log call. ([#29](https://github.com/egeominotti/bunqueue/issues/29))
+- **SandboxedWorker embedded heartbeats missing** — In embedded mode, `sendHeartbeat` was a no-op and `heartbeatInterval` defaulted to 0 (timer never started). Long-running jobs without `progress()` calls were detected as stalled and moved to DLQ despite still running. Now `sendHeartbeat` calls `manager.jobHeartbeat()` and defaults to 5000ms. ([#30](https://github.com/egeominotti/bunqueue/issues/30))
+
+### Added
+- Typed event overloads for `'log'` event on SandboxedWorker (`on`/`once`)
+- Regression tests for both issues (`test/issue29-sandboxed-log.test.ts`, `test/issue30-dlq-stall.test.ts`)
+
+### Docs
+- Updated SandboxedWorker processor example with `log()`, `fail()`, and `parentId` fields
+- Fixed `heartbeatInterval` default from `0` to `5000` in embedded mode docs
+- Added `log` event to SandboxedWorker Event Reference (8 events total)
+- Added SandboxedWorker section to Stall Detection guide
+- Updated SandboxedWorkerOptions type with `heartbeatInterval` and `connection` fields
+
+## [2.6.4] - 2026-03-05
+
+### Fixed
+- **Lock token race condition** — Resolved race where concurrent ack/fail operations could use an expired lock token, causing "Invalid or expired lock token" errors under high concurrency. ([#28](https://github.com/egeominotti/bunqueue/issues/28))
+
+### Added
+- **SandboxedWorker generics** — `SandboxedWorker<T>` now supports a generic type parameter for typed events (e.g., `worker.on('completed', (job: Job<MyData>) => ...)`)
+- **Processor API improvements** — Processor files now receive `log()`, `fail()`, and `parentId` on the job object alongside `progress()`
+- Typed `on()`/`once()` overloads for all SandboxedWorker events ([#25](https://github.com/egeominotti/bunqueue/issues/25))
+
 ## [2.6.2] - 2026-03-03
 
 ### Fixed
