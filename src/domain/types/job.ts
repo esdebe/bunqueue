@@ -160,6 +160,7 @@ export interface JobInput {
   uniqueKey?: string;
   customId?: string;
   dependsOn?: JobId[];
+  childrenIds?: JobId[];
   parentId?: JobId;
   tags?: string[];
   groupId?: string;
@@ -362,7 +363,7 @@ export function createJob(
     backoff,
     backoffConfig,
     dependsOn: input.dependsOn ?? [],
-    childrenIds: [],
+    childrenIds: input.childrenIds ?? [],
     childrenCompleted: 0,
     tags: input.tags ?? [],
     progress: 0,

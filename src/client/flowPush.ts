@@ -89,6 +89,7 @@ export async function pushJobWithParent(
   if (ctx.embedded) {
     const manager = getSharedManager();
     const { removeOnComplete, removeOnFail } = parseRemoveOptions(opts);
+    const childJobIds = childIds.map((id) => jobId(id));
     const job = await manager.push(queueName, {
       data,
       priority: opts.priority,
@@ -100,6 +101,8 @@ export async function pushJobWithParent(
       removeOnComplete,
       removeOnFail,
       parentId: parentRef ? jobId(parentRef.id) : undefined,
+      dependsOn: childJobIds.length > 0 ? childJobIds : undefined,
+      childrenIds: childJobIds.length > 0 ? childJobIds : undefined,
     });
 
     if (childIds.length > 0) {
@@ -126,6 +129,7 @@ export async function pushJobWithParent(
     removeOnFail: opts.removeOnFail,
     parentId: parentRef?.id,
     childIds,
+    dependsOn: childIds.length > 0 ? childIds : undefined,
   });
 
   if (!response.ok) {

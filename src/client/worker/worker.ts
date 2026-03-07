@@ -8,7 +8,7 @@ import { getSharedManager } from '../manager';
 import { TcpConnectionPool } from '../tcpPool';
 import { EventType } from '../../domain/types/queue';
 import type { WorkerOptions, Processor, ConnectionOptions, Job } from '../types';
-import type { Job as InternalJob } from '../../domain/types/job';
+import { jobId, type Job as InternalJob } from '../../domain/types/job';
 import type { TcpConnection, ExtendedWorkerOptions } from './types';
 import { FORCE_EMBEDDED, WORKER_CONSTANTS } from './types';
 import { AckBatcher } from './ackBatcher';
@@ -155,9 +155,18 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.subscribeToStalledEvents();
     }
 
-    if (!this.embedded && this.opts.heartbeatInterval > 0) {
-      const deps = this.getHeartbeatDeps();
-      this.heartbeatTimer = startHeartbeat(deps, this.opts.heartbeatInterval);
+    if (this.opts.heartbeatInterval > 0) {
+      if (this.embedded) {
+        this.heartbeatTimer = setInterval(() => {
+          const manager = getSharedManager();
+          for (const id of this.pulledJobIds) {
+            manager.jobHeartbeat(jobId(id));
+          }
+        }, this.opts.heartbeatInterval);
+      } else {
+        const deps = this.getHeartbeatDeps();
+        this.heartbeatTimer = startHeartbeat(deps, this.opts.heartbeatInterval);
+      }
     }
     this.poll();
   }

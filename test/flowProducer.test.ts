@@ -251,9 +251,9 @@ describe('FlowProducer - BullMQ v5 API', () => {
 
       const result = await flowProducer.add(flow);
 
-      // All jobs should be created
+      // Children should be waiting; parent waits for children (not in waiting state)
       const jobs = await queue.getWaitingAsync(0, 100);
-      expect(jobs.length).toBeGreaterThanOrEqual(3);
+      expect(jobs.length).toBeGreaterThanOrEqual(2);
 
       // Verify parent job exists
       const parentJob = await queue.getJob(result.job.id);

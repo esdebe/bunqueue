@@ -33,7 +33,10 @@ export async function getJob(jobId: JobId, ctx: QueryContext): Promise<Job | nul
   switch (location.type) {
     case 'queue': {
       return await withReadLock(ctx.shardLocks[location.shardIdx], () => {
-        return ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+        const shard = ctx.shards[location.shardIdx];
+        return (
+          shard.getQueue(location.queueName).find(jobId) ?? shard.waitingDeps.get(jobId) ?? null
+        );
       });
     }
     case 'processing': {
@@ -61,7 +64,8 @@ export function getJobByCustomId(customId: string, ctx: QueryContext): Job | nul
   if (!location) return null;
 
   if (location.type === 'queue') {
-    return ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+    const shard = ctx.shards[location.shardIdx];
+    return shard.getQueue(location.queueName).find(jobId) ?? shard.waitingDeps.get(jobId) ?? null;
   }
   if (location.type === 'processing') {
     return ctx.processingShards[location.shardIdx].get(jobId) ?? null;
@@ -103,13 +107,19 @@ export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobS
 
   switch (location.type) {
     case 'queue': {
-      // Check if job is delayed or waiting
-      const job = await withReadLock(ctx.shardLocks[location.shardIdx], () => {
-        return ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+      // Check if job is delayed, waiting, or waiting for children/deps
+      const result = await withReadLock(ctx.shardLocks[location.shardIdx], () => {
+        const shard = ctx.shards[location.shardIdx];
+        const queueJob = shard.getQueue(location.queueName).find(jobId);
+        if (queueJob) return { job: queueJob, waitingDeps: false };
+        const depsJob = shard.waitingDeps.get(jobId);
+        if (depsJob) return { job: depsJob, waitingDeps: true };
+        return null;
       });
-      if (!job) return 'unknown';
+      if (!result) return 'unknown';
+      if (result.waitingDeps) return 'waiting-children' as JobState;
       const now = Date.now();
-      return job.runAt > now ? JobState.Delayed : JobState.Waiting;
+      return result.job.runAt > now ? JobState.Delayed : JobState.Waiting;
     }
     case 'processing':
       return JobState.Active;

@@ -113,7 +113,8 @@ export async function updateJobData(
 
   if (location?.type === 'queue') {
     return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
-      const job = ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+      const shard = ctx.shards[location.shardIdx];
+      const job = shard.getQueue(location.queueName).find(jobId) ?? shard.waitingDeps.get(jobId);
       if (job) {
         (job as { data: unknown }).data = data;
         return true;
