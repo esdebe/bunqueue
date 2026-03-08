@@ -17,11 +17,16 @@ All notable changes to bunqueue are documented here.
 - **Graceful shutdown burst load** — Fixed `worker.close(true)` causing unhandled AckBatcher errors when jobs were still completing during burst load scenarios. Changed to graceful close with proper drain.
 
 ### Added
-- **37 new test suites** — Comprehensive test coverage across embedded and TCP modes:
-  - **Batch 1 (7 embedded + 7 TCP):** stress testing, ETL pipeline, retry resilience, cron advanced, queue group advanced, graceful shutdown, backpressure
-  - **Batch 2 (6 embedded + 6 TCP):** priority & delayed jobs, job lifecycle events, data integrity, idempotency & deduplication, long-running & timeout, flow patterns advanced
-  - **Batch 3 (6 embedded + 6 TCP):** job removal & cleanup, pause/resume patterns, worker scaling, job cancellation, DLQ patterns, bulk operations advanced
-- Total test count increased from ~4,000 to 4,610 (embedded) + 324 (TCP)
+- **53 new test suites** — Comprehensive test coverage across embedded and TCP modes:
+  - **Batch 1–3 (19 embedded + 18 TCP):** stress, ETL, retry, cron, queue group, shutdown, backpressure, priorities, lifecycle, data integrity, deduplication, timeouts, flows, removal, pause/resume, worker scaling, cancellation, DLQ patterns, bulk ops
+  - **Coverage gap tests (16 embedded):** auto-batching, webhook delivery, durable jobs, rate limiting, lock race conditions, flow + stall detection, cron timezone/DST, LIFO queue, DLQ selective retry, S3 backup concurrent, webhook SSRF, MCP edge cases, CLI error formatting, flow deduplication, sandboxed worker + flow, queue group + flow
+- Total test count increased from ~4,000 to 4,903
+
+### Docs
+- Removed BullMQ-only WorkerOptions from API types (lockDuration, maxStalledCount, etc.)
+- Added auto-batching documentation to Queue guide
+- Added connection pool sizing note to Worker guide
+- Fixed CLI help: removed non-existent socket options, fake interactive prompts
 
 ### Performance
 - CronScheduler `scheduleNext()` now handles stale entries in O(k) amortized instead of blocking indefinitely
