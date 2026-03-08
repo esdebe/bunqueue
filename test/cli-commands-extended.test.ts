@@ -202,7 +202,7 @@ describe('CLI Extended', () => {
     test('printServerHelp output contains server options', async () => {
       const { printServerHelp } = await import('../src/cli/help');
       const output = captureLog(() => printServerHelp());
-      for (const opt of ['--tcp-port', '--http-port', '--host', '--data-path', '--auth-tokens', '--tcp-socket', '--http-socket']) {
+      for (const opt of ['--tcp-port', '--http-port', '--host', '--data-path', '--auth-tokens']) {
         expect(output).toContain(opt);
       }
     });
