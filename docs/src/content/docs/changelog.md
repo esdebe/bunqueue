@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.9] - 2026-03-10
+
+### Fixed
+- **SandboxedWorker graceful stop** — `stop()` now drains active jobs before terminating worker threads, preventing data loss when stopping during job processing. Added `force` parameter for immediate termination when needed. ([#39](https://github.com/egeominotti/bunqueue/issues/39))
+
 ## [2.6.7] - 2026-03-08
 
 ### Fixed
