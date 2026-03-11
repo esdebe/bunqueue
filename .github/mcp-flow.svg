@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200" fill="none">
+  <defs>
+    <linearGradient id="pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9a8d4"/>
+      <stop offset="100%" style="stop-color:#ec4899"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#86efac"/>
+      <stop offset="100%" style="stop-color:#22c55e"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#93c5fd"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f9a8d4;stop-opacity:0.3"/>
+      <stop offset="50%" style="stop-color:#ec4899;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#f9a8d4;stop-opacity:0.3"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="dotGlow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <style>
+    /* Dot travel animation along each connector */
+    @keyframes dot1 {
+      0% { cx: 150; opacity: 0; }
+      8% { opacity: 1; }
+      42% { opacity: 1; }
+      50% { cx: 220; opacity: 0; }
+      100% { cx: 220; opacity: 0; }
+    }
+    @keyframes dot2 {
+      0%, 20% { cx: 310; opacity: 0; }
+      28% { opacity: 1; }
+      62% { opacity: 1; }
+      70% { cx: 380; opacity: 0; }
+      100% { cx: 380; opacity: 0; }
+    }
+    @keyframes dot3 {
+      0%, 40% { cx: 470; opacity: 0; }
+      48% { opacity: 1; }
+      82% { opacity: 1; }
+      90% { cx: 540; opacity: 0; }
+      100% { cx: 540; opacity: 0; }
+    }
+    @keyframes dot4 {
+      0%, 55% { cx: 630; opacity: 0; }
+      63% { opacity: 1; }
+      95% { opacity: 1; }
+      100% { cx: 700; opacity: 0; }
+    }
+
+    /* Node highlight when dot arrives */
+    @keyframes nodeGlow1 {
+      0%, 8% { stroke: #27272a; stroke-width: 1.5; }
+      10%, 48% { stroke: #ec4899; stroke-width: 2; }
+      50%, 100% { stroke: #27272a; stroke-width: 1.5; }
+    }
+    @keyframes nodeGlow2 {
+      0%, 28% { stroke: #27272a; stroke-width: 1.5; }
+      30%, 68% { stroke: #ec4899; stroke-width: 2; }
+      70%, 100% { stroke: #27272a; stroke-width: 1.5; }
+    }
+    @keyframes nodeGlow3 {
+      0%, 48% { stroke: #27272a; stroke-width: 1.5; }
+      50%, 88% { stroke: #ec4899; stroke-width: 2; }
+      90%, 100% { stroke: #27272a; stroke-width: 1.5; }
+    }
+    @keyframes nodeGlow4 {
+      0%, 63% { stroke: #27272a; stroke-width: 1.5; }
+      65%, 98% { stroke: #22c55e; stroke-width: 2; }
+      100% { stroke: #27272a; stroke-width: 1.5; }
+    }
+
+    /* Worker pulse */
+    @keyframes workerPulse {
+      0%, 100% { opacity: 0; }
+      40%, 90% { opacity: 0.12; }
+      65% { opacity: 0.25; }
+    }
+
+    /* Subtle icon bounce on activation */
+    @keyframes iconPop {
+      0%, 45%, 55%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    .d1 { animation: dot1 4s ease-in-out infinite; }
+    .d2 { animation: dot2 4s ease-in-out infinite; }
+    .d3 { animation: dot3 4s ease-in-out infinite; }
+    .d4 { animation: dot4 4s ease-in-out infinite; }
+
+    .ng1 { animation: nodeGlow1 4s ease-in-out infinite; }
+    .ng2 { animation: nodeGlow2 4s ease-in-out infinite; }
+    .ng3 { animation: nodeGlow3 4s ease-in-out infinite; }
+    .ng4 { animation: nodeGlow4 4s ease-in-out infinite; }
+
+    .wp { animation: workerPulse 4s ease-in-out infinite; }
+  </style>
+
+  <!-- Background -->
+  <rect width="820" height="200" rx="16" fill="#0c0c0f"/>
+  <rect width="820" height="200" rx="16" fill="none" stroke="#1a1a2e" stroke-width="1"/>
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.03">
+    <line x1="0" y1="50" x2="820" y2="50" stroke="white"/>
+    <line x1="0" y1="100" x2="820" y2="100" stroke="white"/>
+    <line x1="0" y1="150" x2="820" y2="150" stroke="white"/>
+    <line x1="164" y1="0" x2="164" y2="200" stroke="white"/>
+    <line x1="328" y1="0" x2="328" y2="200" stroke="white"/>
+    <line x1="492" y1="0" x2="492" y2="200" stroke="white"/>
+    <line x1="656" y1="0" x2="656" y2="200" stroke="white"/>
+  </g>
+
+  <!-- ===== CONNECTOR LINES ===== -->
+  <line x1="150" y1="80" x2="220" y2="80" stroke="#27272a" stroke-width="2"/>
+  <line x1="310" y1="80" x2="380" y2="80" stroke="#27272a" stroke-width="2"/>
+  <line x1="470" y1="80" x2="540" y2="80" stroke="#27272a" stroke-width="2"/>
+  <line x1="630" y1="80" x2="700" y2="80" stroke="#27272a" stroke-width="2"/>
+
+  <!-- Arrow heads -->
+  <polygon points="218,74 228,80 218,86" fill="#27272a"/>
+  <polygon points="378,74 388,80 378,86" fill="#27272a"/>
+  <polygon points="538,74 548,80 538,86" fill="#27272a"/>
+  <polygon points="698,74 708,80 698,86" fill="#27272a"/>
+
+  <!-- ===== NODE 1: Cron / Add Job ===== -->
+  <rect x="30" y="45" width="120" height="70" rx="12" fill="#111116" stroke="#27272a" stroke-width="1.5"/>
+  <!-- Clock icon -->
+  <circle cx="60" cy="72" r="12" fill="none" stroke="#f9a8d4" stroke-width="1.5"/>
+  <line x1="60" y1="65" x2="60" y2="72" stroke="#f9a8d4" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="60" y1="72" x2="66" y2="76" stroke="#f9a8d4" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="80" y="70" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Cron /</text>
+  <text x="80" y="84" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Add Job</text>
+  <text x="90" y="140" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">AI agent</text>
+  <text x="90" y="152" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">schedules</text>
+
+  <!-- ===== NODE 2: Queue ===== -->
+  <rect class="ng1" x="228" y="45" width="82" height="70" rx="12" fill="#111116" stroke="#27272a" stroke-width="1.5"/>
+  <!-- List icon -->
+  <line x1="249" y1="68" x2="249" y2="68.5" stroke="#f9a8d4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="256" y1="68" x2="272" y2="68" stroke="#f9a8d4" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="249" y1="77" x2="249" y2="77.5" stroke="#f9a8d4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="256" y1="77" x2="272" y2="77" stroke="#f9a8d4" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="249" y1="86" x2="249" y2="86.5" stroke="#f9a8d4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="256" y1="86" x2="272" y2="86" stroke="#f9a8d4" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="280" y="81" fill="#a1a1aa" font-family="system-ui, sans-serif" font-size="10" font-weight="500">Q</text>
+  <text x="269" y="140" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">waiting</text>
+
+  <!-- ===== NODE 3: Embedded Worker (highlighted) ===== -->
+  <!-- Background glow -->
+  <rect class="wp" x="378" y="35" width="92" height="90" rx="16" fill="#ec4899"/>
+  <rect class="ng2" x="388" y="45" width="82" height="70" rx="12" fill="#111116" stroke="#27272a" stroke-width="1.5"/>
+  <!-- Monitor icon -->
+  <rect x="408" y="62" width="22" height="16" rx="3" fill="none" stroke="#ec4899" stroke-width="1.5"/>
+  <line x1="415" y1="78" x2="424" y2="78" stroke="#ec4899" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="419" y1="78" x2="419" y2="82" stroke="#ec4899" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Blinking cursor inside monitor -->
+  <rect x="414" y="67" width="6" height="2" rx="1" fill="#ec4899" opacity="0.7">
+    <animate attributeName="opacity" values="0.7;0.2;0.7" dur="1.5s" repeatCount="indefinite"/>
+  </rect>
+  <text x="434" y="77" fill="#f9a8d4" font-family="system-ui, sans-serif" font-size="9" font-weight="600">W</text>
+  <text x="429" y="140" fill="#71717a" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">embedded</text>
+  <text x="429" y="152" fill="#71717a" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">worker</text>
+
+  <!-- ===== NODE 4: HTTP API ===== -->
+  <rect class="ng3" x="548" y="45" width="82" height="70" rx="12" fill="#111116" stroke="#27272a" stroke-width="1.5"/>
+  <!-- Link icon -->
+  <path d="M567 73 a6 6 0 0 1 8.5-8.5l2 2a6 6 0 0 1 0 8.5" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M581 72 a6 6 0 0 1-8.5 8.5l-2-2a6 6 0 0 1 0-8.5" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="589" y="77" fill="#93c5fd" font-family="system-ui, sans-serif" font-size="9" font-weight="600">HTTP</text>
+  <text x="589" y="140" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">your</text>
+  <text x="589" y="152" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">endpoint</text>
+
+  <!-- ===== NODE 5: Job Result ===== -->
+  <rect class="ng4" x="708" y="45" width="82" height="70" rx="12" fill="#111116" stroke="#27272a" stroke-width="1.5"/>
+  <!-- Checkmark icon -->
+  <circle cx="735" cy="76" r="11" fill="none" stroke="#4ade80" stroke-width="1.5"/>
+  <polyline points="729,76 733,80 741,72" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="752" y="80" fill="#4ade80" font-family="system-ui, sans-serif" font-size="9" font-weight="600">OK</text>
+  <text x="749" y="140" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">result</text>
+  <text x="749" y="152" fill="#52525b" font-family="system-ui, sans-serif" font-size="9" text-anchor="middle" font-style="italic">saved</text>
+
+  <!-- ===== ANIMATED DOTS ===== -->
+  <circle class="d1" cx="150" cy="80" r="4" fill="#ec4899" filter="url(#dotGlow)" opacity="0"/>
+  <circle class="d2" cx="310" cy="80" r="4" fill="#ec4899" filter="url(#dotGlow)" opacity="0"/>
+  <circle class="d3" cx="470" cy="80" r="4" fill="#ec4899" filter="url(#dotGlow)" opacity="0"/>
+  <circle class="d4" cx="630" cy="80" r="4" fill="#22c55e" filter="url(#dotGlow)" opacity="0"/>
+
+  <!-- Title label top-left -->
+  <text x="30" y="24" fill="#52525b" font-family="system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="0.05em">HTTP HANDLER FLOW</text>
+
+  <!-- bunqueue label top-right -->
+  <text x="790" y="24" fill="#3f3f46" font-family="system-ui, sans-serif" font-size="9" text-anchor="end">bunqueue MCP</text>
+</svg>

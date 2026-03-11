@@ -147,7 +147,13 @@ SQLite handles surprisingly high throughput for single-node deployments:
 
 ## Built for AI Agents (MCP Server)
 
+<p align="center">
+  <img src=".github/mcp-flow.svg" alt="HTTP Handler Flow: Cron/Add Job → Queue → Embedded Worker → HTTP API → Job Result" width="700" />
+</p>
+
 bunqueue is the **first job queue with native MCP support**. AI agents get a full-featured scheduler, task queue, and monitoring system — no glue code needed.
+
+**HTTP Handlers** solve a fundamental problem: an AI agent can schedule jobs and manage queues, but it cannot run a persistent worker. When the agent registers an HTTP handler, bunqueue spawns an embedded Worker that continuously pulls jobs and calls your HTTP endpoint. Responses are saved as results. Failed calls retry automatically via DLQ.
 
 **What AI agents can do with bunqueue:**
 
