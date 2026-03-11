@@ -1,0 +1,710 @@
+---
+/**
+ * Animated Notification Fanout diagram.
+ * Shows: Event → Queue (notifications) → Worker (Load Prefs → Fan Out)
+ * Worker fans out to 4 channels: Email, Push (FCM), SMS (Twilio), In-App
+ */
+---
+
+<div class="nf-wrap">
+  <!-- Desktop layout -->
+  <div class="nf-flow">
+    <!-- Main horizontal flow -->
+    <div class="nf-main">
+      <!-- Node 1: Event -->
+      <div class="nf-node nf-n1">
+        <div class="nf-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <span class="nf-label">Event</span>
+        <span class="nf-sublabel">security, order</span>
+      </div>
+
+      <!-- Connector 1 -->
+      <div class="nf-conn">
+        <div class="nf-line"></div>
+        <div class="nf-arrow"></div>
+        <div class="nf-dot nf-d1"></div>
+      </div>
+
+      <!-- Node 2: Queue -->
+      <div class="nf-node nf-n2">
+        <div class="nf-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </div>
+        <span class="nf-label">Queue</span>
+        <span class="nf-sublabel">notifications</span>
+      </div>
+
+      <!-- Connector 2 -->
+      <div class="nf-conn">
+        <div class="nf-line"></div>
+        <div class="nf-arrow"></div>
+        <div class="nf-dot nf-d2"></div>
+      </div>
+
+      <!-- Node 3: Worker (hero) -->
+      <div class="nf-node nf-n3 nf-hero">
+        <div class="nf-glow"></div>
+        <div class="nf-icon nf-icon-active">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <span class="nf-label">Worker</span>
+        <div class="nf-worker-steps">
+          <span class="nf-step">Load Prefs</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="nf-step-arrow">
+            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+          <span class="nf-step">Fan Out</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fan-out channels below Worker -->
+    <div class="nf-fanout">
+      <!-- Vertical connectors -->
+      <div class="nf-fan-connectors">
+        <div class="nf-fan-line nf-fl-1"></div>
+        <div class="nf-fan-dot nf-fd-1"></div>
+        <div class="nf-fan-line nf-fl-2"></div>
+        <div class="nf-fan-dot nf-fd-2"></div>
+        <div class="nf-fan-line nf-fl-3"></div>
+        <div class="nf-fan-dot nf-fd-3"></div>
+        <div class="nf-fan-line nf-fl-4"></div>
+        <div class="nf-fan-dot nf-fd-4"></div>
+      </div>
+
+      <!-- Channel boxes -->
+      <div class="nf-channels">
+        <!-- Email -->
+        <div class="nf-channel nf-ch-email">
+          <div class="nf-ch-icon nf-chi-gray">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </div>
+          <span class="nf-ch-label">Email</span>
+        </div>
+        <!-- Push -->
+        <div class="nf-channel nf-ch-push">
+          <div class="nf-ch-icon nf-chi-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </div>
+          <span class="nf-ch-label">Push</span>
+          <span class="nf-ch-sub">FCM</span>
+        </div>
+        <!-- SMS -->
+        <div class="nf-channel nf-ch-sms">
+          <div class="nf-ch-icon nf-chi-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+              <line x1="12" y1="18" x2="12.01" y2="18"/>
+            </svg>
+          </div>
+          <span class="nf-ch-label">SMS</span>
+          <span class="nf-ch-sub">Twilio</span>
+        </div>
+        <!-- In-App -->
+        <div class="nf-channel nf-ch-inapp">
+          <div class="nf-ch-icon nf-chi-pink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <span class="nf-ch-label">In-App</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="nf-vertical">
+    <div class="nf-vrow">
+      <div class="nf-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      </div>
+      <div><span class="nf-vlabel">Event</span><span class="nf-vsub">security, order</span></div>
+    </div>
+    <div class="nf-vconn"><div class="nf-vline-m"></div><div class="nf-vdot-m nf-vdm1"></div></div>
+
+    <div class="nf-vrow">
+      <div class="nf-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <div><span class="nf-vlabel">Queue</span><span class="nf-vsub">notifications</span></div>
+    </div>
+    <div class="nf-vconn"><div class="nf-vline-m"></div><div class="nf-vdot-m nf-vdm2"></div></div>
+
+    <div class="nf-vrow nf-vhero">
+      <div class="nf-vicon nf-vicon-pink">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div>
+        <span class="nf-vlabel">Worker</span>
+        <span class="nf-vsub">Load Prefs &#8594; Fan Out</span>
+      </div>
+    </div>
+    <div class="nf-vconn"><div class="nf-vline-m"></div><div class="nf-vdot-m nf-vdm3"></div></div>
+
+    <div class="nf-vchannels">
+      <div class="nf-vch nf-vch-gray">
+        <span class="nf-vch-label">Email</span>
+      </div>
+      <div class="nf-vch nf-vch-blue">
+        <span class="nf-vch-label">Push</span>
+      </div>
+      <div class="nf-vch nf-vch-green">
+        <span class="nf-vch-label">SMS</span>
+      </div>
+      <div class="nf-vch nf-vch-pink">
+        <span class="nf-vch-label">In-App</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .nf-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+
+  :root[data-theme='dark'] .nf-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .nf-vertical { display: none; }
+
+  /* === Desktop layout === */
+  .nf-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .nf-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 500px;
+  }
+
+  /* Nodes */
+  .nf-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: nfAppear 0.5s ease-out both;
+  }
+
+  .nf-n1 { animation-delay: 0s; }
+  .nf-n2 { animation-delay: 0.12s; }
+  .nf-n3 { animation-delay: 0.24s; }
+
+  @keyframes nfAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .nf-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    transition: all 0.3s ease;
+  }
+
+  :root[data-theme='dark'] .nf-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .nf-icon-active {
+    border-color: #ec4899;
+    color: #ec4899;
+    animation: nfIconPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .nf-icon-active {
+    border-color: #f9a8d4;
+    color: #f9a8d4;
+  }
+
+  @keyframes nfIconPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.15); }
+    50% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.35); }
+  }
+
+  /* Hero glow */
+  .nf-hero { position: relative; }
+
+  .nf-glow {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 18px;
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.12) 0%, transparent 70%);
+    animation: nfGlow 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  :root[data-theme='dark'] .nf-glow {
+    background: radial-gradient(ellipse, rgba(249, 168, 212, 0.1) 0%, transparent 70%);
+  }
+
+  @keyframes nfGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  .nf-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .nf-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* Worker sub-steps */
+  .nf-worker-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.1rem;
+  }
+
+  .nf-step {
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(236, 72, 153, 0.08);
+    color: #ec4899;
+    white-space: nowrap;
+  }
+
+  :root[data-theme='dark'] .nf-step {
+    background: rgba(249, 168, 212, 0.08);
+    color: #f9a8d4;
+  }
+
+  .nf-step-arrow {
+    color: var(--sl-color-gray-3);
+    flex-shrink: 0;
+  }
+
+  /* Connectors */
+  .nf-conn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .nf-line {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .nf-line {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .nf-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .nf-arrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Animated dots on main flow */
+  .nf-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: nfDotTravel 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .nf-dot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .nf-d1 { animation-delay: 0s; }
+  .nf-d2 { animation-delay: 0.7s; }
+
+  @keyframes nfDotTravel {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Fan-out section === */
+  .nf-fanout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: nfAppear 0.5s ease-out 0.4s both;
+  }
+
+  .nf-fan-connectors {
+    position: relative;
+    height: 40px;
+    width: 400px;
+    display: flex;
+    justify-content: space-around;
+  }
+
+  .nf-fan-line {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .nf-fan-line {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .nf-fl-1 { background: rgba(107, 114, 128, 0.3); }
+  .nf-fl-2 { background: rgba(59, 130, 246, 0.3); }
+  .nf-fl-3 { background: rgba(34, 197, 94, 0.3); }
+  .nf-fl-4 { background: rgba(236, 72, 153, 0.3); }
+
+  :root[data-theme='dark'] .nf-fl-1 { background: rgba(156, 163, 175, 0.2); }
+  :root[data-theme='dark'] .nf-fl-2 { background: rgba(147, 197, 253, 0.2); }
+  :root[data-theme='dark'] .nf-fl-3 { background: rgba(74, 222, 128, 0.2); }
+  :root[data-theme='dark'] .nf-fl-4 { background: rgba(249, 168, 212, 0.2); }
+
+  .nf-fan-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    top: -3px;
+  }
+
+  .nf-fd-1 {
+    left: calc(12.5% - 3px);
+    background: #6b7280;
+    box-shadow: 0 0 6px rgba(107, 114, 128, 0.4);
+    animation: nfFanDot 3.5s ease-in-out infinite 0s;
+  }
+
+  .nf-fd-2 {
+    left: calc(37.5% - 3px);
+    background: #3b82f6;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+    animation: nfFanDot 3.5s ease-in-out infinite 0.7s;
+  }
+
+  .nf-fd-3 {
+    left: calc(62.5% - 3px);
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+    animation: nfFanDot 3.5s ease-in-out infinite 1.4s;
+  }
+
+  .nf-fd-4 {
+    left: calc(87.5% - 3px);
+    background: #ec4899;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: nfFanDot 3.5s ease-in-out infinite 2.1s;
+  }
+
+  :root[data-theme='dark'] .nf-fd-1 {
+    background: #9ca3af;
+    box-shadow: 0 0 8px rgba(156, 163, 175, 0.4);
+  }
+
+  :root[data-theme='dark'] .nf-fd-2 {
+    background: #93c5fd;
+    box-shadow: 0 0 8px rgba(147, 197, 253, 0.4);
+  }
+
+  :root[data-theme='dark'] .nf-fd-3 {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+  }
+
+  :root[data-theme='dark'] .nf-fd-4 {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.4);
+  }
+
+  @keyframes nfFanDot {
+    0% { top: -3px; opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Channel boxes */
+  .nf-channels {
+    display: flex;
+    justify-content: space-around;
+    width: 400px;
+    gap: 0.5rem;
+  }
+
+  .nf-channel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    min-width: 72px;
+  }
+
+  :root[data-theme='dark'] .nf-channel {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .nf-ch-email { border-color: rgba(107, 114, 128, 0.2); }
+  .nf-ch-push { border-color: rgba(59, 130, 246, 0.2); }
+  .nf-ch-sms { border-color: rgba(34, 197, 94, 0.2); }
+  .nf-ch-inapp { border-color: rgba(236, 72, 153, 0.2); }
+
+  :root[data-theme='dark'] .nf-ch-email { border-color: rgba(156, 163, 175, 0.15); }
+  :root[data-theme='dark'] .nf-ch-push { border-color: rgba(147, 197, 253, 0.15); }
+  :root[data-theme='dark'] .nf-ch-sms { border-color: rgba(74, 222, 128, 0.15); }
+  :root[data-theme='dark'] .nf-ch-inapp { border-color: rgba(249, 168, 212, 0.15); }
+
+  .nf-ch-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nf-chi-gray { color: #6b7280; background: rgba(107, 114, 128, 0.08); }
+  .nf-chi-blue { color: #3b82f6; background: rgba(59, 130, 246, 0.08); }
+  .nf-chi-green { color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+  .nf-chi-pink { color: #ec4899; background: rgba(236, 72, 153, 0.08); }
+
+  :root[data-theme='dark'] .nf-chi-gray { color: #9ca3af; background: rgba(156, 163, 175, 0.08); }
+  :root[data-theme='dark'] .nf-chi-blue { color: #93c5fd; background: rgba(147, 197, 253, 0.08); }
+  :root[data-theme='dark'] .nf-chi-green { color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+  :root[data-theme='dark'] .nf-chi-pink { color: #f9a8d4; background: rgba(249, 168, 212, 0.08); }
+
+  .nf-ch-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .nf-ch-sub {
+    font-size: 0.58rem;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+  }
+
+  /* === Mobile vertical layout === */
+  .nf-vrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .nf-vhero {
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(236, 72, 153, 0.04);
+    border: 1px solid rgba(236, 72, 153, 0.1);
+  }
+
+  :root[data-theme='dark'] .nf-vhero {
+    background: rgba(249, 168, 212, 0.04);
+    border-color: rgba(249, 168, 212, 0.1);
+  }
+
+  .nf-vicon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .nf-vicon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .nf-vicon-pink { color: #ec4899; border-color: #ec4899; }
+  :root[data-theme='dark'] .nf-vicon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.4); }
+
+  .nf-vlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .nf-vsub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .nf-vconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .nf-vline-m {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .nf-vline-m {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .nf-vdot-m {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: nfVdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .nf-vdot-m {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.5);
+  }
+
+  .nf-vdm1 { animation-delay: 0s; }
+  .nf-vdm2 { animation-delay: 0.7s; }
+  .nf-vdm3 { animation-delay: 1.4s; }
+
+  @keyframes nfVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .nf-vchannels {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.25rem 0;
+  }
+
+  .nf-vch {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.4rem 0.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .nf-vch {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .nf-vch-gray { border-color: rgba(107, 114, 128, 0.2); }
+  .nf-vch-blue { border-color: rgba(59, 130, 246, 0.2); }
+  .nf-vch-green { border-color: rgba(34, 197, 94, 0.2); }
+  .nf-vch-pink { border-color: rgba(236, 72, 153, 0.2); }
+
+  .nf-vch-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .nf-flow { display: none; }
+    .nf-vertical { display: flex; flex-direction: column; }
+    .nf-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

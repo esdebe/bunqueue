@@ -20,6 +20,19 @@ head:
       content: "background jobs, job queue, Bun, TypeScript, email queue, webhook delivery, payment processing, image processing, video transcoding, cron jobs, AI agent, MCP, multi-tenant, rate limiting, dead letter queue, retry pattern, AI automation, agentic workflows, AI task scheduler, Claude, Cursor"
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+import AiAgentWorkflow from '../../../components/AiAgentWorkflow.astro';
+import AppArchitecture from '../../../components/AppArchitecture.astro';
+import JobLifecycle from '../../../components/JobLifecycle.astro';
+import EmailPipeline from '../../../components/EmailPipeline.astro';
+import ReportPipeline from '../../../components/ReportPipeline.astro';
+import WebhookDelivery from '../../../components/WebhookDelivery.astro';
+import ImagePipeline from '../../../components/ImagePipeline.astro';
+import NotificationFanout from '../../../components/NotificationFanout.astro';
+import PaymentFlow from '../../../components/PaymentFlow.astro';
+import MultiTenantArch from '../../../components/MultiTenantArch.astro';
+import WorkflowPatterns from '../../../components/WorkflowPatterns.astro';
+
 Every non-trivial application needs background processing. API requests should return immediately while expensive operations — sending emails, processing images, charging payments, calling external APIs — happen asynchronously in the background.
 
 bunqueue provides the infrastructure for all of these patterns: persistent queues backed by SQLite, automatic retries with exponential backoff, dead letter queues for failed jobs, progress tracking, cron scheduling, rate limiting, and real-time monitoring. Each pattern below is production-ready and uses bunqueue's embedded mode (zero config, no external services).
@@ -30,30 +43,7 @@ AI agents are increasingly used to orchestrate complex automation tasks, but the
 
 When an agent connects to bunqueue via MCP (Model Context Protocol), it gains the ability to add jobs to queues, create cron schedules, set rate limits, monitor queue health, manage dead letter queues, and — with HTTP handlers — auto-process jobs by making HTTP requests without any external worker process.
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        AI AGENT WORKFLOW                                  │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐               │
-│   │  AI Agent   │────▶│  MCP Server │────▶│   bunqueue   │               │
-│   │  (Claude,   │     │ (73 tools)  │     │   Engine     │               │
-│   │   Cursor)   │◀────│             │◀────│              │               │
-│   └─────────────┘     └─────────────┘     └──────┬───────┘               │
-│                                                   │                       │
-│        "Schedule a cleanup job every day at 3AM"  │                       │
-│        "Register an HTTP handler on the meteo     │                       │
-│         queue to poll the weather API"             │                       │
-│        "Show me all failed jobs and retry them"   │                       │
-│                                                   ▼                       │
-│                                     ┌──────────────────────┐             │
-│                                     │  Workers / HTTP      │             │
-│                                     │  Handlers (process   │             │
-│                                     │  jobs automatically) │             │
-│                                     └──────────────────────┘             │
-│                                                                           │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+<AiAgentWorkflow />
 
 **What AI agents can do with bunqueue:**
 - **Schedule tasks** — create cron jobs, delayed execution, recurring workflows with a single tool call
@@ -74,60 +64,11 @@ The MCP server runs as a subprocess, communicates via stdio using JSON-RPC, and 
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           YOUR APPLICATION                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│   ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐      │
-│   │   API    │     │  Cron    │     │ Webhooks │     │  Events  │      │
-│   │ Handlers │     │Scheduler │     │ Receiver │     │ Triggers │      │
-│   └────┬─────┘     └────┬─────┘     └────┬─────┘     └────┬─────┘      │
-│        │                │                │                │             │
-│        └────────────────┴────────────────┴────────────────┘             │
-│                                   │                                      │
-│                                   ▼                                      │
-│   ┌─────────────────────────────────────────────────────────────────┐   │
-│   │                         QUEUE LAYER                              │   │
-│   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │   │
-│   │  │ emails  │  │ reports │  │webhooks │  │ payments│  ...       │   │
-│   │  └─────────┘  └─────────┘  └─────────┘  └─────────┘            │   │
-│   └─────────────────────────────────────────────────────────────────┘   │
-│                                   │                                      │
-│                                   ▼                                      │
-│   ┌─────────────────────────────────────────────────────────────────┐   │
-│   │                        WORKER POOL                               │   │
-│   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │   │
-│   │  │Worker x3│  │Worker x2│  │Worker x5│  │Worker x3│            │   │
-│   │  └─────────┘  └─────────┘  └─────────┘  └─────────┘            │   │
-│   └─────────────────────────────────────────────────────────────────┘   │
-│                                   │                                      │
-│        ┌──────────────────────────┼──────────────────────────┐          │
-│        ▼                          ▼                          ▼          │
-│   ┌─────────┐              ┌───────────┐              ┌──────────┐      │
-│   │   DLQ   │              │  SQLite   │              │  Events  │      │
-│   │ (Failed)│              │(Persistence)             │ (Hooks)  │      │
-│   └─────────┘              └───────────┘              └──────────┘      │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+<AppArchitecture />
 
 ## Job Lifecycle
 
-```
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  QUEUED  │───▶│  ACTIVE  │───▶│COMPLETED │    │  FAILED  │
-└──────────┘    └────┬─────┘    └──────────┘    └────┬─────┘
-                     │                               │
-                     │         ┌──────────┐          │
-                     └────────▶│ RETRYING │──────────┘
-                               └────┬─────┘
-                                    │ max attempts
-                                    ▼
-                               ┌──────────┐
-                               │   DLQ    │
-                               └──────────┘
-```
+<JobLifecycle />
 
 ---
 
@@ -137,20 +78,7 @@ Email is one of the most common background job use cases. Sending email synchron
 
 bunqueue handles this with automatic retries and exponential backoff. If SendGrid or your SMTP server returns a 5xx error, the job is retried up to N times with increasing delays. After all attempts are exhausted, the job moves to the dead letter queue (DLQ) where it can be inspected, retried manually, or auto-retried on a schedule. Progress tracking lets you monitor each step of the email pipeline in real time.
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Request   │────▶│   Queue     │────▶│   Worker    │────▶│   SMTP/     │
-│  (API/Cron) │     │  (emails)   │     │ (render +   │     │   SendGrid  │
-└─────────────┘     └─────────────┘     │   send)     │     └─────────────┘
-                                        └──────┬──────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────────┐
-                    ▼                          ▼                          ▼
-             ┌───────────┐              ┌───────────┐              ┌───────────┐
-             │  Success  │              │  Retry    │              │   DLQ     │
-             │ (logged)  │              │ (backoff) │              │ (alert)   │
-             └───────────┘              └───────────┘              └───────────┘
-```
+<EmailPipeline />
 
 ```typescript
 import { Queue, Worker, shutdownManager } from 'bunqueue/client';
@@ -218,22 +146,7 @@ await emailQueue.addBulk(
 
 ## Report Generation Pipeline
 
-```
-┌──────────┐    ┌──────────┐    ┌─────────────────────────────────────┐
-│  User    │───▶│  Queue   │───▶│              Worker                 │
-│ Request  │    │ (reports)│    │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐  │
-└──────────┘    └──────────┘    │  │Query│▶│Trans│▶│ Gen │▶│Upload│  │
-                                │  │ DB  │ │form │ │File │ │ S3  │  │
-                                │  └─────┘ └─────┘ └─────┘ └─────┘  │
-                                │      10%    40%    70%    90%      │
-                                └────────────────┬────────────────────┘
-                                                 │
-                                                 ▼
-                                          ┌────────────┐
-                                          │   Notify   │
-                                          │   (email)  │
-                                          └────────────┘
-```
+<ReportPipeline />
 
 Reports that query large datasets, transform data, generate files, and upload to storage can take minutes to complete. Running this synchronously in an API request would timeout. Instead, the user triggers the report and receives a notification when it's ready.
 
@@ -315,23 +228,7 @@ await reportQueue.add('monthly-sales', {
 
 ## Webhook Delivery with Circuit Breaker
 
-```
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────────┐
-│  Event   │───▶│  Queue   │───▶│  Worker  │───▶│   Partner    │
-│ (order,  │    │(webhooks)│    │  (HTTP   │    │   Endpoint   │
-│  user)   │    │          │    │   POST)  │    │              │
-└──────────┘    └──────────┘    └────┬─────┘    └──────────────┘
-                                     │
-           ┌─────────────────────────┼─────────────────────────┐
-           │                         │                         │
-           ▼                         ▼                         ▼
-    ┌────────────┐           ┌────────────┐           ┌────────────┐
-    │  Success   │           │   Retry    │           │    DLQ     │
-    │   (200)    │           │  (5xx/429) │           │ (8 fails)  │
-    └────────────┘           │ exp backoff│           │ auto-retry │
-                             │ 5s▶10s▶20s │           │  hourly    │
-                             └────────────┘           └────────────┘
-```
+<WebhookDelivery />
 
 Webhooks are inherently unreliable. Partner endpoints go down, return 5xx errors, or hit rate limits. A robust webhook system must handle all of these cases gracefully. bunqueue provides exactly this: each webhook delivery is a job with configurable retry attempts, exponential backoff, and a dead letter queue for permanent failures.
 
@@ -409,28 +306,7 @@ await webhookQueue.add('order.created', {
 
 ## Image Processing Pipeline
 
-```
-┌──────────┐    ┌──────────┐    ┌─────────────────────────────────────────┐
-│  Upload  │───▶│  Queue   │───▶│                Worker                   │
-│  (S3)    │    │ (images) │    │                                         │
-└──────────┘    └──────────┘    │  ┌────────┐    ┌────────────────────┐  │
-                                │  │Download│───▶│    Sharp Process    │  │
-                                │  │ Source │    │  ┌──────┐ ┌──────┐ │  │
-                                │  └────────┘    │  │thumb │ │ card │ │  │
-                                │                │  │150px │ │400px │ │  │
-                                │                │  └──┬───┘ └──┬───┘ │  │
-                                │                │     │        │     │  │
-                                │                │  ┌──┴───┐ ┌──┴───┐ │  │
-                                │                │  │ full │ │  og  │ │  │
-                                │                │  │1200px│ │1200px│ │  │
-                                │                │  └──────┘ └──────┘ │  │
-                                │                └─────────┬──────────┘  │
-                                │                          ▼             │
-                                │                   ┌────────────┐       │
-                                │                   │ Upload CDN │       │
-                                │                   └────────────┘       │
-                                └─────────────────────────────────────────┘
-```
+<ImagePipeline />
 
 When a user uploads an image, you typically need to generate multiple variants: thumbnails for listings, medium sizes for cards, full resolution for detail views, and OpenGraph images for social sharing. Processing all of these synchronously would make the upload endpoint unbearably slow.
 
@@ -599,23 +475,7 @@ await exportQueue.add('accounting-export', {
 
 ## Multi-Channel Notification System
 
-```
-┌──────────┐    ┌──────────┐    ┌─────────────────────────────────────────┐
-│  Event   │───▶│  Queue   │───▶│                Worker                   │
-│(security,│    │(notifica-│    │  ┌────────────────────────────────────┐│
-│ order)   │    │  tions)  │    │  │    Load User Preferences           ││
-└──────────┘    └──────────┘    │  └─────────────────┬──────────────────┘│
-                                │                    ▼                    │
-                                │  ┌─────────────────────────────────────┐│
-                                │  │         Fan Out by Channel          ││
-                                │  └────┬────────┬────────┬────────┬────┘│
-                                │       ▼        ▼        ▼        ▼     │
-                                │  ┌───────┐┌───────┐┌───────┐┌───────┐  │
-                                │  │ Email ││ Push  ││  SMS  ││In-App │  │
-                                │  │       ││ (FCM) ││(Twilio││       │  │
-                                │  └───────┘└───────┘└───────┘└───────┘  │
-                                └─────────────────────────────────────────┘
-```
+<NotificationFanout />
 
 Modern applications need to reach users through multiple channels: email, push notifications, SMS, and in-app messages. Each channel has its own API, failure modes, and rate limits. Processing notifications synchronously would make the triggering action (e.g. "order placed") extremely slow and fragile — a single SMS provider timeout would block the entire response.
 
@@ -699,33 +559,7 @@ await notificationQueue.add('security-alert', {
 
 ## Payment Processing Queue
 
-```
-┌──────────┐    ┌──────────┐    ┌─────────────────────────────────────────┐
-│  Order   │───▶│  Queue   │───▶│                Worker                   │
-│ Checkout │    │(payments)│    │                                         │
-└──────────┘    └──────────┘    │  ┌────────────────────────────────────┐ │
-                                │  │     Check Idempotency Key          │ │
-                                │  └─────────────────┬──────────────────┘ │
-                                │                    ▼                    │
-                                │           ┌───────────────┐             │
-                                │           │ Already Done? │             │
-                                │           └───────┬───────┘             │
-                                │              no   │   yes               │
-                                │         ┌────────┴────────┐             │
-                                │         ▼                 ▼             │
-                                │  ┌─────────────┐   ┌─────────────┐      │
-                                │  │   Stripe    │   │   Return    │      │
-                                │  │  Charge     │   │   Cached    │      │
-                                │  └──────┬──────┘   └─────────────┘      │
-                                │         ▼                               │
-                                │  ┌─────────────┐                        │
-                                │  │ Record Txn  │                        │
-                                │  │ Audit Log   │                        │
-                                │  └─────────────┘                        │
-                                └─────────────────────────────────────────┘
-
-                    ⚠️  DLQ: Manual review required (no auto-retry)
-```
+<PaymentFlow />
 
 Payment processing is the most critical background job in any e-commerce system. It must be reliable (never lose a charge), idempotent (never charge twice for the same order), and auditable (every action logged). Processing payments synchronously in the checkout flow is risky: a timeout or crash after the charge but before the database update results in a lost transaction.
 
@@ -906,9 +740,9 @@ await indexQueue.addBulk(
 
 ## Scheduled Tasks with Cron
 
-:::note[Server Mode Feature]
+<Aside type="note" title="Server Mode Feature">
 Cron scheduling via `upsertJobScheduler()` is only available in **server mode**. In embedded mode, use `setInterval()` + `queue.add()` for recurring jobs.
-:::
+</Aside>
 
 Recurring tasks using cron expressions (server mode) or intervals (embedded mode).
 
@@ -981,31 +815,7 @@ process.on('SIGINT', () => {
 
 ## Multi-Tenant Queue Isolation
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         MULTI-TENANT ARCHITECTURE                        │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌────────────────────────────────┐  ┌────────────────────────────────┐ │
-│  │          TENANT A              │  │          TENANT B              │ │
-│  │    QueueGroup('tenant-a')      │  │    QueueGroup('tenant-b')      │ │
-│  │  ┌────────┐ ┌────────┐        │  │  ┌────────┐ ┌────────┐        │ │
-│  │  │emails  │ │reports │ ...    │  │  │emails  │ │reports │ ...    │ │
-│  │  └────────┘ └────────┘        │  │  └────────┘ └────────┘        │ │
-│  │                                │  │                                │ │
-│  │  • Isolated namespace          │  │  • Isolated namespace          │ │
-│  │  • Independent pause/resume    │  │  • Independent pause/resume    │ │
-│  │  • Separate DLQ                │  │  • Separate DLQ                │ │
-│  │  • Own rate limits             │  │  • Own rate limits             │ │
-│  └────────────────────────────────┘  └────────────────────────────────┘ │
-│                                                                          │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                     SHARED INFRASTRUCTURE                         │   │
-│  │              SQLite (single DB, prefixed keys)                    │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+<MultiTenantArch />
 
 In a multi-tenant SaaS application, you need queue isolation between tenants. One tenant's burst of activity should not impact another tenant's job processing. Pausing queues for maintenance on tenant A should not affect tenant B.
 
@@ -1062,20 +872,82 @@ console.log(tenantA.group.listQueues()); // ['emails', 'reports', 'webhooks']
 
 ## Rate-Limited API Calls
 
-:::note[Server Mode Feature]
+<Aside type="note" title="Server Mode Feature">
 Rate limiting via `setRateLimit()` is only available in **server mode**. In embedded mode, control throughput using worker `concurrency` and job `backoff` options.
-:::
+</Aside>
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     THROUGHPUT CONTROL                                    │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│   SERVER MODE: setRateLimit(100, 60000)  →  Token bucket algorithm       │
-│   EMBEDDED MODE: concurrency + backoff   →  Parallel limit + retry delay │
-│                                                                           │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+<div class="rl-modes">
+  <div class="rl-mode">
+    <span class="rl-tag rl-tag-server">Server Mode</span>
+    <code>setRateLimit(100, 60000)</code>
+    <span class="rl-arrow">→</span>
+    <span class="rl-desc">Token bucket algorithm</span>
+  </div>
+  <div class="rl-mode">
+    <span class="rl-tag rl-tag-embedded">Embedded Mode</span>
+    <code>concurrency + backoff</code>
+    <span class="rl-arrow">→</span>
+    <span class="rl-desc">Parallel limit + retry delay</span>
+  </div>
+</div>
+
+<style>{`
+  .rl-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+  }
+  :root[data-theme='dark'] .rl-modes {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .rl-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .rl-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .rl-tag-server {
+    color: #ec4899;
+    background: rgba(236, 72, 153, 0.1);
+    border: 1px solid rgba(236, 72, 153, 0.2);
+  }
+  .rl-tag-embedded {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  :root[data-theme='dark'] .rl-tag-server {
+    color: #f9a8d4;
+    border-color: rgba(249, 168, 212, 0.3);
+  }
+  :root[data-theme='dark'] .rl-tag-embedded {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.3);
+  }
+  .rl-arrow {
+    color: var(--sl-color-gray-3);
+    font-size: 1rem;
+  }
+  .rl-desc {
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+  }
+`}</style>
 
 External APIs impose rate limits, and exceeding them results in 429 errors, temporary bans, or degraded service. When your application needs to make thousands of API calls (syncing inventory, importing data, sending notifications), you need controlled throughput.
 
@@ -1141,47 +1013,7 @@ for (const item of items) {
 
 ## Parent-Child Job Workflows
 
-```
-                         ┌─────────────────────────────────────┐
-                         │         ORDER FULFILLMENT           │
-                         │           (Parent Job)              │
-                         └─────────────────┬───────────────────┘
-                                           │
-              ┌────────────────────────────┼────────────────────────────┐
-              ▼                            ▼                            ▼
-     ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
-     │    Validate     │        │    Validate     │        │   Calculate     │
-     │   Inventory     │        │    Payment      │        │    Shipping     │
-     │   (Child 1)     │        │   (Child 2)     │        │   (Child 3)     │
-     └────────┬────────┘        └────────┬────────┘        └────────┬────────┘
-              │                          │                          │
-              └──────────────────────────┼──────────────────────────┘
-                                         │
-                                         ▼
-                              ┌─────────────────────┐
-                              │   Parent Executes   │
-                              │  (all children done)│
-                              └─────────────────────┘
-
-
-                    SEQUENTIAL CHAIN: Extract → Transform → Load
-  ┌───────────┐         ┌───────────┐         ┌───────────┐
-  │  Extract  │────────▶│ Transform │────────▶│   Load    │
-  │  (CSV)    │ result  │  (clean)  │ result  │(warehouse)│
-  └───────────┘         └───────────┘         └───────────┘
-
-
-                    PARALLEL THEN MERGE
-        ┌───────────┐
-        │  Chunk 1  │──────┐
-        └───────────┘      │
-        ┌───────────┐      │      ┌───────────┐
-        │  Chunk 2  │──────┼─────▶│   Merge   │
-        └───────────┘      │      │  Results  │
-        ┌───────────┐      │      └───────────┘
-        │  Chunk 3  │──────┘
-        └───────────┘
-```
+<WorkflowPatterns />
 
 Real-world job processing often involves dependencies: you cannot ship an order before validating inventory and payment. You cannot load data into a warehouse before extracting and transforming it. You cannot merge results before all parallel chunks complete.
 

@@ -1,0 +1,862 @@
+---
+/**
+ * Animated payment processing flow with idempotency decision branch.
+ * Shows: Order Checkout → Queue → Worker → Idempotency Check (diamond)
+ *   → yes: Return Cached | no: Stripe Charge → Record Txn / Audit Log
+ * DLQ warning banner at the bottom.
+ */
+---
+
+<div class="pf-wrap">
+  <!-- Desktop horizontal flow -->
+  <div class="pf-flow">
+    <!-- Main pipeline row -->
+    <div class="pf-main">
+      <!-- Node 1: Order Checkout -->
+      <div class="pf-node pf-n1">
+        <div class="pf-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+          </svg>
+        </div>
+        <span class="pf-label">Order Checkout</span>
+      </div>
+
+      <!-- Connector 1 -->
+      <div class="pf-conn">
+        <div class="pf-line"></div>
+        <div class="pf-arrow"></div>
+        <div class="pf-dot pf-d1"></div>
+      </div>
+
+      <!-- Node 2: Queue -->
+      <div class="pf-node pf-n2">
+        <div class="pf-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </div>
+        <span class="pf-label">Queue</span>
+        <span class="pf-sublabel">payments</span>
+      </div>
+
+      <!-- Connector 2 -->
+      <div class="pf-conn">
+        <div class="pf-line"></div>
+        <div class="pf-arrow"></div>
+        <div class="pf-dot pf-d2"></div>
+      </div>
+
+      <!-- Node 3: Worker (hero with glow) -->
+      <div class="pf-node pf-n3 pf-hero">
+        <div class="pf-glow"></div>
+        <div class="pf-icon pf-icon-pink">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <span class="pf-label">Worker</span>
+      </div>
+
+      <!-- Connector 3 -->
+      <div class="pf-conn">
+        <div class="pf-line"></div>
+        <div class="pf-arrow"></div>
+        <div class="pf-dot pf-d3"></div>
+      </div>
+
+      <!-- Node 4: Idempotency Check (diamond) -->
+      <div class="pf-node pf-n4">
+        <div class="pf-diamond">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <span class="pf-label">Idempotency</span>
+        <span class="pf-sublabel">Check</span>
+      </div>
+    </div>
+
+    <!-- Branch area -->
+    <div class="pf-branches">
+      <!-- "yes" branch: already processed -->
+      <div class="pf-branch pf-branch-yes">
+        <div class="pf-branch-line pf-branch-line-yes">
+          <div class="pf-branch-dot pf-bd-yes"></div>
+        </div>
+        <span class="pf-branch-tag pf-tag-green">yes</span>
+        <div class="pf-node pf-n-cached">
+          <div class="pf-icon pf-icon-green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <span class="pf-label">Return Cached</span>
+          <span class="pf-sublabel">already done</span>
+        </div>
+      </div>
+
+      <!-- "no" branch: new payment -->
+      <div class="pf-branch pf-branch-no">
+        <div class="pf-branch-line pf-branch-line-no">
+          <div class="pf-branch-dot pf-bd-no"></div>
+        </div>
+        <span class="pf-branch-tag pf-tag-blue">no</span>
+        <div class="pf-node pf-n-stripe">
+          <div class="pf-icon pf-icon-blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+              <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+          </div>
+          <span class="pf-label">Stripe Charge</span>
+        </div>
+
+        <div class="pf-conn pf-conn-sm">
+          <div class="pf-line"></div>
+          <div class="pf-arrow"></div>
+          <div class="pf-dot pf-d-stripe"></div>
+        </div>
+
+        <div class="pf-node pf-n-record">
+          <div class="pf-icon pf-icon-green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <span class="pf-label">Record Txn</span>
+          <span class="pf-sublabel">Audit Log</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DLQ Warning Banner -->
+  <div class="pf-dlq">
+    <div class="pf-dlq-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <span class="pf-dlq-text">DLQ: Manual review required (no auto-retry)</span>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="pf-vertical">
+    <div class="pf-vrow">
+      <div class="pf-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+        </svg>
+      </div>
+      <div><span class="pf-vlabel">Order Checkout</span></div>
+    </div>
+    <div class="pf-vconn"><div class="pf-vline"></div><div class="pf-vdot pf-vd1"></div></div>
+
+    <div class="pf-vrow">
+      <div class="pf-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <div><span class="pf-vlabel">Queue</span><span class="pf-vsub">payments</span></div>
+    </div>
+    <div class="pf-vconn"><div class="pf-vline"></div><div class="pf-vdot pf-vd2"></div></div>
+
+    <div class="pf-vrow pf-vhero">
+      <div class="pf-vicon pf-vicon-pink">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div><span class="pf-vlabel">Worker</span><span class="pf-vsub">Payment processor</span></div>
+    </div>
+    <div class="pf-vconn"><div class="pf-vline"></div><div class="pf-vdot pf-vd3"></div></div>
+
+    <div class="pf-vrow pf-vdiamond-row">
+      <div class="pf-vdiamond">?</div>
+      <div><span class="pf-vlabel">Idempotency Check</span></div>
+    </div>
+
+    <div class="pf-vbranches">
+      <div class="pf-vbranch">
+        <span class="pf-branch-tag pf-tag-green">yes</span>
+        <div class="pf-vicon pf-vicon-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <span class="pf-vlabel">Return Cached</span>
+      </div>
+      <div class="pf-vbranch">
+        <span class="pf-branch-tag pf-tag-blue">no</span>
+        <div class="pf-vicon pf-vicon-blue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+        </div>
+        <span class="pf-vlabel">Stripe Charge</span>
+        <span class="pf-varrow">→</span>
+        <div class="pf-vicon pf-vicon-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <span class="pf-vlabel">Record Txn</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* ===== Container ===== */
+  .pf-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+
+  :root[data-theme='dark'] .pf-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ===== Desktop flow ===== */
+  .pf-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    min-width: 580px;
+  }
+
+  .pf-vertical { display: none; }
+
+  .pf-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* ===== Nodes ===== */
+  .pf-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: pfAppear 0.5s ease-out both;
+  }
+
+  .pf-n1 { animation-delay: 0s; }
+  .pf-n2 { animation-delay: 0.1s; }
+  .pf-n3 { animation-delay: 0.2s; }
+  .pf-n4 { animation-delay: 0.3s; }
+  .pf-n-cached { animation-delay: 0.4s; }
+  .pf-n-stripe { animation-delay: 0.4s; }
+  .pf-n-record { animation-delay: 0.5s; }
+
+  @keyframes pfAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .pf-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    transition: all 0.3s ease;
+  }
+
+  :root[data-theme='dark'] .pf-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .pf-icon-pink {
+    border-color: #ec4899;
+    color: #ec4899;
+    animation: pfPinkPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .pf-icon-pink {
+    border-color: #f9a8d4;
+    color: #f9a8d4;
+  }
+
+  @keyframes pfPinkPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.15); }
+    50% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.35); }
+  }
+
+  .pf-icon-blue {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  :root[data-theme='dark'] .pf-icon-blue {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.3);
+  }
+
+  .pf-icon-green {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  :root[data-theme='dark'] .pf-icon-green {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+  }
+
+  /* Hero glow */
+  .pf-hero { position: relative; }
+
+  .pf-glow {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 18px;
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.12) 0%, transparent 70%);
+    animation: pfGlow 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  :root[data-theme='dark'] .pf-glow {
+    background: radial-gradient(ellipse, rgba(249, 168, 212, 0.1) 0%, transparent 70%);
+  }
+
+  @keyframes pfGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
+  .pf-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .pf-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* ===== Diamond (decision node) ===== */
+  .pf-diamond {
+    width: 46px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #f59e0b;
+    background: var(--sl-color-bg);
+    color: #f59e0b;
+    transform: rotate(45deg);
+    border-radius: 6px;
+  }
+
+  .pf-diamond svg {
+    transform: rotate(-45deg);
+  }
+
+  :root[data-theme='dark'] .pf-diamond {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: #fbbf24;
+    color: #fbbf24;
+  }
+
+  /* ===== Connectors ===== */
+  .pf-conn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .pf-conn-sm {
+    width: 36px;
+  }
+
+  .pf-line {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .pf-line {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .pf-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .pf-arrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* ===== Animated dots ===== */
+  .pf-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: pfDotTravel 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .pf-dot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .pf-d1 { animation-delay: 0s; }
+  .pf-d2 { animation-delay: 0.6s; }
+  .pf-d3 { animation-delay: 1.2s; }
+
+  .pf-d-stripe {
+    background: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    animation: pfDotTravel 3.5s ease-in-out infinite 2.4s;
+  }
+
+  :root[data-theme='dark'] .pf-d-stripe {
+    background: #93c5fd;
+    box-shadow: 0 0 10px rgba(147, 197, 253, 0.6);
+  }
+
+  @keyframes pfDotTravel {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* ===== Branches ===== */
+  .pf-branches {
+    display: flex;
+    gap: 2.5rem;
+    justify-content: center;
+    position: relative;
+    margin-top: 0.25rem;
+  }
+
+  .pf-branch {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .pf-branch-line {
+    position: relative;
+    width: 2px;
+    height: 32px;
+    margin-right: 0.5rem;
+  }
+
+  .pf-branch-line-yes {
+    background: rgba(34, 197, 94, 0.3);
+  }
+
+  :root[data-theme='dark'] .pf-branch-line-yes {
+    background: rgba(74, 222, 128, 0.2);
+  }
+
+  .pf-branch-line-no {
+    background: rgba(59, 130, 246, 0.3);
+  }
+
+  :root[data-theme='dark'] .pf-branch-line-no {
+    background: rgba(147, 197, 253, 0.2);
+  }
+
+  .pf-branch-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+  }
+
+  .pf-bd-yes {
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+    animation: pfBranchDot 3.5s ease-in-out infinite 1.8s;
+  }
+
+  :root[data-theme='dark'] .pf-bd-yes {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+  }
+
+  .pf-bd-no {
+    background: #3b82f6;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+    animation: pfBranchDot 3.5s ease-in-out infinite 1.8s;
+  }
+
+  :root[data-theme='dark'] .pf-bd-no {
+    background: #93c5fd;
+    box-shadow: 0 0 8px rgba(147, 197, 253, 0.5);
+  }
+
+  @keyframes pfBranchDot {
+    0% { top: -3px; opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .pf-branch-tag {
+    position: absolute;
+    top: -0.3rem;
+    left: 0.9rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+  }
+
+  .pf-tag-green {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  :root[data-theme='dark'] .pf-tag-green {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+  }
+
+  .pf-tag-blue {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  :root[data-theme='dark'] .pf-tag-blue {
+    color: #93c5fd;
+    background: rgba(147, 197, 253, 0.1);
+  }
+
+  .pf-branch-yes {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pf-branch-yes .pf-branch-tag {
+    position: static;
+    margin-bottom: 0.35rem;
+  }
+
+  .pf-branch-yes .pf-branch-line {
+    margin-right: 0;
+    margin-bottom: 0.35rem;
+  }
+
+  .pf-branch-no {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pf-branch-no .pf-branch-tag {
+    position: static;
+    margin-bottom: 0.35rem;
+  }
+
+  .pf-branch-no .pf-branch-line {
+    margin-right: 0;
+    margin-bottom: 0.35rem;
+  }
+
+  .pf-branch-no {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Inner row for stripe → record in the "no" branch */
+  .pf-branch-no {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pf-branch-no .pf-branch-tag {
+    order: -2;
+  }
+
+  .pf-branch-no .pf-branch-line {
+    order: -1;
+  }
+
+  /* Place stripe+conn+record in a row */
+  .pf-branch-no .pf-n-stripe,
+  .pf-branch-no .pf-conn-sm,
+  .pf-branch-no .pf-n-record {
+    display: inline-flex;
+  }
+
+  /* Wrap the stripe chain in a flex row */
+  .pf-branch-no {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Force the stripe row onto one line */
+  .pf-branch-no .pf-n-stripe { order: 1; }
+  .pf-branch-no .pf-conn-sm { order: 2; }
+  .pf-branch-no .pf-n-record { order: 3; }
+
+  /* ===== DLQ Warning ===== */
+  .pf-dlq {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+  }
+
+  :root[data-theme='dark'] .pf-dlq {
+    background: rgba(251, 191, 36, 0.04);
+    border-color: rgba(251, 191, 36, 0.15);
+  }
+
+  .pf-dlq-icon {
+    color: #f59e0b;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  :root[data-theme='dark'] .pf-dlq-icon {
+    color: #fbbf24;
+  }
+
+  .pf-dlq-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f59e0b;
+  }
+
+  :root[data-theme='dark'] .pf-dlq-text {
+    color: #fbbf24;
+  }
+
+  /* ===== Mobile vertical ===== */
+  .pf-vrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .pf-vhero {
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(236, 72, 153, 0.04);
+    border: 1px solid rgba(236, 72, 153, 0.1);
+  }
+
+  :root[data-theme='dark'] .pf-vhero {
+    background: rgba(249, 168, 212, 0.04);
+    border-color: rgba(249, 168, 212, 0.1);
+  }
+
+  .pf-vicon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .pf-vicon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .pf-vicon-pink { color: #ec4899; border-color: rgba(236, 72, 153, 0.4); }
+  :root[data-theme='dark'] .pf-vicon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.4); }
+  .pf-vicon-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
+  :root[data-theme='dark'] .pf-vicon-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.3); }
+  .pf-vicon-green { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .pf-vicon-green { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+
+  .pf-vdiamond-row .pf-vdiamond {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(45deg);
+    border-radius: 4px;
+    border: 1.5px solid #f59e0b;
+    background: var(--sl-color-bg);
+    color: #f59e0b;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 3px;
+  }
+
+  .pf-vdiamond-row .pf-vdiamond { margin-right: calc(0.75rem + 3px); }
+
+  :root[data-theme='dark'] .pf-vdiamond-row .pf-vdiamond {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: #fbbf24;
+    color: #fbbf24;
+  }
+
+  .pf-vlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .pf-vsub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .pf-vconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .pf-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .pf-vline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .pf-vdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: pfVdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .pf-vdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.5);
+  }
+
+  .pf-vd1 { animation-delay: 0s; }
+  .pf-vd2 { animation-delay: 0.6s; }
+  .pf-vd3 { animation-delay: 1.2s; }
+
+  @keyframes pfVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .pf-vbranches {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+  }
+
+  .pf-vbranch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 8px;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .pf-vbranch {
+    background: rgba(17, 17, 22, 0.6);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .pf-varrow {
+    color: var(--sl-color-gray-3);
+    font-size: 0.8rem;
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 700px) {
+    .pf-flow { display: none; }
+    .pf-vertical { display: flex; flex-direction: column; }
+    .pf-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

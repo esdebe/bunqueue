@@ -1,0 +1,683 @@
+---
+/**
+ * Animated email pipeline diagram.
+ * Linear flow: Request (API/Cron) -> Queue (emails) -> Worker (render + send) -> SMTP/SendGrid
+ * Below Worker: 3 branch outputs (Success, Retry, DLQ) with staggered animated dots.
+ */
+---
+
+<div class="ep-wrap">
+  <!-- Desktop horizontal flow -->
+  <div class="ep-flow">
+    <!-- Node 1: Request -->
+    <div class="ep-node ep-n1">
+      <div class="ep-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+      <span class="ep-label">Request</span>
+      <span class="ep-sublabel">API / Cron</span>
+    </div>
+
+    <!-- Connector 1 -->
+    <div class="ep-hconn">
+      <div class="ep-hline"></div>
+      <div class="ep-harrow"></div>
+      <div class="ep-hdot ep-hd1"></div>
+    </div>
+
+    <!-- Node 2: Queue -->
+    <div class="ep-node ep-n2">
+      <div class="ep-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <span class="ep-label">Queue</span>
+      <span class="ep-sublabel">emails</span>
+    </div>
+
+    <!-- Connector 2 -->
+    <div class="ep-hconn">
+      <div class="ep-hline"></div>
+      <div class="ep-harrow"></div>
+      <div class="ep-hdot ep-hd2"></div>
+    </div>
+
+    <!-- Node 3: Worker (hero) -->
+    <div class="ep-node ep-n3 ep-hero">
+      <div class="ep-glow"></div>
+      <div class="ep-icon ep-icon-pink">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <span class="ep-label">Worker</span>
+      <span class="ep-sublabel">render + send</span>
+    </div>
+
+    <!-- Connector 3 -->
+    <div class="ep-hconn">
+      <div class="ep-hline"></div>
+      <div class="ep-harrow"></div>
+      <div class="ep-hdot ep-hd3"></div>
+    </div>
+
+    <!-- Node 4: SMTP/SendGrid -->
+    <div class="ep-node ep-n4">
+      <div class="ep-icon ep-icon-blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <span class="ep-label">SMTP / SendGrid</span>
+    </div>
+  </div>
+
+  <!-- Branch outputs below Worker -->
+  <div class="ep-branches">
+    <!-- Three vertical branches -->
+    <div class="ep-branch ep-branch-success">
+      <div class="ep-bconn">
+        <div class="ep-bline ep-bline-green"></div>
+        <div class="ep-bdot ep-bd1 ep-bdot-green"></div>
+      </div>
+      <div class="ep-bnode ep-bnode-green">
+        <div class="ep-bicon ep-bi-green">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="ep-btext">
+          <span class="ep-blabel">Success</span>
+          <span class="ep-bsub">logged</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ep-branch ep-branch-retry">
+      <div class="ep-bconn">
+        <div class="ep-bline ep-bline-yellow"></div>
+        <div class="ep-bdot ep-bd2 ep-bdot-yellow"></div>
+      </div>
+      <div class="ep-bnode ep-bnode-yellow">
+        <div class="ep-bicon ep-bi-yellow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </div>
+        <div class="ep-btext">
+          <span class="ep-blabel">Retry</span>
+          <span class="ep-bsub">backoff</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ep-branch ep-branch-dlq">
+      <div class="ep-bconn">
+        <div class="ep-bline ep-bline-red"></div>
+        <div class="ep-bdot ep-bd3 ep-bdot-red"></div>
+      </div>
+      <div class="ep-bnode ep-bnode-red">
+        <div class="ep-bicon ep-bi-red">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="ep-btext">
+          <span class="ep-blabel">DLQ</span>
+          <span class="ep-bsub">alert</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="ep-mobile">
+    <div class="ep-mrow">
+      <div class="ep-micon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+      <div><span class="ep-mlabel">Request</span><span class="ep-msub">API / Cron</span></div>
+    </div>
+    <div class="ep-mvconn"><div class="ep-mvline"></div><div class="ep-mvdot ep-mvd1"></div></div>
+    <div class="ep-mrow">
+      <div class="ep-micon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <div><span class="ep-mlabel">Queue</span><span class="ep-msub">emails</span></div>
+    </div>
+    <div class="ep-mvconn"><div class="ep-mvline"></div><div class="ep-mvdot ep-mvd2"></div></div>
+    <div class="ep-mrow ep-mhero">
+      <div class="ep-micon ep-micon-pink">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div><span class="ep-mlabel">Worker</span><span class="ep-msub">render + send</span></div>
+    </div>
+    <div class="ep-mvconn"><div class="ep-mvline"></div><div class="ep-mvdot ep-mvd3"></div></div>
+    <div class="ep-mrow">
+      <div class="ep-micon ep-micon-blue">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div><span class="ep-mlabel">SMTP / SendGrid</span></div>
+    </div>
+    <div class="ep-mvconn"><div class="ep-mvline"></div></div>
+    <div class="ep-moutcomes">
+      <div class="ep-mout ep-mout-green">
+        <span class="ep-mout-label">Success</span><span class="ep-mout-sub">logged</span>
+      </div>
+      <div class="ep-mout ep-mout-yellow">
+        <span class="ep-mout-label">Retry</span><span class="ep-mout-sub">backoff</span>
+      </div>
+      <div class="ep-mout ep-mout-red">
+        <span class="ep-mout-label">DLQ</span><span class="ep-mout-sub">alert</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ep-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow: hidden;
+  }
+
+  :root[data-theme='dark'] .ep-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .ep-mobile { display: none; }
+
+  /* === Desktop horizontal flow === */
+  .ep-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Nodes */
+  .ep-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: epAppear 0.5s ease-out both;
+  }
+
+  .ep-n1 { animation-delay: 0s; }
+  .ep-n2 { animation-delay: 0.12s; }
+  .ep-n3 { animation-delay: 0.24s; }
+  .ep-n4 { animation-delay: 0.36s; }
+
+  @keyframes epAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .ep-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .ep-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .ep-icon-pink {
+    color: #ec4899;
+    border-color: rgba(236, 72, 153, 0.4);
+    animation: epIconPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .ep-icon-pink {
+    color: #f9a8d4;
+    border-color: rgba(249, 168, 212, 0.4);
+  }
+
+  @keyframes epIconPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.15); }
+    50% { box-shadow: 0 0 22px rgba(236, 72, 153, 0.35); }
+  }
+
+  .ep-icon-blue {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  :root[data-theme='dark'] .ep-icon-blue {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.3);
+  }
+
+  /* Hero glow */
+  .ep-hero { position: relative; }
+
+  .ep-glow {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 18px;
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.12) 0%, transparent 70%);
+    animation: epGlow 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  :root[data-theme='dark'] .ep-glow {
+    background: radial-gradient(ellipse, rgba(249, 168, 212, 0.1) 0%, transparent 70%);
+  }
+
+  @keyframes epGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
+  .ep-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .ep-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* === Horizontal connectors === */
+  .ep-hconn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .ep-hline {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .ep-hline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .ep-harrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .ep-harrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .ep-hdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: epHdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .ep-hdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .ep-hd1 { animation-delay: 0s; }
+  .ep-hd2 { animation-delay: 0.7s; }
+  .ep-hd3 { animation-delay: 1.4s; }
+
+  @keyframes epHdot {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Branch outputs below Worker === */
+  .ep-branches {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 0.5rem;
+  }
+
+  .ep-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ep-bconn {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .ep-bline {
+    width: 2px;
+    height: 100%;
+  }
+
+  .ep-bline-green { background: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .ep-bline-green { background: rgba(74, 222, 128, 0.2); }
+
+  .ep-bline-yellow { background: rgba(245, 158, 11, 0.3); }
+  :root[data-theme='dark'] .ep-bline-yellow { background: rgba(251, 191, 36, 0.2); }
+
+  .ep-bline-red { background: rgba(239, 68, 68, 0.3); }
+  :root[data-theme='dark'] .ep-bline-red { background: rgba(248, 113, 113, 0.2); }
+
+  .ep-bdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    animation: epBdot 3.5s ease-in-out infinite;
+  }
+
+  .ep-bdot-green {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  }
+
+  :root[data-theme='dark'] .ep-bdot-green {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+  }
+
+  .ep-bdot-yellow {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+  }
+
+  :root[data-theme='dark'] .ep-bdot-yellow {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  }
+
+  .ep-bdot-red {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  }
+
+  :root[data-theme='dark'] .ep-bdot-red {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
+  }
+
+  .ep-bd1 { animation-delay: 0s; }
+  .ep-bd2 { animation-delay: 0.7s; }
+  .ep-bd3 { animation-delay: 1.4s; }
+
+  @keyframes epBdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Branch nodes */
+  .ep-bnode {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .ep-bnode {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .ep-bnode-green { border-color: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .ep-bnode-green { border-color: rgba(74, 222, 128, 0.2); }
+
+  .ep-bnode-yellow { border-color: rgba(245, 158, 11, 0.3); }
+  :root[data-theme='dark'] .ep-bnode-yellow { border-color: rgba(251, 191, 36, 0.2); }
+
+  .ep-bnode-red { border-color: rgba(239, 68, 68, 0.3); }
+  :root[data-theme='dark'] .ep-bnode-red { border-color: rgba(248, 113, 113, 0.2); }
+
+  .ep-bicon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ep-bi-green { color: #22c55e; }
+  :root[data-theme='dark'] .ep-bi-green { color: #4ade80; }
+
+  .ep-bi-yellow { color: #f59e0b; }
+  :root[data-theme='dark'] .ep-bi-yellow { color: #fbbf24; }
+
+  .ep-bi-red { color: #ef4444; }
+  :root[data-theme='dark'] .ep-bi-red { color: #f87171; }
+
+  .ep-btext {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ep-blabel {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .ep-bsub {
+    font-size: 0.6rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  /* === Mobile layout === */
+  .ep-mrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .ep-mhero {
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(236, 72, 153, 0.04);
+    border: 1px solid rgba(236, 72, 153, 0.1);
+  }
+
+  :root[data-theme='dark'] .ep-mhero {
+    background: rgba(249, 168, 212, 0.04);
+    border-color: rgba(249, 168, 212, 0.1);
+  }
+
+  .ep-micon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .ep-micon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .ep-micon-pink { color: #ec4899; border-color: rgba(236, 72, 153, 0.4); }
+  :root[data-theme='dark'] .ep-micon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.4); }
+  .ep-micon-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
+  :root[data-theme='dark'] .ep-micon-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.3); }
+
+  .ep-mlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .ep-msub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .ep-mvconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .ep-mvline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .ep-mvline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .ep-mvdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: epMvdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .ep-mvdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.5);
+  }
+
+  .ep-mvd1 { animation-delay: 0s; }
+  .ep-mvd2 { animation-delay: 0.7s; }
+  .ep-mvd3 { animation-delay: 1.4s; }
+
+  @keyframes epMvdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .ep-moutcomes {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .ep-mout {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.4rem;
+    border-radius: 8px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .ep-mout {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .ep-mout-green { border-color: rgba(34, 197, 94, 0.3); }
+  .ep-mout-yellow { border-color: rgba(245, 158, 11, 0.3); }
+  .ep-mout-red { border-color: rgba(239, 68, 68, 0.3); }
+
+  .ep-mout-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .ep-mout-sub {
+    font-size: 0.58rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .ep-flow { display: none; }
+    .ep-branches { display: none; }
+    .ep-mobile { display: flex; flex-direction: column; align-items: center; }
+    .ep-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

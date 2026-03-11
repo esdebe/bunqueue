@@ -1,0 +1,468 @@
+---
+/**
+ * Animated application architecture diagram.
+ * 4 stacked layers: TRIGGERS -> QUEUE LAYER -> WORKER POOL -> OUTPUTS
+ * Animated dots flowing between layers. Pulse on queues, activity dots on workers.
+ */
+---
+
+<div class="aa-wrap">
+  <!-- Layer 1: TRIGGERS -->
+  <div class="aa-layer aa-l1">
+    <div class="aa-layer-label">TRIGGERS</div>
+    <div class="aa-row">
+      <div class="aa-box aa-box-trigger">
+        <div class="aa-box-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">API Handlers</span>
+      </div>
+      <div class="aa-box aa-box-trigger">
+        <div class="aa-box-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">Cron Scheduler</span>
+      </div>
+      <div class="aa-box aa-box-trigger">
+        <div class="aa-box-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">Webhooks Receiver</span>
+      </div>
+      <div class="aa-box aa-box-trigger">
+        <div class="aa-box-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">Event Triggers</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector: triggers → queues -->
+  <div class="aa-conn-row">
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-t1"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-t2"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-t3"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-t4"></div></div>
+  </div>
+
+  <!-- Layer 2: QUEUE LAYER -->
+  <div class="aa-layer aa-l2">
+    <div class="aa-layer-label">QUEUE LAYER</div>
+    <div class="aa-row">
+      <div class="aa-box aa-box-queue aa-pulse">
+        <span class="aa-box-label">emails</span>
+        <span class="aa-box-count">queue</span>
+      </div>
+      <div class="aa-box aa-box-queue aa-pulse aa-p2">
+        <span class="aa-box-label">reports</span>
+        <span class="aa-box-count">queue</span>
+      </div>
+      <div class="aa-box aa-box-queue aa-pulse aa-p3">
+        <span class="aa-box-label">webhooks</span>
+        <span class="aa-box-count">queue</span>
+      </div>
+      <div class="aa-box aa-box-queue aa-pulse aa-p4">
+        <span class="aa-box-label">payments</span>
+        <span class="aa-box-count">queue</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector: queues → workers -->
+  <div class="aa-conn-row">
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-q1"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-q2"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-q3"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-q4"></div></div>
+  </div>
+
+  <!-- Layer 3: WORKER POOL -->
+  <div class="aa-layer aa-l3">
+    <div class="aa-layer-label">WORKER POOL</div>
+    <div class="aa-row">
+      <div class="aa-box aa-box-worker">
+        <div class="aa-activity-dot"></div>
+        <span class="aa-box-label">Worker x3</span>
+      </div>
+      <div class="aa-box aa-box-worker">
+        <div class="aa-activity-dot aa-ad2"></div>
+        <span class="aa-box-label">Worker x2</span>
+      </div>
+      <div class="aa-box aa-box-worker">
+        <div class="aa-activity-dot aa-ad3"></div>
+        <span class="aa-box-label">Worker x5</span>
+      </div>
+      <div class="aa-box aa-box-worker">
+        <div class="aa-activity-dot aa-ad4"></div>
+        <span class="aa-box-label">Worker x3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector: workers → outputs -->
+  <div class="aa-conn-row aa-conn-out">
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-w1 aa-vdot-green"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-w2 aa-vdot-green"></div></div>
+    <div class="aa-vconn"><div class="aa-vline"></div><div class="aa-vdot aa-vd-w3 aa-vdot-green"></div></div>
+  </div>
+
+  <!-- Layer 4: OUTPUTS -->
+  <div class="aa-layer aa-l4">
+    <div class="aa-layer-label">OUTPUTS</div>
+    <div class="aa-row aa-row-3">
+      <div class="aa-box aa-box-output aa-box-red">
+        <div class="aa-box-icon aa-oi-red">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">DLQ</span>
+      </div>
+      <div class="aa-box aa-box-output aa-box-blue">
+        <div class="aa-box-icon aa-oi-blue">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">SQLite</span>
+      </div>
+      <div class="aa-box aa-box-output aa-box-green-out">
+        <div class="aa-box-icon aa-oi-green">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <span class="aa-box-label">Events</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .aa-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  :root[data-theme='dark'] .aa-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* === Layers === */
+  .aa-layer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: 640px;
+    animation: aaFadeIn 0.5s ease-out both;
+  }
+
+  .aa-l1 { animation-delay: 0s; }
+  .aa-l2 { animation-delay: 0.15s; }
+  .aa-l3 { animation-delay: 0.3s; }
+  .aa-l4 { animation-delay: 0.45s; }
+
+  @keyframes aaFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .aa-layer-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3);
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .aa-row {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .aa-row-3 {
+    max-width: 420px;
+  }
+
+  /* === Boxes === */
+  .aa-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    min-width: 90px;
+    flex: 1;
+    max-width: 140px;
+    position: relative;
+  }
+
+  :root[data-theme='dark'] .aa-box {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .aa-box-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sl-color-gray-3);
+  }
+
+  .aa-box-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .aa-box-count {
+    font-size: 0.6rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  /* Trigger boxes */
+  .aa-box-trigger {
+    border-color: rgba(59, 130, 246, 0.15);
+  }
+
+  :root[data-theme='dark'] .aa-box-trigger {
+    border-color: rgba(147, 197, 253, 0.1);
+  }
+
+  .aa-box-trigger .aa-box-icon {
+    color: #3b82f6;
+  }
+
+  :root[data-theme='dark'] .aa-box-trigger .aa-box-icon {
+    color: #93c5fd;
+  }
+
+  /* Queue boxes with pulse */
+  .aa-box-queue {
+    border-color: rgba(236, 72, 153, 0.2);
+  }
+
+  :root[data-theme='dark'] .aa-box-queue {
+    border-color: rgba(249, 168, 212, 0.15);
+  }
+
+  .aa-pulse {
+    animation: aaPulse 3s ease-in-out infinite;
+  }
+
+  .aa-p2 { animation-delay: 0.5s; }
+  .aa-p3 { animation-delay: 1s; }
+  .aa-p4 { animation-delay: 1.5s; }
+
+  @keyframes aaPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(236, 72, 153, 0); }
+    50% { box-shadow: 0 0 12px rgba(236, 72, 153, 0.12); }
+  }
+
+  :root[data-theme='dark'] .aa-pulse {
+    animation-name: aaPulseDark;
+  }
+
+  @keyframes aaPulseDark {
+    0%, 100% { box-shadow: 0 0 0 rgba(249, 168, 212, 0); }
+    50% { box-shadow: 0 0 12px rgba(249, 168, 212, 0.1); }
+  }
+
+  /* Worker boxes */
+  .aa-box-worker {
+    border-color: rgba(34, 197, 94, 0.2);
+    flex-direction: row;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  :root[data-theme='dark'] .aa-box-worker {
+    border-color: rgba(74, 222, 128, 0.15);
+  }
+
+  .aa-activity-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    animation: aaBlink 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  :root[data-theme='dark'] .aa-activity-dot {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+  }
+
+  .aa-ad2 { animation-delay: 0.5s; }
+  .aa-ad3 { animation-delay: 1s; }
+  .aa-ad4 { animation-delay: 1.5s; }
+
+  @keyframes aaBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Output boxes */
+  .aa-box-output {
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+
+  .aa-box-red { border-color: rgba(239, 68, 68, 0.2); }
+  :root[data-theme='dark'] .aa-box-red { border-color: rgba(248, 113, 113, 0.15); }
+  .aa-oi-red { color: #ef4444; }
+  :root[data-theme='dark'] .aa-oi-red { color: #f87171; }
+
+  .aa-box-blue { border-color: rgba(59, 130, 246, 0.2); }
+  :root[data-theme='dark'] .aa-box-blue { border-color: rgba(147, 197, 253, 0.15); }
+  .aa-oi-blue { color: #3b82f6; }
+  :root[data-theme='dark'] .aa-oi-blue { color: #93c5fd; }
+
+  .aa-box-green-out { border-color: rgba(34, 197, 94, 0.2); }
+  :root[data-theme='dark'] .aa-box-green-out { border-color: rgba(74, 222, 128, 0.15); }
+  .aa-oi-green { color: #22c55e; }
+  :root[data-theme='dark'] .aa-oi-green { color: #4ade80; }
+
+  /* === Vertical connectors === */
+  .aa-conn-row {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    width: 100%;
+    max-width: 560px;
+    padding-left: 28px;
+  }
+
+  .aa-conn-out {
+    max-width: 420px;
+    padding-left: 28px;
+  }
+
+  .aa-vconn {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    justify-content: center;
+    flex: 1;
+    max-width: 140px;
+  }
+
+  .aa-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .aa-vline {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .aa-vdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: aaVdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .aa-vdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .aa-vdot-green {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  }
+
+  :root[data-theme='dark'] .aa-vdot-green {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+  }
+
+  /* Stagger: triggers → queues */
+  .aa-vd-t1 { animation-delay: 0s; }
+  .aa-vd-t2 { animation-delay: 0.7s; }
+  .aa-vd-t3 { animation-delay: 1.4s; }
+  .aa-vd-t4 { animation-delay: 2.1s; }
+
+  /* Stagger: queues → workers */
+  .aa-vd-q1 { animation-delay: 0.35s; }
+  .aa-vd-q2 { animation-delay: 1.05s; }
+  .aa-vd-q3 { animation-delay: 1.75s; }
+  .aa-vd-q4 { animation-delay: 2.45s; }
+
+  /* Stagger: workers → outputs */
+  .aa-vd-w1 { animation-delay: 0.7s; }
+  .aa-vd-w2 { animation-delay: 1.4s; }
+  .aa-vd-w3 { animation-delay: 2.1s; }
+
+  @keyframes aaVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Responsive === */
+  @media (max-width: 700px) {
+    .aa-wrap { padding: 1.25rem 0.5rem; }
+    .aa-layer { flex-direction: column; gap: 0.5rem; }
+    .aa-layer-label {
+      writing-mode: horizontal-tb;
+      transform: none;
+      font-size: 0.58rem;
+    }
+    .aa-row { flex-direction: column; align-items: stretch; }
+    .aa-box { max-width: 100%; flex-direction: row; justify-content: center; }
+    .aa-conn-row { flex-direction: column; align-items: center; padding-left: 0; }
+    .aa-vconn { width: 100%; max-width: 100%; height: 28px; }
+  }
+</style>

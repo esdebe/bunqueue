@@ -1,0 +1,871 @@
+---
+/**
+ * Animated workflow patterns diagram.
+ * Three patterns stacked vertically:
+ * 1. Parent-Child (Fan-in) - order fulfillment
+ * 2. Sequential Chain - ETL pipeline
+ * 3. Fan-out/Fan-in - parallel chunks → merge
+ */
+---
+
+<div class="wp-wrap">
+  <!-- ===== Pattern 1: Parent-Child (Fan-in) ===== -->
+  <div class="wp-section">
+    <div class="wp-title">Parent-Child (Fan-in)</div>
+
+    <!-- Desktop -->
+    <div class="wp-p1-desktop">
+      <!-- Parent node -->
+      <div class="wp-p1-parent">
+        <div class="wp-icon wp-icon-pink">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          </svg>
+        </div>
+        <span class="wp-label">ORDER FULFILLMENT</span>
+        <span class="wp-sublabel">Parent Job</span>
+      </div>
+
+      <!-- Connectors down to children -->
+      <div class="wp-p1-lines">
+        <div class="wp-p1-vline wp-p1-vl1">
+          <div class="wp-p1-vdot wp-p1-vd1"></div>
+        </div>
+        <div class="wp-p1-vline wp-p1-vl2">
+          <div class="wp-p1-vdot wp-p1-vd2"></div>
+        </div>
+        <div class="wp-p1-vline wp-p1-vl3">
+          <div class="wp-p1-vdot wp-p1-vd3"></div>
+        </div>
+      </div>
+
+      <!-- Children row -->
+      <div class="wp-p1-children">
+        <div class="wp-node wp-p1-c1">
+          <div class="wp-icon wp-icon-blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+              <rect x="9" y="3" width="6" height="4" rx="1"/>
+            </svg>
+          </div>
+          <span class="wp-label">Validate Inventory</span>
+          <span class="wp-sublabel">Child 1</span>
+        </div>
+
+        <div class="wp-node wp-p1-c2">
+          <div class="wp-icon wp-icon-blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+              <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+          </div>
+          <span class="wp-label">Validate Payment</span>
+          <span class="wp-sublabel">Child 2</span>
+        </div>
+
+        <div class="wp-node wp-p1-c3">
+          <div class="wp-icon wp-icon-blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="3" width="15" height="13"/>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+              <circle cx="5.5" cy="18.5" r="2.5"/>
+              <circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+          </div>
+          <span class="wp-label">Calculate Shipping</span>
+          <span class="wp-sublabel">Child 3</span>
+        </div>
+      </div>
+
+      <!-- Connectors up to completion -->
+      <div class="wp-p1-lines wp-p1-lines-up">
+        <div class="wp-p1-vline wp-p1-vl4">
+          <div class="wp-p1-vdot-up wp-p1-vu1"></div>
+        </div>
+        <div class="wp-p1-vline wp-p1-vl5">
+          <div class="wp-p1-vdot-up wp-p1-vu2"></div>
+        </div>
+        <div class="wp-p1-vline wp-p1-vl6">
+          <div class="wp-p1-vdot-up wp-p1-vu3"></div>
+        </div>
+      </div>
+
+      <!-- Completion node -->
+      <div class="wp-p1-complete">
+        <div class="wp-icon wp-icon-green">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <span class="wp-label">Parent Executes</span>
+        <span class="wp-sublabel">all children done</span>
+      </div>
+    </div>
+
+    <!-- Mobile -->
+    <div class="wp-p1-mobile">
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-pink">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Order Fulfillment</span><span class="wp-msub">Parent Job</span></div>
+      </div>
+      <div class="wp-mconn"><div class="wp-mline"></div></div>
+      <div class="wp-mchildren">
+        <div class="wp-mchild wp-mc-blue">Child 1: Validate Inventory</div>
+        <div class="wp-mchild wp-mc-blue">Child 2: Validate Payment</div>
+        <div class="wp-mchild wp-mc-blue">Child 3: Calculate Shipping</div>
+      </div>
+      <div class="wp-mconn"><div class="wp-mline"></div></div>
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Parent Executes</span><span class="wp-msub">all children done</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Separator -->
+  <div class="wp-sep"></div>
+
+  <!-- ===== Pattern 2: Sequential Chain ===== -->
+  <div class="wp-section">
+    <div class="wp-title">Sequential Chain</div>
+
+    <!-- Desktop -->
+    <div class="wp-p2-desktop">
+      <div class="wp-node wp-p2-n1">
+        <div class="wp-icon wp-icon-yellow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <span class="wp-label">Extract</span>
+        <span class="wp-sublabel">CSV</span>
+      </div>
+
+      <div class="wp-hconn">
+        <div class="wp-hline"></div>
+        <div class="wp-harrow"></div>
+        <span class="wp-hconn-label">result</span>
+        <div class="wp-hdot wp-hd1"></div>
+      </div>
+
+      <div class="wp-node wp-p2-n2">
+        <div class="wp-icon wp-icon-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+        </div>
+        <span class="wp-label">Transform</span>
+        <span class="wp-sublabel">clean</span>
+      </div>
+
+      <div class="wp-hconn">
+        <div class="wp-hline"></div>
+        <div class="wp-harrow"></div>
+        <span class="wp-hconn-label">result</span>
+        <div class="wp-hdot wp-hd2"></div>
+      </div>
+
+      <div class="wp-node wp-p2-n3">
+        <div class="wp-icon wp-icon-green">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <span class="wp-label">Load</span>
+        <span class="wp-sublabel">warehouse</span>
+      </div>
+    </div>
+
+    <!-- Mobile -->
+    <div class="wp-p2-mobile">
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-yellow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Extract</span><span class="wp-msub">CSV</span></div>
+      </div>
+      <div class="wp-mconn"><div class="wp-mline"></div><span class="wp-mconn-label">result</span></div>
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-blue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Transform</span><span class="wp-msub">clean</span></div>
+      </div>
+      <div class="wp-mconn"><div class="wp-mline"></div><span class="wp-mconn-label">result</span></div>
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Load</span><span class="wp-msub">warehouse</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Separator -->
+  <div class="wp-sep"></div>
+
+  <!-- ===== Pattern 3: Fan-out/Fan-in ===== -->
+  <div class="wp-section">
+    <div class="wp-title">Fan-out / Fan-in (Parallel Merge)</div>
+
+    <!-- Desktop -->
+    <div class="wp-p3-desktop">
+      <div class="wp-p3-chunks">
+        <div class="wp-node wp-p3-ch1">
+          <div class="wp-icon wp-icon-pink">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+              <rect x="9" y="9" width="6" height="6"/>
+            </svg>
+          </div>
+          <span class="wp-label">Chunk 1</span>
+        </div>
+        <div class="wp-node wp-p3-ch2">
+          <div class="wp-icon wp-icon-blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+              <rect x="9" y="9" width="6" height="6"/>
+            </svg>
+          </div>
+          <span class="wp-label">Chunk 2</span>
+        </div>
+        <div class="wp-node wp-p3-ch3">
+          <div class="wp-icon wp-icon-yellow">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+              <rect x="9" y="9" width="6" height="6"/>
+            </svg>
+          </div>
+          <span class="wp-label">Chunk 3</span>
+        </div>
+      </div>
+
+      <!-- Connectors -->
+      <div class="wp-p3-lines">
+        <div class="wp-p3-hconn wp-p3-hc1">
+          <div class="wp-p3-hline"></div>
+          <div class="wp-p3-hdot wp-p3-hd1"></div>
+        </div>
+        <div class="wp-p3-hconn wp-p3-hc2">
+          <div class="wp-p3-hline"></div>
+          <div class="wp-p3-hdot wp-p3-hd2"></div>
+        </div>
+        <div class="wp-p3-hconn wp-p3-hc3">
+          <div class="wp-p3-hline"></div>
+          <div class="wp-p3-hdot wp-p3-hd3"></div>
+        </div>
+      </div>
+
+      <!-- Merge node -->
+      <div class="wp-p3-merge">
+        <div class="wp-icon wp-icon-green">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/>
+            <polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/>
+            <line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </div>
+        <span class="wp-label">Merge Results</span>
+      </div>
+    </div>
+
+    <!-- Mobile -->
+    <div class="wp-p3-mobile">
+      <div class="wp-mchildren">
+        <div class="wp-mchild wp-mc-pink">Chunk 1</div>
+        <div class="wp-mchild wp-mc-blue">Chunk 2</div>
+        <div class="wp-mchild wp-mc-yellow">Chunk 3</div>
+      </div>
+      <div class="wp-mconn"><div class="wp-mline"></div></div>
+      <div class="wp-mrow">
+        <div class="wp-micon wp-micon-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </div>
+        <div><span class="wp-mlabel">Merge Results</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* ===== Container ===== */
+  .wp-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+
+  :root[data-theme='dark'] .wp-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ===== Section & title ===== */
+  .wp-section {
+    padding: 0.5rem 0;
+  }
+
+  .wp-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .wp-sep {
+    height: 1px;
+    background: var(--sl-color-hairline);
+    margin: 1.25rem 1.5rem;
+  }
+
+  :root[data-theme='dark'] .wp-sep {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ===== Shared node styles ===== */
+  .wp-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: wpAppear 0.5s ease-out both;
+  }
+
+  @keyframes wpAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .wp-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    transition: all 0.3s ease;
+  }
+
+  :root[data-theme='dark'] .wp-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-icon-pink {
+    color: #ec4899;
+    border-color: rgba(236, 72, 153, 0.3);
+  }
+  :root[data-theme='dark'] .wp-icon-pink {
+    color: #f9a8d4;
+    border-color: rgba(249, 168, 212, 0.3);
+  }
+
+  .wp-icon-blue {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  :root[data-theme='dark'] .wp-icon-blue {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.3);
+  }
+
+  .wp-icon-green {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+  :root[data-theme='dark'] .wp-icon-green {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+  }
+
+  .wp-icon-yellow {
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  :root[data-theme='dark'] .wp-icon-yellow {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  .wp-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .wp-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* ========================================
+     PATTERN 1: Parent-Child (Fan-in)
+     ======================================== */
+  .wp-p1-desktop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    min-width: 500px;
+  }
+
+  .wp-p1-mobile { display: none; }
+
+  .wp-p1-parent, .wp-p1-complete {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    animation: wpAppear 0.5s ease-out both;
+  }
+
+  .wp-p1-parent { animation-delay: 0s; }
+  .wp-p1-complete { animation-delay: 0.4s; }
+
+  /* Vertical lines from parent to children */
+  .wp-p1-lines {
+    display: flex;
+    justify-content: center;
+    gap: 6rem;
+    height: 32px;
+    position: relative;
+  }
+
+  .wp-p1-vline {
+    position: relative;
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wp-p1-vline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Dots flowing DOWN (parent to children) */
+  .wp-p1-vdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.5);
+    animation: wpVdotDown 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .wp-p1-vdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.5);
+  }
+
+  .wp-p1-vd1 { animation-delay: 0s; }
+  .wp-p1-vd2 { animation-delay: 0.2s; }
+  .wp-p1-vd3 { animation-delay: 0.4s; }
+
+  @keyframes wpVdotDown {
+    0% { top: -3px; opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Dots flowing UP (children to completion) */
+  .wp-p1-vdot-up {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -3px;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    animation: wpVdotUp 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .wp-p1-vdot-up {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+  }
+
+  .wp-p1-vu1 { animation-delay: 1.2s; }
+  .wp-p1-vu2 { animation-delay: 1.4s; }
+  .wp-p1-vu3 { animation-delay: 1.6s; }
+
+  @keyframes wpVdotUp {
+    0% { bottom: -3px; opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { bottom: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Children row */
+  .wp-p1-children {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+  }
+
+  .wp-p1-c1 { animation-delay: 0.15s; }
+  .wp-p1-c2 { animation-delay: 0.25s; }
+  .wp-p1-c3 { animation-delay: 0.35s; }
+
+  /* ========================================
+     PATTERN 2: Sequential Chain
+     ======================================== */
+  .wp-p2-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 450px;
+  }
+
+  .wp-p2-mobile { display: none; }
+
+  .wp-p2-n1 { animation-delay: 0s; }
+  .wp-p2-n2 { animation-delay: 0.15s; }
+  .wp-p2-n3 { animation-delay: 0.3s; }
+
+  /* Horizontal connectors */
+  .wp-hconn {
+    position: relative;
+    width: 56px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .wp-hline {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wp-hline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-harrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wp-harrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-hconn-label {
+    position: absolute;
+    top: -0.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.58rem;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+    white-space: nowrap;
+  }
+
+  .wp-hdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    animation: wpHdot 3.5s ease-in-out infinite;
+  }
+
+  .wp-hd1 {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    animation-delay: 0s;
+  }
+
+  :root[data-theme='dark'] .wp-hd1 {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  }
+
+  .wp-hd2 {
+    background: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    animation-delay: 1.2s;
+  }
+
+  :root[data-theme='dark'] .wp-hd2 {
+    background: #93c5fd;
+    box-shadow: 0 0 10px rgba(147, 197, 253, 0.6);
+  }
+
+  @keyframes wpHdot {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* ========================================
+     PATTERN 3: Fan-out/Fan-in
+     ======================================== */
+  .wp-p3-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 500px;
+  }
+
+  .wp-p3-mobile { display: none; }
+
+  .wp-p3-chunks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .wp-p3-ch1 { animation-delay: 0s; }
+  .wp-p3-ch2 { animation-delay: 0.1s; }
+  .wp-p3-ch3 { animation-delay: 0.2s; }
+
+  .wp-p3-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .wp-p3-hconn {
+    position: relative;
+    width: 56px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+  }
+
+  .wp-p3-hline {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wp-p3-hline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-p3-hdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    animation: wpHdot 3.5s ease-in-out infinite;
+  }
+
+  .wp-p3-hd1 {
+    background: #ec4899;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation-delay: 0s;
+  }
+  :root[data-theme='dark'] .wp-p3-hd1 {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .wp-p3-hd2 {
+    background: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    animation-delay: 0.3s;
+  }
+  :root[data-theme='dark'] .wp-p3-hd2 {
+    background: #93c5fd;
+    box-shadow: 0 0 10px rgba(147, 197, 253, 0.6);
+  }
+
+  .wp-p3-hd3 {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    animation-delay: 0.15s;
+  }
+  :root[data-theme='dark'] .wp-p3-hd3 {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  }
+
+  .wp-p3-merge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    animation: wpAppear 0.5s ease-out both 0.3s;
+  }
+
+  /* ========================================
+     MOBILE STYLES (shared)
+     ======================================== */
+  .wp-mrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .wp-micon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .wp-micon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-micon-pink { color: #ec4899; border-color: rgba(236, 72, 153, 0.3); }
+  :root[data-theme='dark'] .wp-micon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.3); }
+  .wp-micon-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
+  :root[data-theme='dark'] .wp-micon-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.3); }
+  .wp-micon-green { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .wp-micon-green { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+  .wp-micon-yellow { color: #f59e0b; border-color: rgba(245, 158, 11, 0.3); }
+  :root[data-theme='dark'] .wp-micon-yellow { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); }
+
+  .wp-mlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .wp-msub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .wp-mconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .wp-mline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wp-mline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wp-mconn-label {
+    position: absolute;
+    left: calc(50% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.6rem;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+  }
+
+  .wp-mchildren {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-left: 0.5rem;
+  }
+
+  .wp-mchild {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .wp-mchild {
+    background: rgba(17, 17, 22, 0.7);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .wp-mc-pink { color: #ec4899; border-color: rgba(236, 72, 153, 0.2); }
+  :root[data-theme='dark'] .wp-mc-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.15); }
+  .wp-mc-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.2); }
+  :root[data-theme='dark'] .wp-mc-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.15); }
+  .wp-mc-yellow { color: #f59e0b; border-color: rgba(245, 158, 11, 0.2); }
+  :root[data-theme='dark'] .wp-mc-yellow { color: #fbbf24; border-color: rgba(251, 191, 36, 0.15); }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 700px) {
+    .wp-p1-desktop, .wp-p2-desktop, .wp-p3-desktop { display: none; }
+    .wp-p1-mobile, .wp-p2-mobile, .wp-p3-mobile { display: flex; flex-direction: column; }
+    .wp-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

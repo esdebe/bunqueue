@@ -1,0 +1,577 @@
+---
+/**
+ * Animated Report Pipeline diagram.
+ * Shows: User Request → Queue (reports) → Worker (with progress phases) → Notify
+ * Worker contains 4 internal phases as an animated progress bar.
+ */
+---
+
+<div class="rp-wrap">
+  <!-- Desktop horizontal layout -->
+  <div class="rp-flow">
+    <!-- Node 1: User Request -->
+    <div class="rp-node rp-n1">
+      <div class="rp-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <span class="rp-label">User Request</span>
+      <span class="rp-sublabel">trigger</span>
+    </div>
+
+    <!-- Connector 1 -->
+    <div class="rp-conn">
+      <div class="rp-line"></div>
+      <div class="rp-arrow"></div>
+      <div class="rp-dot rp-d1"></div>
+    </div>
+
+    <!-- Node 2: Queue -->
+    <div class="rp-node rp-n2">
+      <div class="rp-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <span class="rp-label">Queue</span>
+      <span class="rp-sublabel">reports</span>
+    </div>
+
+    <!-- Connector 2 -->
+    <div class="rp-conn">
+      <div class="rp-line"></div>
+      <div class="rp-arrow"></div>
+      <div class="rp-dot rp-d2"></div>
+    </div>
+
+    <!-- Node 3: Worker (hero, wider) -->
+    <div class="rp-node rp-n3 rp-hero">
+      <div class="rp-glow"></div>
+      <div class="rp-icon rp-icon-active">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <span class="rp-label">Worker</span>
+      <!-- Progress bar with 4 phases -->
+      <div class="rp-progress-wrap">
+        <div class="rp-progress-track">
+          <div class="rp-progress-fill"></div>
+        </div>
+        <div class="rp-phases">
+          <div class="rp-phase rp-phase-1">
+            <span class="rp-phase-label">Query DB</span>
+            <span class="rp-phase-pct">10%</span>
+          </div>
+          <div class="rp-phase rp-phase-2">
+            <span class="rp-phase-label">Transform</span>
+            <span class="rp-phase-pct">40%</span>
+          </div>
+          <div class="rp-phase rp-phase-3">
+            <span class="rp-phase-label">Gen File</span>
+            <span class="rp-phase-pct">70%</span>
+          </div>
+          <div class="rp-phase rp-phase-4">
+            <span class="rp-phase-label">Upload S3</span>
+            <span class="rp-phase-pct">90%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connector 3 -->
+    <div class="rp-conn">
+      <div class="rp-line"></div>
+      <div class="rp-arrow"></div>
+      <div class="rp-dot rp-d3"></div>
+    </div>
+
+    <!-- Node 4: Notify -->
+    <div class="rp-node rp-n4">
+      <div class="rp-icon rp-icon-green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <span class="rp-label">Notify</span>
+      <span class="rp-sublabel">email</span>
+    </div>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="rp-vertical">
+    <div class="rp-vrow">
+      <div class="rp-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <div><span class="rp-vlabel">User Request</span><span class="rp-vsub">Report trigger</span></div>
+    </div>
+    <div class="rp-vconn"><div class="rp-vline"></div><div class="rp-vdot rp-vd1"></div></div>
+
+    <div class="rp-vrow">
+      <div class="rp-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <div><span class="rp-vlabel">Queue</span><span class="rp-vsub">reports</span></div>
+    </div>
+    <div class="rp-vconn"><div class="rp-vline"></div><div class="rp-vdot rp-vd2"></div></div>
+
+    <div class="rp-vrow rp-vhero">
+      <div class="rp-vicon rp-vicon-pink">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div class="rp-vworker-info">
+        <span class="rp-vlabel">Worker</span>
+        <div class="rp-vphases">
+          <span class="rp-vphase">Query DB 10%</span>
+          <span class="rp-vphase">Transform 40%</span>
+          <span class="rp-vphase">Gen File 70%</span>
+          <span class="rp-vphase">Upload S3 90%</span>
+        </div>
+      </div>
+    </div>
+    <div class="rp-vconn"><div class="rp-vline"></div><div class="rp-vdot rp-vd3"></div></div>
+
+    <div class="rp-vrow">
+      <div class="rp-vicon rp-vicon-green">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div><span class="rp-vlabel">Notify</span><span class="rp-vsub">Email sent</span></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .rp-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+
+  :root[data-theme='dark'] .rp-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* === Horizontal (desktop) === */
+  .rp-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 700px;
+  }
+
+  .rp-vertical { display: none; }
+
+  /* Nodes */
+  .rp-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: rpAppear 0.5s ease-out both;
+  }
+
+  .rp-n1 { animation-delay: 0s; }
+  .rp-n2 { animation-delay: 0.12s; }
+  .rp-n3 { animation-delay: 0.24s; }
+  .rp-n4 { animation-delay: 0.48s; }
+
+  @keyframes rpAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .rp-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    transition: all 0.3s ease;
+  }
+
+  :root[data-theme='dark'] .rp-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .rp-icon-active {
+    border-color: #ec4899;
+    color: #ec4899;
+    animation: rpIconPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .rp-icon-active {
+    border-color: #f9a8d4;
+    color: #f9a8d4;
+  }
+
+  @keyframes rpIconPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.15); }
+    50% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.35); }
+  }
+
+  .rp-icon-green {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  :root[data-theme='dark'] .rp-icon-green {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+  }
+
+  /* Hero glow */
+  .rp-hero { position: relative; }
+
+  .rp-glow {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 18px;
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.12) 0%, transparent 70%);
+    animation: rpGlow 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  :root[data-theme='dark'] .rp-glow {
+    background: radial-gradient(ellipse, rgba(249, 168, 212, 0.1) 0%, transparent 70%);
+  }
+
+  @keyframes rpGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  .rp-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .rp-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* Progress bar inside worker */
+  .rp-progress-wrap {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+  }
+
+  .rp-progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--sl-color-hairline);
+    overflow: hidden;
+    position: relative;
+  }
+
+  :root[data-theme='dark'] .rp-progress-track {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .rp-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #ec4899, #f9a8d4);
+    animation: rpProgressFill 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .rp-progress-fill {
+    background: linear-gradient(90deg, #f9a8d4, #ec4899);
+  }
+
+  @keyframes rpProgressFill {
+    0% { width: 0%; }
+    15% { width: 10%; }
+    40% { width: 40%; }
+    65% { width: 70%; }
+    85% { width: 90%; }
+    95%, 100% { width: 100%; }
+  }
+
+  .rp-phases {
+    display: flex;
+    justify-content: space-between;
+    gap: 2px;
+  }
+
+  .rp-phase {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    flex: 1;
+    opacity: 0.4;
+    animation: rpPhaseActivate 3.5s ease-in-out infinite;
+  }
+
+  .rp-phase-1 { animation-delay: 0s; }
+  .rp-phase-2 { animation-delay: 0.7s; }
+  .rp-phase-3 { animation-delay: 1.4s; }
+  .rp-phase-4 { animation-delay: 2.1s; }
+
+  @keyframes rpPhaseActivate {
+    0%, 10% { opacity: 0.4; }
+    20%, 60% { opacity: 1; }
+    75%, 100% { opacity: 0.4; }
+  }
+
+  .rp-phase-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    white-space: nowrap;
+  }
+
+  .rp-phase-pct {
+    font-size: 0.52rem;
+    color: #ec4899;
+    font-weight: 600;
+    font-family: var(--sl-font-mono);
+  }
+
+  :root[data-theme='dark'] .rp-phase-pct {
+    color: #f9a8d4;
+  }
+
+  /* Connectors */
+  .rp-conn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .rp-line {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .rp-line {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .rp-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .rp-arrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Animated dots */
+  .rp-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: rpDotTravel 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .rp-dot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .rp-d1 { animation-delay: 0s; }
+  .rp-d2 { animation-delay: 0.7s; }
+  .rp-d3 { animation-delay: 1.4s; }
+
+  @keyframes rpDotTravel {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Vertical (mobile) === */
+  .rp-vrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .rp-vhero {
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(236, 72, 153, 0.04);
+    border: 1px solid rgba(236, 72, 153, 0.1);
+  }
+
+  :root[data-theme='dark'] .rp-vhero {
+    background: rgba(249, 168, 212, 0.04);
+    border-color: rgba(249, 168, 212, 0.1);
+  }
+
+  .rp-vicon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .rp-vicon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .rp-vicon-pink { color: #ec4899; border-color: #ec4899; }
+  :root[data-theme='dark'] .rp-vicon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.4); }
+  .rp-vicon-green { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .rp-vicon-green { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+
+  .rp-vlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .rp-vsub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .rp-vworker-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .rp-vphases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .rp-vphase {
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(236, 72, 153, 0.08);
+    color: #ec4899;
+  }
+
+  :root[data-theme='dark'] .rp-vphase {
+    background: rgba(249, 168, 212, 0.08);
+    color: #f9a8d4;
+  }
+
+  .rp-vconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .rp-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .rp-vline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .rp-vdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: rpVdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .rp-vdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.5);
+  }
+
+  .rp-vd1 { animation-delay: 0s; }
+  .rp-vd2 { animation-delay: 0.7s; }
+  .rp-vd3 { animation-delay: 1.4s; }
+
+  @keyframes rpVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .rp-flow { display: none; }
+    .rp-vertical { display: flex; flex-direction: column; }
+    .rp-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

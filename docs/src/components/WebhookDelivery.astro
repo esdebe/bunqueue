@@ -1,0 +1,658 @@
+---
+/**
+ * Animated Webhook Delivery diagram.
+ * Shows: Event → Queue (webhooks) → Worker (HTTP POST) → Partner Endpoint
+ * Below Worker: 3 branch outcomes: Success (green), Retry (yellow), DLQ (red)
+ */
+---
+
+<div class="wd-wrap">
+  <!-- Desktop horizontal layout -->
+  <div class="wd-flow">
+    <!-- Main horizontal flow -->
+    <div class="wd-main">
+      <!-- Node 1: Event -->
+      <div class="wd-node wd-n1">
+        <div class="wd-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <span class="wd-label">Event</span>
+        <span class="wd-sublabel">order, user</span>
+      </div>
+
+      <!-- Connector 1 -->
+      <div class="wd-conn">
+        <div class="wd-line"></div>
+        <div class="wd-arrow"></div>
+        <div class="wd-dot wd-d1"></div>
+      </div>
+
+      <!-- Node 2: Queue -->
+      <div class="wd-node wd-n2">
+        <div class="wd-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </div>
+        <span class="wd-label">Queue</span>
+        <span class="wd-sublabel">webhooks</span>
+      </div>
+
+      <!-- Connector 2 -->
+      <div class="wd-conn">
+        <div class="wd-line"></div>
+        <div class="wd-arrow"></div>
+        <div class="wd-dot wd-d2"></div>
+      </div>
+
+      <!-- Node 3: Worker (hero) -->
+      <div class="wd-node wd-n3 wd-hero">
+        <div class="wd-icon wd-icon-blue">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+        </div>
+        <span class="wd-label">Worker</span>
+        <span class="wd-sublabel">HTTP POST</span>
+      </div>
+
+      <!-- Connector 3 -->
+      <div class="wd-conn">
+        <div class="wd-line"></div>
+        <div class="wd-arrow"></div>
+        <div class="wd-dot wd-d3"></div>
+      </div>
+
+      <!-- Node 4: Partner Endpoint -->
+      <div class="wd-node wd-n4">
+        <div class="wd-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+        </div>
+        <span class="wd-label">Partner</span>
+        <span class="wd-sublabel">endpoint</span>
+      </div>
+    </div>
+
+    <!-- Branch outcomes below Worker -->
+    <div class="wd-branches">
+      <div class="wd-branch-connectors">
+        <div class="wd-branch-vline wd-bvl-1"></div>
+        <div class="wd-branch-vdot wd-bvd-1"></div>
+        <div class="wd-branch-vline wd-bvl-2"></div>
+        <div class="wd-branch-vdot wd-bvd-2"></div>
+        <div class="wd-branch-vline wd-bvl-3"></div>
+        <div class="wd-branch-vdot wd-bvd-3"></div>
+      </div>
+      <div class="wd-outcomes">
+        <!-- Success -->
+        <div class="wd-outcome wd-outcome-green">
+          <div class="wd-outcome-icon wd-oicon-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <span class="wd-outcome-label">Success</span>
+          <span class="wd-outcome-detail wd-detail-green">200 OK</span>
+        </div>
+        <!-- Retry -->
+        <div class="wd-outcome wd-outcome-yellow">
+          <div class="wd-outcome-icon wd-oicon-yellow">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </div>
+          <span class="wd-outcome-label">Retry</span>
+          <span class="wd-outcome-detail wd-detail-yellow">5xx/429, backoff 5s&#8594;10s&#8594;20s</span>
+        </div>
+        <!-- DLQ -->
+        <div class="wd-outcome wd-outcome-red">
+          <div class="wd-outcome-icon wd-oicon-red">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <span class="wd-outcome-label">DLQ</span>
+          <span class="wd-outcome-detail wd-detail-red">8 fails, auto-retry hourly</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="wd-vertical">
+    <div class="wd-vrow">
+      <div class="wd-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      </div>
+      <div><span class="wd-vlabel">Event</span><span class="wd-vsub">order, user</span></div>
+    </div>
+    <div class="wd-vconn"><div class="wd-vline-m"></div><div class="wd-vdot-m wd-vdm1"></div></div>
+
+    <div class="wd-vrow">
+      <div class="wd-vicon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <div><span class="wd-vlabel">Queue</span><span class="wd-vsub">webhooks</span></div>
+    </div>
+    <div class="wd-vconn"><div class="wd-vline-m"></div><div class="wd-vdot-m wd-vdm2"></div></div>
+
+    <div class="wd-vrow wd-vhero">
+      <div class="wd-vicon wd-vicon-blue">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+      <div><span class="wd-vlabel">Worker</span><span class="wd-vsub">HTTP POST</span></div>
+    </div>
+    <div class="wd-vconn"><div class="wd-vline-m"></div><div class="wd-vdot-m wd-vdm3"></div></div>
+
+    <div class="wd-voutcomes">
+      <div class="wd-voutcome wd-vo-green">
+        <span class="wd-vo-label">Success</span>
+        <span class="wd-vo-detail">200 OK</span>
+      </div>
+      <div class="wd-voutcome wd-vo-yellow">
+        <span class="wd-vo-label">Retry</span>
+        <span class="wd-vo-detail">5xx, backoff</span>
+      </div>
+      <div class="wd-voutcome wd-vo-red">
+        <span class="wd-vo-label">DLQ</span>
+        <span class="wd-vo-detail">8 fails</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .wd-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+
+  :root[data-theme='dark'] .wd-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .wd-vertical { display: none; }
+
+  /* === Main horizontal flow === */
+  .wd-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .wd-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 600px;
+  }
+
+  /* Nodes */
+  .wd-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    animation: wdAppear 0.5s ease-out both;
+  }
+
+  .wd-n1 { animation-delay: 0s; }
+  .wd-n2 { animation-delay: 0.12s; }
+  .wd-n3 { animation-delay: 0.24s; }
+  .wd-n4 { animation-delay: 0.36s; }
+
+  @keyframes wdAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .wd-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    transition: all 0.3s ease;
+  }
+
+  :root[data-theme='dark'] .wd-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wd-icon-blue {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.4);
+    animation: wdIconPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .wd-icon-blue {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.4);
+  }
+
+  @keyframes wdIconPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.15); }
+    50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.35); }
+  }
+
+  .wd-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .wd-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* Hero */
+  .wd-hero { position: relative; }
+
+  /* Connectors */
+  .wd-conn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .wd-line {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wd-line {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wd-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wd-arrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Animated dots */
+  .wd-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3b82f6;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    animation: wdDotTravel 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .wd-dot {
+    background: #93c5fd;
+    box-shadow: 0 0 10px rgba(147, 197, 253, 0.6);
+  }
+
+  .wd-d1 { animation-delay: 0s; }
+  .wd-d2 { animation-delay: 0.7s; }
+  .wd-d3 { animation-delay: 1.4s; }
+
+  @keyframes wdDotTravel {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Branch outcomes === */
+  .wd-branches {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 0;
+    animation: wdAppear 0.5s ease-out 0.5s both;
+  }
+
+  .wd-branch-connectors {
+    position: relative;
+    height: 36px;
+    width: 340px;
+    display: flex;
+    justify-content: space-around;
+  }
+
+  .wd-branch-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+    position: relative;
+  }
+
+  :root[data-theme='dark'] .wd-branch-vline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wd-bvl-1 { background: rgba(34, 197, 94, 0.3); }
+  .wd-bvl-2 { background: rgba(245, 158, 11, 0.3); }
+  .wd-bvl-3 { background: rgba(239, 68, 68, 0.3); }
+
+  :root[data-theme='dark'] .wd-bvl-1 { background: rgba(74, 222, 128, 0.2); }
+  :root[data-theme='dark'] .wd-bvl-2 { background: rgba(251, 191, 36, 0.2); }
+  :root[data-theme='dark'] .wd-bvl-3 { background: rgba(248, 113, 113, 0.2); }
+
+  .wd-branch-vdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    top: -3px;
+  }
+
+  .wd-bvd-1 {
+    left: calc(16.67% - 3px);
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    animation: wdBranchDot 3.5s ease-in-out infinite 0s;
+  }
+
+  .wd-bvd-2 {
+    left: calc(50% - 3px);
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+    animation: wdBranchDot 3.5s ease-in-out infinite 0.7s;
+  }
+
+  .wd-bvd-3 {
+    left: calc(83.33% - 3px);
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+    animation: wdBranchDot 3.5s ease-in-out infinite 1.4s;
+  }
+
+  :root[data-theme='dark'] .wd-bvd-1 {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+  }
+
+  :root[data-theme='dark'] .wd-bvd-2 {
+    background: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  }
+
+  :root[data-theme='dark'] .wd-bvd-3 {
+    background: #f87171;
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.5);
+  }
+
+  @keyframes wdBranchDot {
+    0% { top: -3px; opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .wd-outcomes {
+    display: flex;
+    justify-content: space-around;
+    width: 340px;
+    gap: 0.5rem;
+  }
+
+  .wd-outcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    min-width: 90px;
+  }
+
+  :root[data-theme='dark'] .wd-outcome {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .wd-outcome-green { border-color: rgba(34, 197, 94, 0.25); }
+  .wd-outcome-yellow { border-color: rgba(245, 158, 11, 0.25); }
+  .wd-outcome-red { border-color: rgba(239, 68, 68, 0.25); }
+
+  :root[data-theme='dark'] .wd-outcome-green { border-color: rgba(74, 222, 128, 0.2); }
+  :root[data-theme='dark'] .wd-outcome-yellow { border-color: rgba(251, 191, 36, 0.2); }
+  :root[data-theme='dark'] .wd-outcome-red { border-color: rgba(248, 113, 113, 0.2); }
+
+  .wd-outcome-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .wd-oicon-green { color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+  .wd-oicon-yellow { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+  .wd-oicon-red { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+
+  :root[data-theme='dark'] .wd-oicon-green { color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+  :root[data-theme='dark'] .wd-oicon-yellow { color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
+  :root[data-theme='dark'] .wd-oicon-red { color: #f87171; background: rgba(248, 113, 113, 0.08); }
+
+  .wd-outcome-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .wd-outcome-detail {
+    font-size: 0.58rem;
+    font-family: var(--sl-font-mono);
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  .wd-detail-green { color: #22c55e; }
+  .wd-detail-yellow { color: #f59e0b; }
+  .wd-detail-red { color: #ef4444; }
+
+  :root[data-theme='dark'] .wd-detail-green { color: #4ade80; }
+  :root[data-theme='dark'] .wd-detail-yellow { color: #fbbf24; }
+  :root[data-theme='dark'] .wd-detail-red { color: #f87171; }
+
+  /* === Mobile vertical layout === */
+  .wd-vrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .wd-vhero {
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+  }
+
+  :root[data-theme='dark'] .wd-vhero {
+    background: rgba(147, 197, 253, 0.04);
+    border-color: rgba(147, 197, 253, 0.1);
+  }
+
+  .wd-vicon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+
+  :root[data-theme='dark'] .wd-vicon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wd-vicon-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
+  :root[data-theme='dark'] .wd-vicon-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.4); }
+
+  .wd-vlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    display: block;
+  }
+
+  .wd-vsub {
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+    display: block;
+  }
+
+  .wd-vconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .wd-vline-m {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .wd-vline-m {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wd-vdot-m {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3b82f6;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+    animation: wdVdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .wd-vdot-m {
+    background: #93c5fd;
+    box-shadow: 0 0 8px rgba(147, 197, 253, 0.5);
+  }
+
+  .wd-vdm1 { animation-delay: 0s; }
+  .wd-vdm2 { animation-delay: 0.7s; }
+  .wd-vdm3 { animation-delay: 1.4s; }
+
+  @keyframes wdVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  .wd-voutcomes {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0.25rem 0;
+  }
+
+  .wd-voutcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.4rem 0.3rem;
+    border-radius: 8px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .wd-voutcome {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .wd-vo-green { border-color: rgba(34, 197, 94, 0.25); }
+  .wd-vo-yellow { border-color: rgba(245, 158, 11, 0.25); }
+  .wd-vo-red { border-color: rgba(239, 68, 68, 0.25); }
+
+  .wd-vo-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .wd-vo-detail {
+    font-size: 0.58rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .wd-flow { display: none; }
+    .wd-vertical { display: flex; flex-direction: column; }
+    .wd-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

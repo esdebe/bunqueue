@@ -1,0 +1,728 @@
+---
+/**
+ * Animated job lifecycle state machine diagram.
+ * QUEUED -> ACTIVE -> COMPLETED (happy path)
+ * ACTIVE -> FAILED -> RETRYING -> QUEUED (retry) or DLQ (max attempts)
+ * Two animated dots trace the happy and failure paths.
+ */
+---
+
+<div class="jl-wrap">
+  <!-- Desktop layout -->
+  <div class="jl-flow">
+    <!-- Happy path row -->
+    <div class="jl-happy-row">
+      <!-- QUEUED -->
+      <div class="jl-node jl-queued">
+        <div class="jl-icon jl-icon-gray">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <span class="jl-label">QUEUED</span>
+      </div>
+
+      <!-- Connector: QUEUED -> ACTIVE -->
+      <div class="jl-hconn">
+        <div class="jl-hline"></div>
+        <div class="jl-harrow"></div>
+        <div class="jl-hdot jl-hd1"></div>
+      </div>
+
+      <!-- ACTIVE -->
+      <div class="jl-node jl-active">
+        <div class="jl-active-glow"></div>
+        <div class="jl-icon jl-icon-pink">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4"/>
+          </svg>
+        </div>
+        <span class="jl-label">ACTIVE</span>
+        <span class="jl-sublabel">processing</span>
+      </div>
+
+      <!-- Connector: ACTIVE -> COMPLETED -->
+      <div class="jl-hconn">
+        <div class="jl-hline jl-hline-green"></div>
+        <div class="jl-harrow jl-harrow-green"></div>
+        <div class="jl-hdot jl-hd2 jl-hdot-green"></div>
+      </div>
+
+      <!-- COMPLETED -->
+      <div class="jl-node jl-completed">
+        <div class="jl-icon jl-icon-green">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <span class="jl-label">COMPLETED</span>
+      </div>
+    </div>
+
+    <!-- Failure branch below ACTIVE -->
+    <div class="jl-fail-branch">
+      <!-- Vertical connector from ACTIVE down to FAILED -->
+      <div class="jl-vconn jl-vc-fail">
+        <div class="jl-vline jl-vline-red"></div>
+        <div class="jl-vdot jl-vd-fail jl-vdot-red"></div>
+      </div>
+
+      <!-- Failure row -->
+      <div class="jl-fail-row">
+        <!-- FAILED -->
+        <div class="jl-node jl-failed">
+          <div class="jl-icon jl-icon-red">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <span class="jl-label">FAILED</span>
+        </div>
+
+        <!-- Connector: FAILED -> RETRYING -->
+        <div class="jl-hconn">
+          <div class="jl-hline jl-hline-red"></div>
+          <div class="jl-harrow jl-harrow-red"></div>
+          <div class="jl-hdot jl-hd-f1 jl-hdot-red"></div>
+        </div>
+
+        <!-- RETRYING -->
+        <div class="jl-node jl-retrying">
+          <div class="jl-icon jl-icon-yellow">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </div>
+          <span class="jl-label">RETRYING</span>
+        </div>
+      </div>
+
+      <!-- Branch outputs from RETRYING -->
+      <div class="jl-retry-branches">
+        <!-- Retry arrow: back up to QUEUED -->
+        <div class="jl-branch-up">
+          <div class="jl-curve-up">
+            <svg class="jl-curve-svg" viewBox="0 0 120 80" fill="none">
+              <path d="M60 0 L60 30 Q60 50 30 50 L0 50" stroke="var(--jl-line-color)" stroke-width="2" fill="none"/>
+              <polygon points="-1,46 7,50 -1,54" fill="var(--jl-line-color)"/>
+            </svg>
+            <div class="jl-curve-dot jl-cd-up"></div>
+          </div>
+          <span class="jl-branch-label jl-branch-label-up">retry</span>
+        </div>
+
+        <!-- DLQ arrow: down -->
+        <div class="jl-branch-down">
+          <div class="jl-vconn jl-vc-dlq">
+            <div class="jl-vline jl-vline-darkred"></div>
+            <div class="jl-vdot jl-vd-dlq jl-vdot-darkred"></div>
+          </div>
+          <span class="jl-branch-tag">max attempts</span>
+          <div class="jl-node jl-dlq">
+            <div class="jl-icon jl-icon-darkred">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <span class="jl-label">DLQ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile vertical layout -->
+  <div class="jl-mobile">
+    <div class="jl-mnode jl-mnode-gray">
+      <span class="jl-mlabel">QUEUED</span>
+    </div>
+    <div class="jl-mvconn"><div class="jl-mvline"></div><div class="jl-mvdot jl-mvd1"></div></div>
+    <div class="jl-mnode jl-mnode-pink">
+      <span class="jl-mlabel">ACTIVE</span>
+      <span class="jl-msub">processing</span>
+    </div>
+    <div class="jl-msplit">
+      <div class="jl-msplit-path jl-msplit-happy">
+        <div class="jl-mvconn"><div class="jl-mvline jl-mvline-green"></div><div class="jl-mvdot jl-mvd2 jl-mvdot-green"></div></div>
+        <div class="jl-mnode jl-mnode-green">
+          <span class="jl-mlabel">COMPLETED</span>
+        </div>
+      </div>
+      <div class="jl-msplit-path jl-msplit-fail">
+        <div class="jl-mvconn"><div class="jl-mvline jl-mvline-red"></div><div class="jl-mvdot jl-mvd3 jl-mvdot-red"></div></div>
+        <div class="jl-mnode jl-mnode-red">
+          <span class="jl-mlabel">FAILED</span>
+        </div>
+        <div class="jl-mvconn"><div class="jl-mvline jl-mvline-red"></div><div class="jl-mvdot jl-mvd4 jl-mvdot-yellow"></div></div>
+        <div class="jl-mnode jl-mnode-yellow">
+          <span class="jl-mlabel">RETRYING</span>
+        </div>
+        <div class="jl-mvconn"><div class="jl-mvline jl-mvline-red"></div><div class="jl-mvdot jl-mvd5 jl-mvdot-darkred"></div></div>
+        <div class="jl-mnode jl-mnode-darkred">
+          <span class="jl-mlabel">DLQ</span>
+          <span class="jl-msub">max attempts</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  :root {
+    --jl-line-color: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] {
+    --jl-line-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .jl-wrap {
+    margin: 1.5rem 0;
+    padding: 2rem 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow: hidden;
+  }
+
+  :root[data-theme='dark'] .jl-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .jl-mobile { display: none; }
+
+  /* === Desktop flow === */
+  .jl-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Happy path row */
+  .jl-happy-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Nodes */
+  .jl-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    position: relative;
+    animation: jlAppear 0.5s ease-out both;
+  }
+
+  @keyframes jlAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .jl-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+  }
+
+  :root[data-theme='dark'] .jl-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .jl-icon-gray {
+    color: var(--sl-color-gray-3);
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  :root[data-theme='dark'] .jl-icon-gray {
+    background: rgba(40, 40, 50, 0.6);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .jl-icon-pink {
+    color: #ec4899;
+    border-color: rgba(236, 72, 153, 0.4);
+    animation: jlPulse 2.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .jl-icon-pink {
+    color: #f9a8d4;
+    border-color: rgba(249, 168, 212, 0.4);
+  }
+
+  @keyframes jlPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.15); }
+    50% { box-shadow: 0 0 22px rgba(236, 72, 153, 0.35); }
+  }
+
+  .jl-active-glow {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    right: -8px;
+    bottom: -8px;
+    border-radius: 20px;
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
+    animation: jlGlow 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  :root[data-theme='dark'] .jl-active-glow {
+    background: radial-gradient(ellipse, rgba(249, 168, 212, 0.08) 0%, transparent 70%);
+  }
+
+  @keyframes jlGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
+  .jl-icon-green {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.4);
+  }
+
+  :root[data-theme='dark'] .jl-icon-green {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.4);
+  }
+
+  .jl-icon-red {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  :root[data-theme='dark'] .jl-icon-red {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.4);
+  }
+
+  .jl-icon-yellow {
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+
+  :root[data-theme='dark'] .jl-icon-yellow {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+
+  .jl-icon-darkred {
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.4);
+    background: rgba(220, 38, 38, 0.05);
+  }
+
+  :root[data-theme='dark'] .jl-icon-darkred {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(248, 113, 113, 0.05);
+  }
+
+  .jl-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .jl-sublabel {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  /* === Horizontal connectors === */
+  .jl-hconn {
+    position: relative;
+    width: 48px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .jl-hline {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .jl-hline {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .jl-hline-green { background: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .jl-hline-green { background: rgba(74, 222, 128, 0.2); }
+
+  .jl-hline-red { background: rgba(239, 68, 68, 0.3); }
+  :root[data-theme='dark'] .jl-hline-red { background: rgba(248, 113, 113, 0.2); }
+
+  .jl-harrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .jl-harrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .jl-harrow-green { border-left-color: rgba(34, 197, 94, 0.4); }
+  :root[data-theme='dark'] .jl-harrow-green { border-left-color: rgba(74, 222, 128, 0.3); }
+
+  .jl-harrow-red { border-left-color: rgba(239, 68, 68, 0.4); }
+  :root[data-theme='dark'] .jl-harrow-red { border-left-color: rgba(248, 113, 113, 0.3); }
+
+  /* Animated dots */
+  .jl-hdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ec4899;
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    animation: jlHdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .jl-hdot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+
+  .jl-hdot-green {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  }
+
+  :root[data-theme='dark'] .jl-hdot-green {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+  }
+
+  .jl-hdot-red {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  }
+
+  :root[data-theme='dark'] .jl-hdot-red {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
+  }
+
+  .jl-hd1 { animation-delay: 0s; }
+  .jl-hd2 { animation-delay: 0.7s; }
+  .jl-hd-f1 { animation-delay: 1.4s; }
+
+  @keyframes jlHdot {
+    0% { left: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* === Failure branch === */
+  .jl-fail-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-left: 0;
+  }
+
+  .jl-fail-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Vertical connectors */
+  .jl-vconn {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .jl-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .jl-vline {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .jl-vline-red { background: rgba(239, 68, 68, 0.3); }
+  :root[data-theme='dark'] .jl-vline-red { background: rgba(248, 113, 113, 0.2); }
+
+  .jl-vline-darkred { background: rgba(220, 38, 38, 0.3); }
+  :root[data-theme='dark'] .jl-vline-darkred { background: rgba(248, 113, 113, 0.15); }
+
+  .jl-vdot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    animation: jlVdot 3.5s ease-in-out infinite;
+  }
+
+  .jl-vdot-red {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  }
+
+  :root[data-theme='dark'] .jl-vdot-red {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
+  }
+
+  .jl-vdot-darkred {
+    background: #dc2626;
+    box-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
+  }
+
+  :root[data-theme='dark'] .jl-vdot-darkred {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
+  }
+
+  .jl-vd-fail { animation-delay: 0.7s; }
+  .jl-vd-dlq { animation-delay: 2.8s; }
+
+  @keyframes jlVdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Retry branches */
+  .jl-retry-branches {
+    display: flex;
+    gap: 2.5rem;
+    margin-top: 0.25rem;
+    align-items: flex-start;
+  }
+
+  .jl-branch-up {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .jl-curve-up {
+    width: 120px;
+    height: 80px;
+    position: relative;
+  }
+
+  .jl-curve-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .jl-curve-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    animation: jlCurveUp 3.5s ease-in-out infinite 2.1s;
+    top: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  :root[data-theme='dark'] .jl-curve-dot {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  }
+
+  @keyframes jlCurveUp {
+    0% { top: -3px; left: 50%; opacity: 0; }
+    10% { opacity: 1; }
+    50% { top: 45px; left: 50%; }
+    90% { opacity: 1; }
+    100% { top: 45px; left: 0; opacity: 0; }
+  }
+
+  .jl-branch-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .jl-branch-label-up {
+    color: #f59e0b;
+  }
+
+  :root[data-theme='dark'] .jl-branch-label-up {
+    color: #fbbf24;
+  }
+
+  .jl-branch-down {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .jl-branch-tag {
+    font-size: 0.6rem;
+    color: #dc2626;
+    font-weight: 500;
+    margin: 0.15rem 0;
+    white-space: nowrap;
+  }
+
+  :root[data-theme='dark'] .jl-branch-tag {
+    color: #f87171;
+  }
+
+  /* === Mobile layout === */
+  .jl-mnode {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    min-width: 100px;
+  }
+
+  :root[data-theme='dark'] .jl-mnode {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .jl-mnode-gray { border-color: rgba(156, 163, 175, 0.3); }
+  .jl-mnode-pink { border-color: rgba(236, 72, 153, 0.3); }
+  .jl-mnode-green { border-color: rgba(34, 197, 94, 0.3); }
+  .jl-mnode-red { border-color: rgba(239, 68, 68, 0.3); }
+  .jl-mnode-yellow { border-color: rgba(245, 158, 11, 0.3); }
+  .jl-mnode-darkred { border-color: rgba(220, 38, 38, 0.3); }
+
+  .jl-mlabel {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .jl-msub {
+    font-size: 0.65rem;
+    color: var(--sl-color-gray-3);
+    margin-left: 0.25rem;
+  }
+
+  .jl-msplit {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .jl-msplit-path {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+  }
+
+  .jl-mvconn {
+    position: relative;
+    height: 24px;
+    width: 38px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .jl-mvline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+  }
+
+  :root[data-theme='dark'] .jl-mvline { background: rgba(255, 255, 255, 0.1); }
+  .jl-mvline-green { background: rgba(34, 197, 94, 0.3); }
+  .jl-mvline-red { background: rgba(239, 68, 68, 0.3); }
+
+  .jl-mvdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(236, 72, 153, 0.4);
+    animation: jlMvdot 3.5s ease-in-out infinite;
+  }
+
+  :root[data-theme='dark'] .jl-mvdot { background: #f9a8d4; box-shadow: 0 0 8px rgba(249, 168, 212, 0.5); }
+
+  .jl-mvdot-green { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+  :root[data-theme='dark'] .jl-mvdot-green { background: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+  .jl-mvdot-red { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+  :root[data-theme='dark'] .jl-mvdot-red { background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.5); }
+  .jl-mvdot-yellow { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
+  :root[data-theme='dark'] .jl-mvdot-yellow { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.5); }
+  .jl-mvdot-darkred { background: #dc2626; box-shadow: 0 0 6px rgba(220, 38, 38, 0.4); }
+  :root[data-theme='dark'] .jl-mvdot-darkred { background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.5); }
+
+  .jl-mvd1 { animation-delay: 0s; }
+  .jl-mvd2 { animation-delay: 0.7s; }
+  .jl-mvd3 { animation-delay: 0.7s; }
+  .jl-mvd4 { animation-delay: 1.4s; }
+  .jl-mvd5 { animation-delay: 2.1s; }
+
+  @keyframes jlMvdot {
+    0% { top: -3px; opacity: 0; }
+    8% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .jl-flow { display: none; }
+    .jl-mobile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .jl-wrap { padding: 1.25rem 0.75rem; }
+  }
+</style>
