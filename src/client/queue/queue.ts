@@ -22,6 +22,7 @@ import type {
 } from '../types';
 import { FORCE_EMBEDDED } from './helpers';
 import { AddBatcher } from './addBatcher';
+import { resolveToken } from '../resolveToken';
 
 // Import operation modules
 import * as addOps from './operations/add';
@@ -61,8 +62,9 @@ export class Queue<T = unknown> {
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
       const poolSize = connOpts.poolSize ?? 4;
+      const token = resolveToken(connOpts.token);
 
-      if (poolSize === 4 && !connOpts.token) {
+      if (poolSize === 4 && !token) {
         this.tcpPool = getSharedPool({
           host: connOpts.host,
           port: connOpts.port,
@@ -77,7 +79,7 @@ export class Queue<T = unknown> {
         this.tcpPool = new TcpConnectionPool({
           host: connOpts.host ?? 'localhost',
           port: connOpts.port ?? 6789,
-          token: connOpts.token,
+          token,
           poolSize,
           pingInterval: connOpts.pingInterval,
           commandTimeout: connOpts.commandTimeout,

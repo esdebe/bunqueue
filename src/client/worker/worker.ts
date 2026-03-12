@@ -17,6 +17,7 @@ import { processJob } from './processor';
 import { WorkerRateLimiter } from './workerRateLimiter';
 import { startHeartbeat, type HeartbeatDeps } from './workerHeartbeat';
 import { pullEmbedded, pullTcp, type PullConfig } from './workerPull';
+import { resolveToken } from '../resolveToken';
 
 /**
  * Worker class for processing jobs
@@ -124,11 +125,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     } else {
       const connOpts: ConnectionOptions = opts.connection ?? {};
       const poolSize = connOpts.poolSize ?? Math.min(concurrency, 8);
+      const token = resolveToken(connOpts.token);
 
       this.tcpPool = new TcpConnectionPool({
         host: connOpts.host ?? 'localhost',
         port: connOpts.port ?? 6789,
-        token: connOpts.token,
+        token,
         poolSize,
         pingInterval: connOpts.pingInterval,
         commandTimeout: connOpts.commandTimeout,
