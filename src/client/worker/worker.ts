@@ -15,6 +15,7 @@ import { AckBatcher } from './ackBatcher';
 import { parseJobFromResponse } from './jobParser';
 import { processJob } from './processor';
 import { WorkerRateLimiter } from './workerRateLimiter';
+import { GroupConcurrencyLimiter } from './groupConcurrency';
 import { startHeartbeat, type HeartbeatDeps } from './workerHeartbeat';
 import { pullEmbedded, pullTcp, type PullConfig } from './workerPull';
 import { resolveToken } from '../resolveToken';
@@ -31,6 +32,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private readonly tcpPool: TcpConnectionPool | null;
   private readonly ackBatcher: AckBatcher;
   private readonly rateLimiter: WorkerRateLimiter;
+  private readonly groupLimiter: GroupConcurrencyLimiter | null;
 
   private running = false;
   private paused = false;
@@ -110,8 +112,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       useLocks: opts.useLocks ?? true,
     };
 
-    // Initialize rate limiter
-    this.rateLimiter = new WorkerRateLimiter(opts.limiter ?? null);
+    // Initialize rate limiter (skip time-window rate limiting when groupKey is set)
+    this.rateLimiter = new WorkerRateLimiter(
+      opts.limiter?.groupKey ? null : (opts.limiter ?? null)
+    );
+
+    // Initialize group concurrency limiter
+    this.groupLimiter = GroupConcurrencyLimiter.fromOptions(opts.limiter);
 
     this.ackBatcher = new AckBatcher({
       batchSize: opts.batchSize ?? 10,
@@ -439,6 +446,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.cancelledJobs.clear();
     this.pendingJobs = [];
     this.pendingJobsHead = 0;
+    if (this.groupLimiter) this.groupLimiter.clear();
 
     if (this.tcpPool) this.tcpPool.close();
     this.closed = true;
@@ -477,7 +485,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (!this.running || this.closing) return;
 
     try {
-      let item = this.getBufferedJob();
+      let item = this.getNextEligibleJob();
 
       if (!item) {
         const items = await this.doPullBatch();
@@ -486,14 +494,15 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (!this.running || this.closing) return;
         if (items.length > 0) {
           this.registerPulledJobs(items);
-          item = items[0];
+          // Add all items to buffer, then find eligible one
           if (this.pendingJobsHead >= this.pendingJobs.length) {
             this.pendingJobs = items;
-            this.pendingJobsHead = 1;
+            this.pendingJobsHead = 0;
           } else {
-            this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead).concat(items.slice(1));
+            this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead).concat(items);
             this.pendingJobsHead = 0;
           }
+          item = this.getNextEligibleJob();
         }
       }
 
@@ -501,6 +510,15 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         this.consecutiveErrors = 0;
         this.startJob(item.job, item.token);
       } else {
+        // Check if we have buffered jobs but all are group-limited
+        const hasBuffered = this.pendingJobsHead < this.pendingJobs.length;
+        if (hasBuffered && this.groupLimiter) {
+          // Retry shortly - a running job may finish and free a group slot
+          this.pollTimer = setTimeout(() => {
+            this.poll();
+          }, 10);
+          return;
+        }
         const now = Date.now();
         if (now - this.lastDrainedEmit > 1000) {
           this.lastDrainedEmit = now;
@@ -539,6 +557,38 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     return item;
   }
 
+  /**
+   * Get the next buffered job eligible for processing.
+   * When group concurrency is enabled, skips jobs whose group is at capacity
+   * and leaves them in the buffer for later processing.
+   */
+  private getNextEligibleJob(): { job: InternalJob; token: string | null } | null {
+    if (this.pendingJobsHead >= this.pendingJobs.length) return null;
+
+    // No group limiter - just return the next buffered job
+    if (!this.groupLimiter) {
+      return this.getBufferedJob();
+    }
+
+    // Scan buffer for a job whose group has capacity
+    const start = this.pendingJobsHead;
+    const end = this.pendingJobs.length;
+    for (let i = start; i < end; i++) {
+      const item = this.pendingJobs[i];
+      if (this.groupLimiter.canProcess(item.job)) {
+        // Remove this item from the buffer by swapping with the head
+        this.pendingJobs[i] = this.pendingJobs[this.pendingJobsHead];
+        this.pendingJobsHead++;
+        if (this.pendingJobsHead > 500 && this.pendingJobsHead >= this.pendingJobs.length / 2) {
+          this.pendingJobs = this.pendingJobs.slice(this.pendingJobsHead);
+          this.pendingJobsHead = 0;
+        }
+        return item;
+      }
+    }
+    return null;
+  }
+
   private async doPullBatch(): Promise<Array<{ job: InternalJob; token: string | null }>> {
     const slots = this.opts.concurrency - this.activeJobs;
     const batchSize = Math.min(this.opts.batchSize, slots, 1000);
@@ -564,6 +614,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.activeJobs++;
     this.activeJobIds.add(jobIdStr);
 
+    // Track group concurrency
+    if (this.groupLimiter) {
+      this.groupLimiter.increment(job);
+    }
+
     if (this.opts.useLocks && token && !this.jobTokens.has(jobIdStr)) {
       this.jobTokens.set(jobIdStr, token);
     }
@@ -586,6 +641,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.cancelledJobs.delete(jobIdStr);
       if (this.opts.useLocks) {
         this.jobTokens.delete(jobIdStr);
+      }
+      // Release group concurrency slot
+      if (this.groupLimiter) {
+        this.groupLimiter.decrement(job);
       }
       this.rateLimiter.recordJobForLimiter();
       if (this.running && !this.closing) this.poll();
