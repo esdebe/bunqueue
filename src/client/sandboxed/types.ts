@@ -31,6 +31,8 @@ export interface SandboxedWorkerOptions {
   heartbeatInterval?: number;
   /** Auto-stop after this many ms of inactivity (0 = disabled, default: 0) */
   idleTimeout?: number;
+  /** Recycle individual idle worker processes after this many ms (default: 30000, 0 = disabled) */
+  idleRecycleMs?: number;
 }
 
 /** Required options with defaults applied */
@@ -52,6 +54,8 @@ export interface WorkerProcess {
   currentToken: string | null;
   restarts: number;
   timeoutId: Timer | null;
+  lastIdleAt: number;
+  terminated: boolean;
 }
 
 /** IPC message from main to worker */

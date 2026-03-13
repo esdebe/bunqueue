@@ -84,6 +84,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private readonly heartbeatInterval: number;
   private readonly idleTimeout: number;
+  private readonly idleRecycleMs: number;
   private lastActivityTime: number = 0;
 
   constructor(queueName: string, options: SandboxedWorkerOptions) {
@@ -102,6 +103,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     }
 
     this.idleTimeout = options.idleTimeout ?? 0;
+    this.idleRecycleMs = options.idleRecycleMs ?? 30000;
 
     this.options = {
       processor: options.processor,
@@ -145,7 +147,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
     // Unless force, wait for all busy workers to finish their current jobs
     if (!force) {
-      while (this.workers.some((w) => w.busy)) {
+      while (this.workers.some((w) => w.busy && !w.terminated)) {
         await Bun.sleep(50);
       }
     }
@@ -158,7 +160,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
     for (const wp of this.workers) {
       if (wp.timeoutId) clearTimeout(wp.timeoutId);
-      wp.worker.terminate();
+      if (!wp.terminated) wp.worker.terminate();
     }
     this.workers.length = 0;
 
@@ -173,10 +175,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   }
 
   /** Get worker pool stats */
-  getStats(): { total: number; busy: number; idle: number; restarts: number } {
-    const busy = this.workers.filter((w) => w.busy).length;
+  getStats(): { total: number; busy: number; idle: number; recycled: number; restarts: number } {
+    const busy = this.workers.filter((w) => w.busy && !w.terminated).length;
+    const recycled = this.workers.filter((w) => w.terminated).length;
+    const alive = this.workers.length - recycled;
     const restarts = this.workers.reduce((sum, w) => sum + w.restarts, 0);
-    return { total: this.workers.length, busy, idle: this.workers.length - busy, restarts };
+    return { total: this.workers.length, busy, idle: alive - busy, recycled, restarts };
   }
 
   /** Reset worker state to idle */
@@ -188,6 +192,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     wp.busy = false;
     wp.currentJob = null;
     wp.currentToken = null;
+    wp.lastIdleAt = Date.now();
   }
 
   private spawnWorker(index: number): Promise<void> {
@@ -205,6 +210,8 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
         currentToken: null,
         restarts: this.workers[index]?.restarts ?? 0,
         timeoutId: null,
+        lastIdleAt: Date.now(),
+        terminated: false,
       };
 
       let resolved = false;
@@ -242,18 +249,56 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
   private async pullLoop(): Promise<void> {
     while (this.running) {
-      const idle = this.workers.find((w) => !w.busy);
+      // Find an alive idle worker, or respawn a recycled one
+      let idle = this.workers.find((w) => !w.busy && !w.terminated);
       if (!idle) {
-        await Bun.sleep(this.options.pollInterval);
-        continue;
+        const recycled = this.workers.find((w) => w.terminated);
+        if (recycled) {
+          const index = this.workers.indexOf(recycled);
+          await this.spawnWorker(index);
+          idle = this.workers[index];
+        } else {
+          await Bun.sleep(this.options.pollInterval);
+          continue;
+        }
       }
 
       const { job, token } = await this.ops.pull(this.queueName, this.workerId, 1000);
       if (job) {
+        // If the idle worker was recycled between find and dispatch, respawn
+        if (idle.terminated) {
+          const index = this.workers.indexOf(idle);
+          await this.spawnWorker(index);
+          idle = this.workers[index];
+        }
         this.dispatch(idle, job, token);
-      } else if (this.idleTimeout > 0 && Date.now() - this.lastActivityTime >= this.idleTimeout) {
-        this.stop().catch(() => {});
-        return;
+      } else {
+        this.recycleIdleWorkers();
+        if (this.idleTimeout > 0 && Date.now() - this.lastActivityTime >= this.idleTimeout) {
+          this.stop().catch(() => {});
+          return;
+        }
+      }
+    }
+  }
+
+  /** Terminate individual idle workers that exceeded idleRecycleMs, keeping at least 1 alive */
+  private recycleIdleWorkers(): void {
+    if (this.idleRecycleMs <= 0) return;
+    const now = Date.now();
+    let aliveIdleCount = 0;
+
+    for (const wp of this.workers) {
+      if (!wp.busy && !wp.terminated) aliveIdleCount++;
+    }
+
+    for (const wp of this.workers) {
+      if (wp.busy || wp.terminated) continue;
+      if (aliveIdleCount <= 1) break;
+      if (wp.lastIdleAt > 0 && now - wp.lastIdleAt >= this.idleRecycleMs) {
+        wp.worker.terminate();
+        wp.terminated = true;
+        aliveIdleCount--;
       }
     }
   }
@@ -422,7 +467,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
   /** Send heartbeat for all active jobs */
   private async sendHeartbeat(): Promise<void> {
-    const active = this.workers.filter((w) => w.busy && w.currentJob);
+    const active = this.workers.filter((w) => w.busy && w.currentJob && !w.terminated);
     if (active.length === 0) return;
     try {
       const ids = active.map((w) => String(w.currentJob?.id));
