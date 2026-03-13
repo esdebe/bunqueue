@@ -70,6 +70,12 @@ import {
 } from './handlers/advanced';
 
 import {
+  handleDashboardOverview,
+  handleDashboardQueues,
+  handleDashboardQueue,
+} from './handlers/dashboard';
+
+import {
   handleAddLog,
   handleGetLogs,
   handleHeartbeat,
@@ -349,6 +355,25 @@ export function routeMonitoringCommand(
       return handleSetWebhookEnabled(cmd, ctx, reqId);
     case 'CompactMemory':
       return handleCompactMemory(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route dashboard commands */
+export function routeDashboardCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'DashboardOverview':
+      return handleDashboardOverview(cmd, ctx, reqId);
+    case 'DashboardQueues':
+      return handleDashboardQueues(cmd, ctx, reqId);
+    case 'DashboardQueue':
+      return handleDashboardQueue(cmd, ctx, reqId);
     default:
       return null;
   }

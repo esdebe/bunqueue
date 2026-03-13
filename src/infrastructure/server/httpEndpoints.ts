@@ -4,6 +4,8 @@
 
 import type { QueueManager } from '../../application/queueManager';
 import { VERSION } from '../../shared/version';
+import { throughputTracker } from '../../application/throughputTracker';
+import { latencyTracker } from '../../application/latencyTracker';
 
 /** JSON response helper */
 export function jsonResponse(data: unknown, status = 200, corsOrigins?: Set<string>): Response {
@@ -167,6 +169,177 @@ export function statsEndpoint(queueManager: QueueManager, corsOrigins?: Set<stri
     200,
     corsOrigins
   );
+}
+
+/** Dashboard overview endpoint - aggregates all dashboard data in a single call */
+export function dashboardOverviewEndpoint(
+  queueManager: QueueManager,
+  corsOrigins?: Set<string>
+): Response {
+  const stats = queueManager.getStats();
+  const rates = throughputTracker.getRates();
+  const latencies = latencyTracker.getPercentiles();
+  const avgLatencies = latencyTracker.getAverages();
+  const memStats = queueManager.getMemoryStats();
+  const workers = queueManager.workerManager.list();
+  const workerStats = queueManager.workerManager.getStats();
+  const crons = queueManager.listCrons();
+  const storage = queueManager.getStorageStatus();
+  const mem = process.memoryUsage();
+
+  return jsonResponse(
+    {
+      ok: true,
+      stats: {
+        waiting: stats.waiting,
+        active: stats.active,
+        delayed: stats.delayed,
+        completed: stats.completed,
+        dlq: stats.dlq,
+        totalPushed: Number(stats.totalPushed),
+        totalPulled: Number(stats.totalPulled),
+        totalCompleted: Number(stats.totalCompleted),
+        totalFailed: Number(stats.totalFailed),
+        uptime: stats.uptime,
+      },
+      throughput: rates,
+      latency: {
+        averages: avgLatencies,
+        percentiles: latencies,
+      },
+      memory: {
+        heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+        rss: Math.round(mem.rss / 1024 / 1024),
+      },
+      collections: memStats,
+      workers: {
+        total: workerStats.total,
+        active: workerStats.active,
+        list: workers.map(
+          (w: {
+            id: string;
+            name: string;
+            queues: string[];
+            lastSeen: number;
+            activeJobs: number;
+            processedJobs: number;
+            failedJobs: number;
+          }) => ({
+            id: w.id,
+            name: w.name,
+            queues: w.queues,
+            lastSeen: w.lastSeen,
+            activeJobs: w.activeJobs,
+            processedJobs: w.processedJobs,
+            failedJobs: w.failedJobs,
+          })
+        ),
+      },
+      crons: crons.map(
+        (c: {
+          name: string;
+          queue: string;
+          schedule: string | null;
+          repeatEvery: number | null;
+          nextRun: number;
+          executions: number;
+        }) => ({
+          name: c.name,
+          queue: c.queue,
+          schedule: c.schedule ?? null,
+          repeatEvery: c.repeatEvery ?? null,
+          nextRun: c.nextRun,
+          executions: c.executions,
+        })
+      ),
+      storage,
+      timestamp: Date.now(),
+    },
+    200,
+    corsOrigins
+  );
+}
+
+/** Dashboard queues endpoint - all queues with per-queue stats */
+export function dashboardQueuesEndpoint(
+  queueManager: QueueManager,
+  corsOrigins?: Set<string>
+): Response {
+  const queueNames = queueManager.listQueues();
+  const perQueueStats = queueManager.getPerQueueStats();
+
+  const queues = queueNames.map((name: string) => {
+    const stats = perQueueStats.get(name);
+    return {
+      name,
+      waiting: stats?.waiting ?? 0,
+      delayed: stats?.delayed ?? 0,
+      active: stats?.active ?? 0,
+      dlq: stats?.dlq ?? 0,
+      paused: queueManager.isPaused(name),
+    };
+  });
+
+  return jsonResponse({ ok: true, queues, timestamp: Date.now() }, 200, corsOrigins);
+}
+
+/** Dashboard single queue detail endpoint */
+export function dashboardQueueDetailEndpoint(
+  queueManager: QueueManager,
+  queue: string,
+  includeJobs: boolean,
+  corsOrigins?: Set<string>
+): Response {
+  const counts = queueManager.getQueueJobCounts(queue);
+  const paused = queueManager.isPaused(queue);
+  const dlqJobs = queueManager.getDlq(queue, 10);
+  const priorityCounts = queueManager.getCountsPerPriority(queue);
+
+  const result: Record<string, unknown> = {
+    ok: true,
+    name: queue,
+    counts,
+    paused,
+    priorityCounts,
+    dlqPreview: dlqJobs.map(
+      (j: { id: string; data: unknown; attempts: number; createdAt: number }) => ({
+        id: j.id,
+        data: j.data,
+        attempts: j.attempts,
+        createdAt: j.createdAt,
+      })
+    ),
+    timestamp: Date.now(),
+  };
+
+  if (includeJobs) {
+    const waiting = queueManager.getJobs(queue, { state: 'waiting', end: 10 });
+    const active = queueManager.getJobs(queue, { state: 'active', end: 10 });
+    const delayed = queueManager.getJobs(queue, { state: 'delayed', end: 10 });
+    const toSummary = (j: {
+      id: string;
+      priority: number;
+      createdAt: number;
+      runAt: number;
+      attempts: number;
+      progress: number;
+    }) => ({
+      id: j.id,
+      priority: j.priority,
+      createdAt: j.createdAt,
+      runAt: j.runAt,
+      attempts: j.attempts,
+      progress: j.progress,
+    });
+    result.jobs = {
+      waiting: waiting.map(toSummary),
+      active: active.map(toSummary),
+      delayed: delayed.map(toSummary),
+    };
+  }
+
+  return jsonResponse(result, 200, corsOrigins);
 }
 
 /** Metrics endpoint */

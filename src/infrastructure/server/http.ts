@@ -20,6 +20,9 @@ import {
   heapStatsEndpoint,
   statsEndpoint,
   metricsEndpoint,
+  dashboardOverviewEndpoint,
+  dashboardQueuesEndpoint,
+  dashboardQueueDetailEndpoint,
 } from './httpEndpoints';
 
 /**
@@ -239,6 +242,21 @@ async function routeRequest(
   // Metrics endpoint
   if (path === '/metrics' && method === 'GET') {
     return metricsEndpoint(ctx.queueManager, corsOrigins);
+  }
+
+  // Dashboard endpoints
+  if (path === '/dashboard' && method === 'GET') {
+    return dashboardOverviewEndpoint(ctx.queueManager, corsOrigins);
+  }
+  if (path === '/dashboard/queues' && method === 'GET') {
+    return dashboardQueuesEndpoint(ctx.queueManager, corsOrigins);
+  }
+  const dashQueueMatch = path.match(/^\/dashboard\/queues\/([^/]+)$/);
+  if (dashQueueMatch && method === 'GET') {
+    const queue = decodeURIComponent(dashQueueMatch[1]);
+    const url = new URL(req.url);
+    const includeJobs = url.searchParams.get('includeJobs') === 'true';
+    return dashboardQueueDetailEndpoint(ctx.queueManager, queue, includeJobs, corsOrigins);
   }
 
   // Queue operations: POST/GET /queues/:queue/jobs

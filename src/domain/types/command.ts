@@ -472,6 +472,28 @@ export interface PromoteJobsCommand extends BaseCommand {
   readonly count?: number;
 }
 
+// ============ Dashboard Commands ============
+
+/** Dashboard overview - aggregates stats, metrics, workers, crons in a single call */
+export interface DashboardOverviewCommand extends BaseCommand {
+  readonly cmd: 'DashboardOverview';
+}
+
+/** Dashboard queues - all queues with full stats per queue */
+export interface DashboardQueuesCommand extends BaseCommand {
+  readonly cmd: 'DashboardQueues';
+}
+
+/** Dashboard single queue detail */
+export interface DashboardQueueCommand extends BaseCommand {
+  readonly cmd: 'DashboardQueue';
+  readonly queue: string;
+  /** Include recent jobs in response (default: false) */
+  readonly includeJobs?: boolean;
+  /** Max recent jobs to include (default: 10) */
+  readonly jobsLimit?: number;
+}
+
 // ============ Auth Commands ============
 
 export interface AuthCommand extends BaseCommand {
@@ -564,6 +586,9 @@ export type Command =
   | CompactMemoryCommand
   | MoveToWaitCommand
   | PromoteJobsCommand
+  | DashboardOverviewCommand
+  | DashboardQueuesCommand
+  | DashboardQueueCommand
   | AuthCommand
   | HelloCommand;
 

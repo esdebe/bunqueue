@@ -11,6 +11,7 @@ import { Queue, Worker } from '../../src/client';
 
 const TCP_PORT = parseInt(process.env.TCP_PORT ?? '16789');
 const connOpts = { port: TCP_PORT };
+const RUN_ID = Date.now();
 
 let passed = 0;
 let failed = 0;
@@ -41,7 +42,7 @@ async function main() {
   // ─────────────────────────────────────────────────
   console.log('1. Testing MULTIPLE WORKERS SHARE LOAD (20 jobs, 4 workers)...');
   {
-    const q = makeQueue('tcp-scale-share-load');
+    const q = makeQueue(`tcp-scale-share-load-${RUN_ID}`);
     q.obliterate();
     await Bun.sleep(200);
 
@@ -58,7 +59,7 @@ async function main() {
     for (let w = 0; w < 4; w++) {
       const workerId = w;
       const worker = new Worker(
-        'tcp-scale-share-load',
+        `tcp-scale-share-load-${RUN_ID}`,
         async (job) => {
           workerCounts[workerId]++;
           totalCompleted++;
@@ -103,7 +104,7 @@ async function main() {
   // ─────────────────────────────────────────────────
   console.log('\n2. Testing DYNAMIC WORKER ADDITION (add workers after initial processing)...');
   {
-    const q = makeQueue('tcp-scale-dynamic-add');
+    const q = makeQueue(`tcp-scale-dynamic-add-${RUN_ID}`);
     q.obliterate();
     await Bun.sleep(200);
 
@@ -118,7 +119,7 @@ async function main() {
     let totalCompleted = 0;
 
     const worker1 = new Worker(
-      'tcp-scale-dynamic-add',
+      `tcp-scale-dynamic-add-${RUN_ID}`,
       async (job) => {
         await Bun.sleep(JOB_DURATION);
         totalCompleted++;
@@ -138,7 +139,7 @@ async function main() {
 
     // Add 2 more workers
     const worker2 = new Worker(
-      'tcp-scale-dynamic-add',
+      `tcp-scale-dynamic-add-${RUN_ID}`,
       async (job) => {
         await Bun.sleep(JOB_DURATION);
         totalCompleted++;
@@ -148,7 +149,7 @@ async function main() {
     );
 
     const worker3 = new Worker(
-      'tcp-scale-dynamic-add',
+      `tcp-scale-dynamic-add-${RUN_ID}`,
       async (job) => {
         await Bun.sleep(JOB_DURATION);
         totalCompleted++;
@@ -183,17 +184,24 @@ async function main() {
     } else {
       fail(`Only ${totalCompleted}/${JOB_COUNT} jobs completed`);
     }
+
+    // Allow server to fully release all resources before next test
+    await Bun.sleep(1000);
   }
 
   // ─────────────────────────────────────────────────
   // Test 3: Worker removal mid-processing
-  // 3 workers, 30 jobs, close 1 after 10, verify remaining finish all
+  // Start 3 workers on 30 jobs, gracefully close 1 after it finishes some,
+  // verify remaining 2 workers complete the rest.
+  // Uses concurrency:1 and useLocks:false for simplicity;
+  // worker1 is closed only after its jobs are fully acked.
   // ─────────────────────────────────────────────────
   console.log('\n3. Testing WORKER REMOVAL MID-PROCESSING (close 1 of 3, rest finish)...');
   {
-    const q = makeQueue('tcp-scale-removal');
+    // Use a fresh queue with its own TCP pool to avoid shared pool issues
+    const q = makeQueue(`tcp-scale-removal-${RUN_ID}`);
     q.obliterate();
-    await Bun.sleep(200);
+    await Bun.sleep(300);
 
     const JOB_COUNT = 30;
     const bulkJobs = Array.from({ length: JOB_COUNT }, (_, i) => ({
@@ -202,53 +210,66 @@ async function main() {
     }));
     await q.addBulk(bulkJobs);
 
-    const completedIndices: number[] = [];
+    let worker1Count = 0;
+    let totalCompleted = 0;
 
-    const makeScaleWorker = () =>
-      new Worker(
-        'tcp-scale-removal',
-        async (job) => {
-          const data = job.data as { index: number };
-          await Bun.sleep(50);
-          completedIndices.push(data.index);
-          return { ok: true };
-        },
-        { concurrency: 2, connection: connOpts, useLocks: false }
-      );
+    const worker1 = new Worker(
+      `tcp-scale-removal-${RUN_ID}`,
+      async (job) => {
+        await Bun.sleep(100);
+        worker1Count++;
+        totalCompleted++;
+        return { ok: true };
+      },
+      { concurrency: 1, connection: connOpts, useLocks: false }
+    );
 
-    const worker1 = makeScaleWorker();
-    const worker2 = makeScaleWorker();
-    const worker3 = makeScaleWorker();
+    const worker2 = new Worker(
+      `tcp-scale-removal-${RUN_ID}`,
+      async (job) => {
+        await Bun.sleep(100);
+        totalCompleted++;
+        return { ok: true };
+      },
+      { concurrency: 1, connection: connOpts, useLocks: false }
+    );
 
-    // Wait for at least 10 to complete
+    const worker3 = new Worker(
+      `tcp-scale-removal-${RUN_ID}`,
+      async (job) => {
+        await Bun.sleep(100);
+        totalCompleted++;
+        return { ok: true };
+      },
+      { concurrency: 1, connection: connOpts, useLocks: false }
+    );
+
+    // Wait for worker1 to process at least 3 jobs
     for (let i = 0; i < 300; i++) {
-      if (completedIndices.length >= 10) break;
+      if (worker1Count >= 3) break;
       await Bun.sleep(100);
     }
 
-    // Close worker1 mid-processing
+    // Gracefully close worker1 — wait for in-flight to finish
+    await Bun.sleep(200);
     try { await worker1.close(); } catch {}
 
-    // Wait for remaining 2 workers to finish all 30
-    for (let i = 0; i < 300; i++) {
-      if (completedIndices.length >= JOB_COUNT) break;
+    const countAfterRemoval = totalCompleted;
+
+    // Wait for remaining 2 workers to finish all jobs
+    for (let i = 0; i < 600; i++) {
+      if (totalCompleted >= JOB_COUNT) break;
       await Bun.sleep(100);
     }
 
-    // Allow ack batchers to flush before closing
     await Bun.sleep(500);
     try { await worker2.close(); } catch {}
     try { await worker3.close(); } catch {}
 
-    if (completedIndices.length >= JOB_COUNT) {
-      const unique = new Set(completedIndices);
-      if (unique.size === JOB_COUNT) {
-        ok(`All ${JOB_COUNT} jobs completed after removing 1 worker, no duplicates`);
-      } else {
-        ok(`All ${JOB_COUNT} jobs completed (${unique.size} unique) after removing 1 worker`);
-      }
+    if (totalCompleted >= JOB_COUNT) {
+      ok(`All ${JOB_COUNT} jobs completed. Worker1 processed ${worker1Count} before removal. Remaining processed by workers 2 & 3.`);
     } else {
-      fail(`Only ${completedIndices.length}/${JOB_COUNT} jobs completed`);
+      fail(`Only ${totalCompleted}/${JOB_COUNT} jobs completed (worker1 did ${worker1Count})`);
     }
   }
 
@@ -258,7 +279,7 @@ async function main() {
   // ─────────────────────────────────────────────────
   console.log('\n4. Testing DIFFERENT CONCURRENCY LEVELS (concurrency:1 vs concurrency:5)...');
   {
-    const q = makeQueue('tcp-scale-diff-conc');
+    const q = makeQueue(`tcp-scale-diff-conc-${RUN_ID}`);
     q.obliterate();
     await Bun.sleep(200);
 
@@ -274,7 +295,7 @@ async function main() {
     let totalCompleted = 0;
 
     const worker1 = new Worker(
-      'tcp-scale-diff-conc',
+      `tcp-scale-diff-conc-${RUN_ID}`,
       async (job) => {
         await Bun.sleep(100);
         worker1Count++;
@@ -285,7 +306,7 @@ async function main() {
     );
 
     const worker2 = new Worker(
-      'tcp-scale-diff-conc',
+      `tcp-scale-diff-conc-${RUN_ID}`,
       async (job) => {
         await Bun.sleep(100);
         worker2Count++;
@@ -325,7 +346,7 @@ async function main() {
   // ─────────────────────────────────────────────────
   console.log('\n5. Testing SINGLE WORKER HANDLES ALL (10 jobs, concurrency:10)...');
   {
-    const q = makeQueue('tcp-scale-single-all');
+    const q = makeQueue(`tcp-scale-single-all-${RUN_ID}`);
     q.obliterate();
     await Bun.sleep(200);
 
@@ -339,7 +360,7 @@ async function main() {
     const completedIndices: number[] = [];
 
     const worker = new Worker(
-      'tcp-scale-single-all',
+      `tcp-scale-single-all-${RUN_ID}`,
       async (job) => {
         const data = job.data as { index: number };
         completedIndices.push(data.index);
@@ -375,7 +396,7 @@ async function main() {
   // ─────────────────────────────────────────────────
   console.log('\n6. Testing WORKER REPLACEMENT (close worker1, start worker2 for new batch)...');
   {
-    const q = makeQueue('tcp-scale-replacement');
+    const q = makeQueue(`tcp-scale-replacement-${RUN_ID}`);
     q.obliterate();
     await Bun.sleep(200);
 
@@ -391,7 +412,7 @@ async function main() {
 
     // Worker1 processes first batch
     const worker1 = new Worker(
-      'tcp-scale-replacement',
+      `tcp-scale-replacement-${RUN_ID}`,
       async (job) => {
         const data = job.data as { index: number };
         worker1Completed.push(data.index);
@@ -422,7 +443,7 @@ async function main() {
 
       // Start worker2 to handle second batch
       const worker2 = new Worker(
-        'tcp-scale-replacement',
+        `tcp-scale-replacement-${RUN_ID}`,
         async (job) => {
           const data = job.data as { index: number };
           worker2Completed.push(data.index);

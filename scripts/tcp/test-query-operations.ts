@@ -1,51 +1,53 @@
 #!/usr/bin/env bun
 /**
  * Test Query Operations (TCP Mode): GetState, GetResult, GetJobs, GetCountsPerPriority, GetJobByCustomId
+ *
+ * Each test uses its own queue name for isolation, but all queues share
+ * the same TCP pool (via a single connection config). Queues are only
+ * obliterated (not closed) between tests to keep the pool alive.
  */
 
 import { Queue, Worker } from '../../src/client';
 
-const QUEUE_NAME = 'tcp-test-query-ops';
 const TCP_PORT = parseInt(process.env.TCP_PORT ?? '16789');
+const connOpts = { port: TCP_PORT };
+
+const queues: Queue[] = [];
+
+function makeQueue(name: string): Queue {
+  const q = new Queue(name, { connection: connOpts });
+  queues.push(q);
+  return q;
+}
 
 async function main() {
   console.log('=== Test Query Operations (TCP) ===\n');
 
-  const queue = new Queue<{ value: number }>(QUEUE_NAME, {
-    connection: { port: TCP_PORT },
-  });
   let passed = 0;
   let failed = 0;
-
-  // Clean state
-  queue.obliterate();
-  await Bun.sleep(100);
 
   // Test 1: GetState - waiting, active, completed, failed states
   console.log('1. Testing GetState...');
   try {
+    const queue = makeQueue('tcp-qops-getstate');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
-    // Create a job and check waiting state
     const job = await queue.add('state-test', { value: 1 });
     const retrieved = await queue.getJob(job.id);
 
-    // Job should be in waiting state (not started, not completed, runAt <= now)
     if (retrieved && !retrieved.returnvalue && retrieved.attemptsMade === 0) {
       console.log('   Job in waiting state (no attempts, no return value)');
 
-      // Process the job
       let processedId: string | null = null;
-      const worker = new Worker<{ value: number }>(QUEUE_NAME, async (j) => {
+      const worker = new Worker('tcp-qops-getstate', async (j) => {
         processedId = j.id;
         return { processed: true };
-      }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
+      }, { concurrency: 1, connection: connOpts, useLocks: false });
 
       await Bun.sleep(1000);
       await worker.close();
 
-      // After processing, job should be completed
       if (processedId === job.id) {
         console.log('   Job processed and completed');
         console.log('   [PASS] GetState transitions verified');
@@ -66,19 +68,19 @@ async function main() {
   // Test 2: GetResult - Get result of completed job
   console.log('\n2. Testing GetResult...');
   try {
+    const queue = makeQueue('tcp-qops-getresult');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
     const job = await queue.add('result-test', { value: 42 });
 
-    const worker = new Worker<{ value: number }>(QUEUE_NAME, async (j) => {
+    const worker = new Worker('tcp-qops-getresult', async (j) => {
       return { sum: (j.data as { value: number }).value, processed: true };
-    }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
+    }, { concurrency: 1, connection: connOpts, useLocks: false });
 
     await Bun.sleep(1000);
     await worker.close();
 
-    // Get job counts to verify completion (async version for TCP)
     const counts = await queue.getJobCountsAsync();
     if (counts.completed > 0) {
       console.log(`   Job completed: ${job.id}`);
@@ -96,15 +98,14 @@ async function main() {
   // Test 3: GetJobs - List jobs with state filter
   console.log('\n3. Testing GetJobs with state filter...');
   try {
+    const queue = makeQueue('tcp-qops-filter');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
-    // Add jobs with different characteristics
     await queue.add('job-1', { value: 1 });
     await queue.add('job-2', { value: 2 });
-    await queue.add('delayed-job', { value: 3 }, { delay: 60000 }); // 1 minute delay
+    await queue.add('delayed-job', { value: 3 }, { delay: 60000 });
 
-    // Get waiting jobs (async version for TCP)
     const waitingJobs = await queue.getJobsAsync({ state: 'waiting' });
     const delayedJobs = await queue.getJobsAsync({ state: 'delayed' });
 
@@ -126,19 +127,16 @@ async function main() {
   // Test 4: GetJobs - List jobs with limit/offset pagination
   console.log('\n4. Testing GetJobs with pagination...');
   try {
+    const queue = makeQueue('tcp-qops-pagination');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
-    // Add multiple jobs
     for (let i = 0; i < 10; i++) {
       await queue.add(`job-${i}`, { value: i });
     }
 
-    // Get first 3 jobs (async version for TCP)
     const firstPage = await queue.getJobsAsync({ start: 0, end: 3 });
-    // Get next 3 jobs
     const secondPage = await queue.getJobsAsync({ start: 3, end: 6 });
-    // Get all jobs
     const allJobs = await queue.getJobsAsync({ start: 0, end: 100 });
 
     console.log(`   First page: ${firstPage.length} jobs`);
@@ -146,7 +144,6 @@ async function main() {
     console.log(`   All jobs: ${allJobs.length} jobs`);
 
     if (firstPage.length === 3 && secondPage.length === 3 && allJobs.length === 10) {
-      // Check that pages don't overlap
       const firstIds = new Set(firstPage.map(j => j.id));
       const hasOverlap = secondPage.some(j => firstIds.has(j.id));
 
@@ -166,13 +163,13 @@ async function main() {
     failed++;
   }
 
-  // Test 5: GetCountsPerPriority - Get counts grouped by priority
+  // Test 5: GetCountsPerPriority
   console.log('\n5. Testing GetCountsPerPriority...');
   try {
+    const queue = makeQueue('tcp-qops-priority');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
-    // Add jobs with different priorities
     await queue.add('low-1', { value: 1 }, { priority: 1 });
     await queue.add('low-2', { value: 2 }, { priority: 1 });
     await queue.add('medium-1', { value: 3 }, { priority: 5 });
@@ -180,12 +177,9 @@ async function main() {
     await queue.add('medium-3', { value: 5 }, { priority: 5 });
     await queue.add('high-1', { value: 6 }, { priority: 10 });
 
-    // Get counts per priority (async version for TCP)
     const counts = await queue.getCountsPerPriorityAsync();
-
     console.log(`   Priority counts: ${JSON.stringify(counts)}`);
 
-    // Check counts per priority
     const p1Count = counts[1] ?? 0;
     const p5Count = counts[5] ?? 0;
     const p10Count = counts[10] ?? 0;
@@ -202,16 +196,16 @@ async function main() {
     failed++;
   }
 
-  // Test 6: GetJobByCustomId - Get job by custom ID
+  // Test 6: GetJobByCustomId
   console.log('\n6. Testing GetJobByCustomId...');
   try {
+    const queue = makeQueue('tcp-qops-customid');
     queue.obliterate();
-    await Bun.sleep(100);
+    await Bun.sleep(200);
 
     const customId = 'my-unique-custom-id-123';
     const job = await queue.add('custom-id-job', { value: 42 }, { jobId: customId });
 
-    // Retrieve by the job's actual ID
     const retrievedById = await queue.getJob(job.id);
 
     if (retrievedById) {
@@ -234,9 +228,14 @@ async function main() {
     failed++;
   }
 
-  // Cleanup
-  queue.obliterate();
-  queue.close();
+  // Cleanup: obliterate all queues, then close
+  for (const q of queues) {
+    q.obliterate();
+  }
+  await Bun.sleep(100);
+  for (const q of queues) {
+    q.close();
+  }
 
   // Summary
   console.log('\n=== Summary ===');

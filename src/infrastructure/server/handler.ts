@@ -18,6 +18,7 @@ import {
   routeConfigCommand,
   routeCronCommand,
   routeMonitoringCommand,
+  routeDashboardCommand,
 } from './handlerRoutes';
 
 // Re-export types
@@ -85,6 +86,9 @@ export async function handleCommand(cmd: Command, ctx: HandlerContext): Promise<
     if (result) return result;
 
     result = routeMonitoringCommand(cmd, ctx, reqId);
+    if (result) return result;
+
+    result = routeDashboardCommand(cmd, ctx, reqId);
     if (result) return result;
 
     return resp.error(`Unknown command: ${cmd.cmd}`, reqId);
