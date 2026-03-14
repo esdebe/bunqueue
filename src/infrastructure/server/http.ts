@@ -159,9 +159,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       if (denied) return denied;
     }
 
-    // Generate unique clientId for HTTP request (stateless, but needed for job ownership tracking)
-    const clientId = uuid();
-    const ctx: HandlerContext = { queueManager, authTokens, authenticated: true, clientId };
+    // HTTP is stateless — no clientId. Job ownership tracking is only for persistent
+    // connections (TCP/WebSocket). Orphaned HTTP jobs are handled by stall detection.
+    const ctx: HandlerContext = { queueManager, authTokens, authenticated: true };
 
     try {
       return await routeRequest(req, path, ctx, corsOrigins);
