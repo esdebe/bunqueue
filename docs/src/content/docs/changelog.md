@@ -10,6 +10,21 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.21] - 2026-03-14
+
+### Performance
+- **Batch push notifyBatch()** — Batch push now wakes all waiting workers correctly via `notifyBatch(N)` instead of a single `notify()` call. Each waiter is woken up individually, fixing a bug where only 1 of N workers received jobs immediately.
+- **Pre-compiled HTTP route regexes** — All 40+ regex patterns in HTTP route files are now compiled once at module load instead of per-request (~100µs/request savings).
+
+### Security
+- **constantTimeEqual timing fix** — Removed early return on length mismatch that leaked token length via timing side-channel.
+- **Batch PUSHB data validation** — Individual job data size is now validated in batch push (was only checked in single PUSH), preventing 10MB limit bypass.
+- **Dashboard queue name validation** — `GET /dashboard/queues/:queue` now validates queue names like all other endpoints.
+- **Error message sanitization** — SQLite/database error messages are no longer leaked to clients in TCP and HTTP error responses.
+
+### Fixed
+- **Silent error swallowing** — Replaced 7 empty `.catch(() => {})` blocks with proper error logging in addBatcher flush, sandboxed worker stop/kill/restart/heartbeat paths.
+
 ## [2.6.20] - 2026-03-14
 
 ### Fixed
