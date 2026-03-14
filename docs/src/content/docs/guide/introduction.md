@@ -12,7 +12,7 @@ head:
 :::caution[bunqueue Dashboard — Beta]
 A visual interface for managing queues, jobs, workers, and monitoring — all in real time.
 
-<video src="https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116" width="100%" autoplay loop muted playsinline></video>
+<video src="https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116" width="100%" controls autoplay loop muted playsinline style="border-radius: 8px; margin: 1rem 0;"></video>
 
 **Want early access?** Reach out at **egeominotti@gmail.com**
 :::
