@@ -9,12 +9,12 @@ head:
 ---
 
 
-:::caution[bunqueue Dashboard — Beta]
-A visual interface for managing queues, jobs, workers, and monitoring — all in real time.
+:::tip[bunqueue Dashboard]
+A visual interface for managing queues, jobs, workers, and monitoring in real time. Currently in beta.
 
 <video src="https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116" width="100%" controls autoplay loop muted playsinline style="border-radius: 8px; margin: 1rem 0;"></video>
 
-**Want early access?** Reach out at **egeominotti@gmail.com**
+Want early access? Reach out at **egeominotti@gmail.com**
 :::
 
 **bunqueue** is a high-performance job queue written in TypeScript, designed specifically for the [Bun](https://bun.sh) runtime. Built for AI agents and agentic workflows with a native MCP server.
