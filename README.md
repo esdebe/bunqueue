@@ -26,14 +26,14 @@
 ---
 
 <p align="center">
-  <strong>🚀 bunqueue Dashboard is in Beta</strong><br/>
-  <em>A visual interface for managing queues, jobs, workers, and monitoring — all in real time.</em>
+  <strong>bunqueue Dashboard</strong><br/>
+  <sub>A visual interface for managing queues, jobs, workers and monitoring in real time. Currently in beta.</sub>
 </p>
 
 https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116
 
 <p align="center">
-  <b>Want early access?</b> Reach out at <b>egeominotti@gmail.com</b>
+  <sub>Want early access? Reach out at <b>egeominotti@gmail.com</b></sub>
 </p>
 
 ---
