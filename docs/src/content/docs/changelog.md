@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.23] - 2026-03-14
+
+### Added
+- **Dashboard beta demo** — Added demo video and beta CTA to README and docs introduction page.
+
 ## [2.6.22] - 2026-03-14
 
 ### Fixed
