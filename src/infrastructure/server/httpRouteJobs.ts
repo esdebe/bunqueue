@@ -217,48 +217,7 @@ export async function routeJobRoutes(
   ctx: HandlerContext,
   cors: Cors
 ): Promise<Response | null> {
-  // GET/DELETE /jobs/:id
-  const jobMatch = path.match(/^\/jobs\/([^/]+)$/);
-  if (jobMatch) {
-    const id = jobMatch[1];
-    if (method === 'GET') {
-      const r = await handleCommand({ cmd: 'GetJob', id }, ctx);
-      return jsonResponse(r, r.ok ? 200 : 404, cors);
-    }
-    if (method === 'DELETE') {
-      const r = await handleCommand({ cmd: 'Cancel', id }, ctx);
-      return jsonResponse(r, 200, cors);
-    }
-  }
-
-  // GET /jobs/custom/:customId
-  const customIdMatch = path.match(/^\/jobs\/custom\/([^/]+)$/);
-  if (customIdMatch && method === 'GET') {
-    const customId = decodeURIComponent(customIdMatch[1]);
-    const r = await handleCommand({ cmd: 'GetJobByCustomId', customId }, ctx);
-    return jsonResponse(r, r.ok ? 200 : 404, cors);
-  }
-
-  // POST /jobs/:id/ack
-  const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
-  if (ackMatch && method === 'POST') {
-    const body = await parseBody(req);
-    const r = await handleCommand({ cmd: 'ACK', id: ackMatch[1], result: body['result'] }, ctx);
-    return jsonResponse(r, r.ok ? 200 : 400, cors);
-  }
-
-  // POST /jobs/:id/fail
-  const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
-  if (failMatch && method === 'POST') {
-    const body = await parseBody(req);
-    const r = await handleCommand(
-      { cmd: 'FAIL', id: failMatch[1], error: body['error'] as string | undefined },
-      ctx
-    );
-    return jsonResponse(r, r.ok ? 200 : 400, cors);
-  }
-
-  // Batch endpoints
+  // Batch endpoints FIRST (exact match, before generic /jobs/:id pattern)
   if (path === '/jobs/ack-batch' && method === 'POST') {
     const body = await parseBody(req);
     const r = await handleCommand(
@@ -293,6 +252,47 @@ export async function routeJobRoutes(
         ids: body['ids'] as string[],
         tokens: body['tokens'] as string[] | undefined,
       } as Parameters<typeof handleCommand>[0],
+      ctx
+    );
+    return jsonResponse(r, r.ok ? 200 : 400, cors);
+  }
+
+  // GET /jobs/custom/:customId (before generic /jobs/:id)
+  const customIdMatch = path.match(/^\/jobs\/custom\/([^/]+)$/);
+  if (customIdMatch && method === 'GET') {
+    const customId = decodeURIComponent(customIdMatch[1]);
+    const r = await handleCommand({ cmd: 'GetJobByCustomId', customId }, ctx);
+    return jsonResponse(r, r.ok ? 200 : 404, cors);
+  }
+
+  // GET/DELETE /jobs/:id (generic, after specific paths)
+  const jobMatch = path.match(/^\/jobs\/([^/]+)$/);
+  if (jobMatch) {
+    const id = jobMatch[1];
+    if (method === 'GET') {
+      const r = await handleCommand({ cmd: 'GetJob', id }, ctx);
+      return jsonResponse(r, r.ok ? 200 : 404, cors);
+    }
+    if (method === 'DELETE') {
+      const r = await handleCommand({ cmd: 'Cancel', id }, ctx);
+      return jsonResponse(r, 200, cors);
+    }
+  }
+
+  // POST /jobs/:id/ack
+  const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
+  if (ackMatch && method === 'POST') {
+    const body = await parseBody(req);
+    const r = await handleCommand({ cmd: 'ACK', id: ackMatch[1], result: body['result'] }, ctx);
+    return jsonResponse(r, r.ok ? 200 : 400, cors);
+  }
+
+  // POST /jobs/:id/fail
+  const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
+  if (failMatch && method === 'POST') {
+    const body = await parseBody(req);
+    const r = await handleCommand(
+      { cmd: 'FAIL', id: failMatch[1], error: body['error'] as string | undefined },
       ctx
     );
     return jsonResponse(r, r.ok ? 200 : 400, cors);

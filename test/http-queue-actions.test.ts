@@ -115,9 +115,26 @@ describe('HTTP Queue Endpoints', () => {
   describe('GetJobs', () => {
     test('lists jobs by state', async () => {
       for (let i = 0; i < 3; i++) await handleCommand({ cmd: 'PUSH', queue: 'q-list', data: { i } }, ctx);
-      const r = await handleCommand({ cmd: 'GetJobs', queue: 'q-list', state: 'waiting', end: 10 } as Parameters<typeof handleCommand>[0], ctx);
+      const r = await handleCommand({ cmd: 'GetJobs', queue: 'q-list', state: 'waiting', limit: 10 } as Parameters<typeof handleCommand>[0], ctx);
       expect(r.ok).toBe(true);
       expect((r as { jobs: unknown[] }).jobs).toHaveLength(3);
+    });
+
+    test('limit and offset work correctly', async () => {
+      for (let i = 0; i < 5; i++) await handleCommand({ cmd: 'PUSH', queue: 'q-pag', data: { i } }, ctx);
+      const r = await handleCommand({ cmd: 'GetJobs', queue: 'q-pag', state: 'waiting', limit: 2, offset: 1 } as Parameters<typeof handleCommand>[0], ctx);
+      expect(r.ok).toBe(true);
+      expect((r as { jobs: unknown[] }).jobs).toHaveLength(2);
+    });
+  });
+
+  describe('PUSH maxAttempts', () => {
+    test('maxAttempts is correctly passed', async () => {
+      const push = await handleCommand({ cmd: 'PUSH', queue: 'q-ma', data: {}, maxAttempts: 7 }, ctx);
+      expect(push.ok).toBe(true);
+      const id = (push as { id: string }).id;
+      const get = await handleCommand({ cmd: 'GetJob', id }, ctx);
+      expect((get as { job: { maxAttempts: number } }).job.maxAttempts).toBe(7);
     });
   });
 

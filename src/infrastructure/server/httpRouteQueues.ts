@@ -42,7 +42,7 @@ export async function routeQueueRoutes(
         data: body.data,
         priority: body.priority,
         delay: body.delay,
-        attempts: body.attempts,
+        maxAttempts: body.maxAttempts ?? body.attempts,
         backoff: body.backoff,
         timeout: body.timeout,
         jobId: body.jobId,
@@ -123,8 +123,8 @@ export async function routeQueueRoutes(
         cmd: 'GetJobs',
         queue,
         state,
-        end: limit,
-        start: offset,
+        limit,
+        offset,
       } as Parameters<typeof handleCommand>[0],
       ctx
     );
