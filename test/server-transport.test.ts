@@ -444,7 +444,7 @@ describe('WsHandler', () => {
       expect(ws._messages.length).toBe(1);
       const response = JSON.parse(ws._messages[0]);
       expect(response.ok).toBe(false);
-      expect(response.error).toBe('Invalid command');
+      expect(response.error).toBe('Invalid JSON');
     });
 
     test('should send error for command missing cmd field', async () => {

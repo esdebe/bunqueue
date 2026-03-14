@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.19] - 2026-03-14
+
+### Added
+- **WebSocket idle timeout (ping/pong)** — Set `idleTimeout: 120` on the WebSocket server. Bun automatically sends ping frames and closes connections that don't respond with pong within 120 seconds. Dead clients (crash, network drop, kill -9) are now detected and cleaned up automatically instead of leaking in the clients Map forever.
+- **WebSocket max payload limit** — Set `maxPayloadLength: 1MB`. Prevents memory exhaustion from oversized messages.
+
 ## [2.6.18] - 2026-03-14
 
 ### Added

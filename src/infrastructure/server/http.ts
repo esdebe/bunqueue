@@ -181,6 +181,11 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
   // WebSocket handlers
   const websocket = {
+    // Idle timeout: Bun sends ping automatically and closes if no pong received.
+    // 120s is generous — detects dead clients within 2 minutes.
+    idleTimeout: 120,
+    // Max 1MB per message (prevents memory exhaustion from large payloads)
+    maxPayloadLength: 1024 * 1024,
     open(ws: ServerWebSocket<WsData>) {
       wsHandler.onOpen(ws);
     },
