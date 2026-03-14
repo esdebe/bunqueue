@@ -124,7 +124,7 @@ export function handleRegisterWorker(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const worker = ctx.queueManager.workerManager.register(cmd.name, cmd.queues);
+  const worker = ctx.queueManager.registerWorker(cmd.name, cmd.queues);
   return resp.data(
     {
       workerId: worker.id,
@@ -141,7 +141,7 @@ export function handleUnregisterWorker(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const success = ctx.queueManager.workerManager.unregister(cmd.workerId);
+  const success = ctx.queueManager.unregisterWorker(cmd.workerId);
   if (success) {
     return resp.data({ removed: true }, reqId);
   }
@@ -184,6 +184,11 @@ export function handleAddWebhook(
   if (urlError) return resp.error(urlError, reqId);
 
   const webhook = ctx.queueManager.webhookManager.add(cmd.url, cmd.events, cmd.queue, cmd.secret);
+  ctx.queueManager.emitDashboardEvent('webhook:added', {
+    id: webhook.id,
+    url: webhook.url,
+    events: webhook.events,
+  });
   return resp.data(
     {
       webhookId: webhook.id,
@@ -203,6 +208,7 @@ export function handleRemoveWebhook(
 ): Response {
   const success = ctx.queueManager.webhookManager.remove(cmd.webhookId);
   if (success) {
+    ctx.queueManager.emitDashboardEvent('webhook:removed', { id: cmd.webhookId });
     return resp.data({ removed: true }, reqId);
   }
   return resp.error('Webhook not found', reqId);

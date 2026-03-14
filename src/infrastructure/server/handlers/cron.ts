@@ -25,6 +25,13 @@ export function handleCron(
       maxLimit: cmd.maxLimit,
       timezone: cmd.timezone,
     });
+    ctx.queueManager.emitDashboardEvent('cron:created', {
+      name: cron.name,
+      queue: cron.queue,
+      pattern: cron.schedule ?? undefined,
+      every: cron.repeatEvery ?? undefined,
+      nextRun: cron.nextRun,
+    });
     return {
       ok: true,
       cron: {
@@ -75,6 +82,7 @@ export function handleCronDelete(
   reqId?: string
 ): Response {
   const removed = ctx.queueManager.removeCron(cmd.name);
+  if (removed) ctx.queueManager.emitDashboardEvent('cron:deleted', { name: cmd.name });
   return removed ? resp.ok(undefined, reqId) : resp.error('Cron job not found', reqId);
 }
 

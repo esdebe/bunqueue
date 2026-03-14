@@ -1,57 +1,345 @@
 /**
- * WebSocket Handler - WebSocket client management
+ * WebSocket Handler - Pub/sub with dashboard events
+ *
+ * Format: { event: "job:completed", ts: 1710000000000, data: { queue, jobId, ... } }
+ *
+ * Subscribe:   { cmd: "Subscribe", events: ["job:*", "stats:snapshot", "queue:*"] }
+ * Unsubscribe: { cmd: "Unsubscribe", events: ["job:*"] }
+ * Wildcard:    "*" = all, "job:*" = all job events, "queue:*" = all queue events
+ *
+ * Periodic:    health:status (10s), stats:snapshot (5s)
+ * On change:   queue:counts (emitted on every job state change)
+ * Legacy:      clients that never Subscribe get all events in old format
  */
 
 import type { ServerWebSocket } from 'bun';
+import type { QueueManager } from '../../application/queueManager';
 import type { JobEvent } from '../../domain/types/queue';
 import { handleCommand, type HandlerContext } from './handler';
 import { parseCommand, serializeResponse, errorResponse } from './protocol';
+import { throughputTracker } from '../../application/throughputTracker';
 
-/** Singleton TextDecoder for WebSocket messages */
 const textDecoder = new TextDecoder();
+
+/** Old eventType → new event name */
+const EVENT_MAP: Record<string, string> = {
+  pushed: 'job:pushed',
+  pulled: 'job:active',
+  completed: 'job:completed',
+  failed: 'job:failed',
+  progress: 'job:progress',
+  stalled: 'job:stalled',
+  removed: 'job:removed',
+  delayed: 'job:delayed',
+  duplicated: 'job:duplicated',
+  retried: 'job:retried',
+  'waiting-children': 'job:waiting-children',
+  drained: 'queue:drained',
+};
+
+/** All valid subscription patterns (50 events + wildcards) */
+const VALID_PATTERNS = new Set([
+  '*',
+  // Job lifecycle (14)
+  'job:pushed',
+  'job:active',
+  'job:completed',
+  'job:failed',
+  'job:removed',
+  'job:promoted',
+  'job:progress',
+  'job:delayed',
+  'job:stalled',
+  'job:retried',
+  'job:discarded',
+  'job:priority-changed',
+  'job:data-updated',
+  'job:delay-changed',
+  'job:*',
+  // Queue (7)
+  'queue:created',
+  'queue:removed',
+  'queue:paused',
+  'queue:resumed',
+  'queue:drained',
+  'queue:cleaned',
+  'queue:obliterated',
+  'queue:counts',
+  'queue:*',
+  // DLQ (4)
+  'dlq:added',
+  'dlq:retried',
+  'dlq:retry-all',
+  'dlq:purged',
+  'dlq:*',
+  // Cron (5)
+  'cron:created',
+  'cron:updated',
+  'cron:deleted',
+  'cron:fired',
+  'cron:missed',
+  'cron:*',
+  // Worker (3)
+  'worker:connected',
+  'worker:disconnected',
+  'worker:heartbeat',
+  'worker:*',
+  // Rate limit & concurrency (5)
+  'ratelimit:set',
+  'ratelimit:cleared',
+  'ratelimit:hit',
+  'concurrency:set',
+  'concurrency:cleared',
+  'ratelimit:*',
+  'concurrency:*',
+  // Webhook (4)
+  'webhook:added',
+  'webhook:removed',
+  'webhook:fired',
+  'webhook:failed',
+  'webhook:*',
+  // System (6)
+  'health:status',
+  'health:*',
+  'stats:snapshot',
+  'stats:*',
+  'storage:status',
+  'storage:*',
+  'server:started',
+  'server:shutdown',
+  'server:*',
+  // Config (2)
+  'config:stall-changed',
+  'config:dlq-changed',
+  'config:*',
+]);
 
 /** WebSocket client data */
 export interface WsData {
   id: string;
   authenticated: boolean;
   queueFilter: string | null;
+  /** Subscribed patterns. Null = legacy mode */
+  subscriptions: Set<string> | null;
 }
 
-/**
- * WebSocket Handler - manages WebSocket clients and message handling
- */
+/** Check if event matches any subscription pattern */
+function matches(event: string, subs: Set<string>): boolean {
+  if (subs.has('*') || subs.has(event)) return true;
+  const prefix = event.split(':')[0];
+  return subs.has(`${prefix}:*`);
+}
+
 export class WsHandler {
   private readonly clients = new Map<string, ServerWebSocket<WsData>>();
+  private statsInterval: ReturnType<typeof setInterval> | null = null;
+  private healthInterval: ReturnType<typeof setInterval> | null = null;
+  private storageInterval: ReturnType<typeof setInterval> | null = null;
+  private queueManager: QueueManager | null = null;
 
-  /** Get client count */
   get size(): number {
     return this.clients.size;
   }
 
-  /** Broadcast event to all matching clients */
-  broadcast(event: JobEvent): void {
-    const message = JSON.stringify(event);
+  /** Start periodic broadcasts */
+  startBroadcasts(qm: QueueManager): void {
+    this.queueManager = qm;
+
+    this.statsInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastStats(qm);
+    }, 5000);
+
+    this.healthInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastHealth(qm);
+    }, 10000);
+
+    this.storageInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastStorage(qm);
+    }, 30000);
+  }
+
+  /** Stop periodic broadcasts */
+  stopBroadcasts(): void {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    if (this.healthInterval) {
+      clearInterval(this.healthInterval);
+      this.healthInterval = null;
+    }
+    if (this.storageInterval) {
+      clearInterval(this.storageInterval);
+      this.storageInterval = null;
+    }
+  }
+
+  // ── Periodic broadcasts ──────────────────────────────────
+
+  private broadcastStats(qm: QueueManager): void {
+    const stats = qm.getStats();
+    const rates = throughputTracker.getRates();
+    const perQueue = qm.getPerQueueStats();
+    const workerStats = qm.workerManager.getStats();
+    const crons = qm.listCrons();
+
+    const queues: Record<string, object> = {};
+    for (const [name, s] of perQueue) {
+      queues[name] = {
+        waiting: s.waiting ?? 0,
+        active: s.active ?? 0,
+        delayed: s.delayed ?? 0,
+        dlq: s.dlq ?? 0,
+        paused: qm.isPaused(name),
+      };
+    }
+
+    this.emit('stats:snapshot', {
+      waiting: stats.waiting,
+      active: stats.active,
+      delayed: stats.delayed,
+      completed: stats.completed,
+      dlq: stats.dlq,
+      totalPushed: Number(stats.totalPushed),
+      totalCompleted: Number(stats.totalCompleted),
+      totalFailed: Number(stats.totalFailed),
+      pushPerSec: rates.pushPerSec,
+      pullPerSec: rates.pullPerSec,
+      uptime: stats.uptime,
+      queues,
+      workers: { total: workerStats.total, active: workerStats.active },
+      cronJobs: crons.length,
+    });
+  }
+
+  private broadcastHealth(qm: QueueManager): void {
+    const mem = process.memoryUsage();
+    const storage = qm.getStorageStatus();
+
+    this.emit('health:status', {
+      ok: !storage.diskFull,
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(mem.rss / 1024 / 1024),
+        heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+      },
+      connections: { ws: this.clients.size },
+    });
+  }
+
+  private broadcastStorage(qm: QueueManager): void {
+    const memStats = qm.getMemoryStats();
+    const storage = qm.getStorageStatus();
+
+    this.emit('storage:status', {
+      collections: memStats,
+      diskFull: storage.diskFull,
+    });
+  }
+
+  // ── Event broadcasting ───────────────────────────────────
+
+  /** Emit a dashboard event to subscribed clients */
+  emitEvent(event: string, data: Record<string, unknown>): void {
+    this.emit(event, data);
+  }
+
+  /** Core emit: sends { event, ts, data } to matching clients */
+  private emit(event: string, data: Record<string, unknown>): void {
+    if (this.clients.size === 0) return;
+
+    let msg: string | null = null;
+
     for (const [, ws] of this.clients) {
-      if (!ws.data.queueFilter || ws.data.queueFilter === event.queue) {
-        ws.send(message);
+      if (ws.data.subscriptions && matches(event, ws.data.subscriptions)) {
+        msg ??= JSON.stringify({ event, ts: Date.now(), data });
+        ws.send(msg);
       }
     }
   }
 
-  /** Handle WebSocket open */
+  /** Broadcast job event (from eventsManager) + emit queue:counts */
+  broadcast(event: JobEvent): void {
+    if (this.clients.size === 0) return;
+
+    const dashEvent = EVENT_MAP[event.eventType] ?? `job:${event.eventType}`;
+
+    // Build new-format data
+    const eventData: Record<string, unknown> = {
+      queue: event.queue,
+      jobId: event.jobId,
+    };
+    if (event.error) eventData.error = event.error;
+    if (event.progress !== undefined) eventData.progress = event.progress;
+    if (event.prev) eventData.prev = event.prev;
+    if (event.delay !== undefined) eventData.delay = event.delay;
+
+    let newMsg: string | null = null;
+    let legacyMsg: string | null = null;
+
+    for (const [, ws] of this.clients) {
+      if (ws.data.queueFilter && ws.data.queueFilter !== event.queue) continue;
+
+      if (ws.data.subscriptions === null) {
+        // Legacy: old format
+        legacyMsg ??= JSON.stringify(event);
+        ws.send(legacyMsg);
+      } else if (matches(dashEvent, ws.data.subscriptions)) {
+        newMsg ??= JSON.stringify({ event: dashEvent, ts: event.timestamp, data: eventData });
+        ws.send(newMsg);
+      }
+    }
+
+    // Emit queue:counts on every job state change
+    if (this.queueManager) {
+      const counts = this.queueManager.getQueueJobCounts(event.queue);
+      this.emit('queue:counts', {
+        queue: event.queue,
+        waiting: counts.waiting,
+        active: counts.active,
+        completed: counts.completed,
+        failed: counts.failed,
+        delayed: counts.delayed,
+      });
+    }
+  }
+
+  // ── Connection lifecycle ─────────────────────────────────
+
   onOpen(ws: ServerWebSocket<WsData>): void {
     this.clients.set(ws.data.id, ws);
   }
 
-  /** Handle WebSocket message */
+  onClose(ws: ServerWebSocket<WsData>): void {
+    this.clients.delete(ws.data.id);
+  }
+
+  // ── Message handling ─────────────────────────────────────
+
   async onMessage(
     ws: ServerWebSocket<WsData>,
     message: string | Buffer,
     ctx: HandlerContext
   ): Promise<void> {
     const text = typeof message === 'string' ? message : textDecoder.decode(message);
-    const cmd = parseCommand(text);
 
+    // Check for WS-only commands before typed parsing
+    try {
+      const raw = JSON.parse(text) as Record<string, unknown>;
+      if (raw['cmd'] === 'Subscribe') {
+        this.handleSubscribe(ws, raw as { events?: string[]; reqId?: string });
+        return;
+      }
+      if (raw['cmd'] === 'Unsubscribe') {
+        this.handleUnsubscribe(ws, raw as { events?: string[]; reqId?: string });
+        return;
+      }
+    } catch {
+      ws.send(errorResponse('Invalid JSON'));
+      return;
+    }
+
+    const cmd = parseCommand(text);
     if (!cmd) {
       ws.send(errorResponse('Invalid command'));
       return;
@@ -59,12 +347,7 @@ export class WsHandler {
 
     try {
       const response = await handleCommand(cmd, ctx);
-
-      // Update authentication state
-      if (cmd.cmd === 'Auth' && response.ok) {
-        ws.data.authenticated = true;
-      }
-
+      if (cmd.cmd === 'Auth' && response.ok) ws.data.authenticated = true;
       ws.send(serializeResponse(response));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -72,12 +355,42 @@ export class WsHandler {
     }
   }
 
-  /** Handle WebSocket close */
-  onClose(ws: ServerWebSocket<WsData>): void {
-    this.clients.delete(ws.data.id);
+  private handleSubscribe(
+    ws: ServerWebSocket<WsData>,
+    cmd: { events?: string[]; reqId?: string }
+  ): void {
+    const events = cmd.events;
+    if (!Array.isArray(events) || events.length === 0) {
+      ws.send(errorResponse('events must be a non-empty array', cmd.reqId));
+      return;
+    }
+    const invalid = events.filter((e) => !VALID_PATTERNS.has(e));
+    if (invalid.length > 0) {
+      ws.send(errorResponse(`Invalid: ${invalid.join(', ')}`, cmd.reqId));
+      return;
+    }
+    ws.data.subscriptions ??= new Set();
+    for (const e of events) ws.data.subscriptions.add(e);
+    ws.send(JSON.stringify({ ok: true, subscribed: [...ws.data.subscriptions], reqId: cmd.reqId }));
   }
 
-  /** Get clients map (for backward compatibility) */
+  private handleUnsubscribe(
+    ws: ServerWebSocket<WsData>,
+    cmd: { events?: string[]; reqId?: string }
+  ): void {
+    if (!ws.data.subscriptions) {
+      ws.send(JSON.stringify({ ok: true, subscribed: [], reqId: cmd.reqId }));
+      return;
+    }
+    const events = cmd.events;
+    if (!Array.isArray(events) || events.length === 0) {
+      ws.data.subscriptions.clear();
+    } else {
+      for (const e of events) ws.data.subscriptions.delete(e);
+    }
+    ws.send(JSON.stringify({ ok: true, subscribed: [...ws.data.subscriptions], reqId: cmd.reqId }));
+  }
+
   getClients(): Map<string, ServerWebSocket<WsData>> {
     return this.clients;
   }

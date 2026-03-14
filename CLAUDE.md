@@ -2,6 +2,25 @@
 
 "When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test."
 
+**MANDATORY: After ANY code modification, ALWAYS run ALL THREE test suites before committing:**
+
+```bash
+bun test                                # Unit tests (~5000 tests)
+bun scripts/tcp/run-all-tests.ts        # TCP integration tests (~50 suites)
+bun scripts/embedded/run-all-tests.ts   # Embedded integration tests (~35 suites)
+```
+
+Never commit without all three passing. No exceptions.
+
+**MANDATORY: After every commit, ALWAYS:**
+
+1. Bump version in `package.json`
+2. Update changelog in `docs/src/content/docs/changelog.md`
+3. `git push origin main`
+4. `bun publish` to publish new version to npm
+
+No exceptions. Every commit = new version + changelog + npm publish.
+
 High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ, S3 backups.
 
 ## Architecture Flow

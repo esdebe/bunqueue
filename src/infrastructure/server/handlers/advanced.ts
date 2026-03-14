@@ -18,6 +18,7 @@ export async function handleUpdate(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.updateJobData(jobId(cmd.id), cmd.data);
+  if (success) ctx.queueManager.emitDashboardEvent('job:data-updated', { jobId: cmd.id });
   return success
     ? resp.ok(undefined, reqId)
     : resp.error('Job not found or cannot be updated', reqId);
@@ -30,6 +31,12 @@ export async function handleChangePriority(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.changePriority(jobId(cmd.id), cmd.priority);
+  if (success) {
+    ctx.queueManager.emitDashboardEvent('job:priority-changed', {
+      jobId: cmd.id,
+      newPriority: cmd.priority,
+    });
+  }
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not in queue', reqId);
 }
 
@@ -40,6 +47,7 @@ export async function handlePromote(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.promote(jobId(cmd.id));
+  if (success) ctx.queueManager.emitDashboardEvent('job:promoted', { jobId: cmd.id });
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
 }
 
@@ -60,6 +68,7 @@ export async function handleDiscard(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.discard(jobId(cmd.id));
+  if (success) ctx.queueManager.emitDashboardEvent('job:discarded', { jobId: cmd.id });
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found', reqId);
 }
 
@@ -130,6 +139,13 @@ export function handleClean(
   reqId?: string
 ): Response {
   const count = ctx.queueManager.clean(cmd.queue, cmd.grace, cmd.state, cmd.limit);
+  if (count > 0) {
+    ctx.queueManager.emitDashboardEvent('queue:cleaned', {
+      queue: cmd.queue,
+      state: cmd.state,
+      count,
+    });
+  }
   return { ok: true, count, reqId } as Response;
 }
 
@@ -152,6 +168,7 @@ export function handleRateLimit(
   reqId?: string
 ): Response {
   ctx.queueManager.setRateLimit(cmd.queue, cmd.limit);
+  ctx.queueManager.emitDashboardEvent('ratelimit:set', { queue: cmd.queue, max: cmd.limit });
   return resp.ok(undefined, reqId);
 }
 
@@ -162,6 +179,7 @@ export function handleRateLimitClear(
   reqId?: string
 ): Response {
   ctx.queueManager.clearRateLimit(cmd.queue);
+  ctx.queueManager.emitDashboardEvent('ratelimit:cleared', { queue: cmd.queue });
   return resp.ok(undefined, reqId);
 }
 
@@ -172,6 +190,10 @@ export function handleSetConcurrency(
   reqId?: string
 ): Response {
   ctx.queueManager.setConcurrency(cmd.queue, cmd.limit);
+  ctx.queueManager.emitDashboardEvent('concurrency:set', {
+    queue: cmd.queue,
+    concurrency: cmd.limit,
+  });
   return resp.ok(undefined, reqId);
 }
 
@@ -182,6 +204,7 @@ export function handleClearConcurrency(
   reqId?: string
 ): Response {
   ctx.queueManager.clearConcurrency(cmd.queue);
+  ctx.queueManager.emitDashboardEvent('concurrency:cleared', { queue: cmd.queue });
   return resp.ok(undefined, reqId);
 }
 
@@ -194,6 +217,10 @@ export function handleSetStallConfig(
   reqId?: string
 ): Response {
   ctx.queueManager.setStallConfig(cmd.queue, cmd.config);
+  ctx.queueManager.emitDashboardEvent('config:stall-changed', {
+    queue: cmd.queue,
+    config: cmd.config,
+  });
   return resp.ok(undefined, reqId);
 }
 
@@ -214,6 +241,10 @@ export function handleSetDlqConfig(
   reqId?: string
 ): Response {
   ctx.queueManager.setDlqConfig(cmd.queue, cmd.config);
+  ctx.queueManager.emitDashboardEvent('config:dlq-changed', {
+    queue: cmd.queue,
+    config: cmd.config,
+  });
   return resp.ok(undefined, reqId);
 }
 
@@ -234,6 +265,12 @@ export async function handleChangeDelay(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.changeDelay(jobId(cmd.id), cmd.delay);
+  if (success) {
+    ctx.queueManager.emitDashboardEvent('job:delay-changed', {
+      jobId: cmd.id,
+      newDelay: cmd.delay,
+    });
+  }
   return success
     ? resp.ok(undefined, reqId)
     : resp.error('Job not found or cannot change delay', reqId);

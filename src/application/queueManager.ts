@@ -86,6 +86,9 @@ export class QueueManager {
   readonly workerManager: WorkerManager;
   private readonly eventsManager: EventsManager;
 
+  // Dashboard event callback (set by HTTP server for WS broadcast)
+  private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
+
   // Job logs config
   private readonly maxLogsPerJob = 100;
 
@@ -628,10 +631,12 @@ export class QueueManager {
 
   pause(queue: string): void {
     queueControl.pauseQueue(queue, this.contextFactory.getQueueControlContext());
+    this.dashboardEmit?.('queue:paused', { queue });
   }
 
   resume(queue: string): void {
     queueControl.resumeQueue(queue, this.contextFactory.getQueueControlContext());
+    this.dashboardEmit?.('queue:resumed', { queue });
   }
 
   isPaused(queue: string): boolean {
@@ -639,12 +644,15 @@ export class QueueManager {
   }
 
   drain(queue: string): number {
-    return queueControl.drainQueue(queue, this.contextFactory.getQueueControlContext());
+    const count = queueControl.drainQueue(queue, this.contextFactory.getQueueControlContext());
+    if (count > 0) this.dashboardEmit?.('queue:drained', { queue, count });
+    return count;
   }
 
   obliterate(queue: string): void {
     queueControl.obliterateQueue(queue, this.contextFactory.getQueueControlContext());
     this.unregisterQueueName(queue);
+    this.dashboardEmit?.('queue:obliterated', { queue });
   }
 
   listQueues(): string[] {
@@ -859,12 +867,42 @@ export class QueueManager {
 
   // ============ Events ============
 
+  /** Register dashboard event emitter (for WS pub/sub) */
+  setDashboardEmit(fn: (event: string, data: Record<string, unknown>) => void): void {
+    this.dashboardEmit = fn;
+  }
+
+  /** Emit a dashboard event (callable from handlers) */
+  emitDashboardEvent(event: string, data: Record<string, unknown>): void {
+    this.dashboardEmit?.(event, data);
+  }
+
   subscribe(callback: (event: JobEvent) => void): () => void {
     return this.eventsManager.subscribe(callback);
   }
 
   waitForJobCompletion(jobId: JobId, timeoutMs: number): Promise<boolean> {
     return this.eventsManager.waitForJobCompletion(jobId, timeoutMs);
+  }
+
+  /** Register worker with dashboard event */
+  registerWorker(name: string, queues: string[]) {
+    const worker = this.workerManager.register(name, queues);
+    this.dashboardEmit?.('worker:connected', {
+      workerId: worker.id,
+      name: worker.name,
+      queues: worker.queues,
+    });
+    return worker;
+  }
+
+  /** Unregister worker with dashboard event */
+  unregisterWorker(workerId: string): boolean {
+    const result = this.workerManager.unregister(workerId);
+    if (result) {
+      this.dashboardEmit?.('worker:disconnected', { workerId });
+    }
+    return result;
   }
 
   // ============ Internal State Access ============

@@ -311,6 +311,7 @@ describe('WsHandler', () => {
         id: overrides.id ?? `ws-${Date.now()}-${Math.random()}`,
         authenticated: overrides.authenticated ?? false,
         queueFilter: overrides.queueFilter ?? null,
+        subscriptions: overrides.subscriptions ?? null,
       },
       send(msg: string) {
         messages.push(msg);

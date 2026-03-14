@@ -27,11 +27,13 @@ export function handleRetryDlq(
 ): Response {
   const jid = cmd.jobId ? jobId(cmd.jobId) : undefined;
   const count = ctx.queueManager.retryDlq(cmd.queue, jid);
-  return {
-    ok: true,
-    count,
-    reqId,
-  } as Response;
+  if (count > 0) {
+    const event = jid ? 'dlq:retried' : 'dlq:retry-all';
+    const data: Record<string, unknown> = { queue: cmd.queue, count };
+    if (jid) data.jobId = String(jid);
+    ctx.queueManager.emitDashboardEvent(event, data);
+  }
+  return { ok: true, count, reqId } as Response;
 }
 
 /** Handle PurgeDlq command - clear DLQ */
@@ -41,11 +43,8 @@ export function handlePurgeDlq(
   reqId?: string
 ): Response {
   const count = ctx.queueManager.purgeDlq(cmd.queue);
-  return {
-    ok: true,
-    count,
-    reqId,
-  } as Response;
+  if (count > 0) ctx.queueManager.emitDashboardEvent('dlq:purged', { queue: cmd.queue, count });
+  return { ok: true, count, reqId } as Response;
 }
 
 /** Handle RetryCompleted command - retry completed jobs */
@@ -56,9 +55,5 @@ export function handleRetryCompleted(
 ): Response {
   const jid = cmd.id ? jobId(cmd.id) : undefined;
   const count = ctx.queueManager.retryCompleted(cmd.queue, jid);
-  return {
-    ok: true,
-    count,
-    reqId,
-  } as Response;
+  return { ok: true, count, reqId } as Response;
 }

@@ -76,6 +76,14 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     sseHandler.broadcast(event);
   });
 
+  // Start periodic WS broadcasts (stats:snapshot 5s, health:status 10s)
+  wsHandler.startBroadcasts(queueManager);
+
+  // Register dashboard event emitter for non-job events (worker, queue, dlq)
+  queueManager.setDashboardEmit((event, data) => {
+    wsHandler.emitEvent(event, data);
+  });
+
   // Helper to get CORS origin string
   const getCorsOrigin = () => (corsOrigins.has('*') ? '*' : Array.from(corsOrigins).join(', '));
 
@@ -127,7 +135,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       if (denied) return denied;
       const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
       const upgraded = server.upgrade(req, {
-        data: { id: uuid(), authenticated: true, queueFilter },
+        data: { id: uuid(), authenticated: true, queueFilter, subscriptions: null },
       });
       return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 400 });
     }
@@ -220,6 +228,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     getWsClientCount: () => wsHandler.size,
     getSseClientCount: () => sseHandler.size,
     stop(): void {
+      wsHandler.stopBroadcasts();
       sseHandler.closeAll();
       void server.stop();
     },
