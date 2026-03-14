@@ -10,6 +10,22 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.14] - 2026-03-14
+
+### Fixed
+- **CLI double execution** — Every CLI command ran twice due to `main()` being called both on module load and on import. Added `import.meta.main` guard.
+- **CLI ACK/FAIL rejected UUID job IDs** — `parseBigIntArg()` only accepted numeric IDs (`/^\d+$/`) but all job IDs are UUIDs. Now accepts any non-empty string ID.
+- **CLI ACK/FAIL always failed** — Each CLI command opens a new TCP connection. When the PULL connection closed, jobs were auto-released back to waiting. ACK on a new connection found the job no longer in processing. Added `detach` flag to PULL command for CLI usage.
+- **`job get` showed `State: unknown`** — GetJob response didn't include job state. Now includes state from `getJobState()`.
+- **`queue jobs` state column showed `-`** — GetJobs handler didn't include state per job. Now injects state for each returned job.
+- **`bunqueue -p <port>` (without `start`) ignored port flag** — Direct mode ignored all CLI flags. Now routes to CLI parser when flags are present.
+- **Worker/webhook/cron/logs/metrics list showed `OK`** — Server wraps responses in `{data: {...}}` but CLI formatter only checked top-level keys. Added `unwrap()` helper.
+- **Cron list showed `OK`** — Server returns `crons` key but formatter checked for `cronJobs`.
+- **Worker/webhook list showed stats instead of entries** — `stats` check ran before `workers`/`webhooks` in formatter priority order.
+- **Worker register showed queue list** — Response `queues` field triggered queue list formatter.
+- **DLQ list format broken** — Formatter expected `jobId` field but server returns `id`.
+- **Metrics showed `OK`** — Prometheus metrics nested in `data.metrics`.
+
 ## [2.6.9] - 2026-03-10
 
 ### Fixed

@@ -38,10 +38,10 @@ export function parseNumberArg(value: string | undefined, name: string): number 
   return parseInt(value, 10);
 }
 
-/** Parse bigint argument (for job IDs) */
+/** Parse job ID argument (UUIDs, numeric IDs, or custom IDs) */
 export function parseBigIntArg(value: string, name: string): string {
   // Return as string, server will parse it
-  if (!/^\d+$/.test(value)) {
+  if (!value || value.trim().length === 0) {
     throw new CommandError(`Invalid ID for ${name}: ${value}`);
   }
   return value;

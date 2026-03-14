@@ -847,7 +847,7 @@ describe('Query Handlers', () => {
         await handlePush({ cmd: 'PUSH', queue: 'emails', data: { id: i } }, ctx);
       }
 
-      const res = handleGetJobs(
+      const res = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'emails' },
         ctx
       );
@@ -862,13 +862,13 @@ describe('Query Handlers', () => {
       // Pull one job to make it active
       await handlePull({ cmd: 'PULL', queue: 'emails' }, ctx);
 
-      const waitingRes = handleGetJobs(
+      const waitingRes = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'emails', state: 'waiting' },
         ctx
       );
       expect((waitingRes as any).jobs.length).toBe(2);
 
-      const activeRes = handleGetJobs(
+      const activeRes = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'emails', state: 'active' },
         ctx
       );
@@ -880,7 +880,7 @@ describe('Query Handlers', () => {
         await handlePush({ cmd: 'PUSH', queue: 'emails', data: { id: i } }, ctx);
       }
 
-      const res = handleGetJobs(
+      const res = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'emails', offset: 2, limit: 3 },
         ctx
       );
@@ -888,8 +888,8 @@ describe('Query Handlers', () => {
       expect((res as any).jobs.length).toBe(3);
     });
 
-    test('should return empty array for empty queue', () => {
-      const res = handleGetJobs(
+    test('should return empty array for empty queue', async () => {
+      const res = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'non-existent' },
         ctx
       );
@@ -897,8 +897,8 @@ describe('Query Handlers', () => {
       expect((res as any).jobs).toHaveLength(0);
     });
 
-    test('should propagate reqId', () => {
-      const res = handleGetJobs(
+    test('should propagate reqId', async () => {
+      const res = await handleGetJobs(
         { cmd: 'GetJobs', queue: 'emails', reqId: 'req-getjobs' },
         ctx,
         'req-getjobs'

@@ -94,10 +94,14 @@ export function parseGlobalOptions(): { options: GlobalOptions; commandArgs: str
     i++;
   }
 
-  // When the command is 'start', re-inject explicitly-set --host and --port
-  // into commandArgs so they reach parseServerArgs in runServer().
+  // Detect server mode: explicit 'start', no args, or first arg is a flag (server flags)
+  const isServerMode =
+    commandArgs[0] === 'start' || commandArgs.length === 0 || commandArgs[0]?.startsWith('-');
+
+  // Re-inject explicitly-set --host and --port into commandArgs
+  // so they reach parseServerArgs in runServer().
   // Global -p/--port maps to --tcp-port for the server command.
-  if (commandArgs[0] === 'start') {
+  if (isServerMode) {
     if (hostExplicit) {
       commandArgs.push('--host', host);
     }
@@ -135,8 +139,8 @@ export async function main(): Promise<void> {
   // Get the command (first positional argument)
   const command = commandArgs[0];
 
-  // No command or 'start' = server mode
-  if (!command || command === 'start') {
+  // No command, 'start', or first arg is a flag (server flags like --tcp-port) = server mode
+  if (!command || command === 'start' || command.startsWith('-')) {
     const serverArgs = command === 'start' ? commandArgs.slice(1) : commandArgs;
     await runServer(serverArgs, options.help);
     return;
@@ -191,8 +195,10 @@ export async function main(): Promise<void> {
   }
 }
 
-// Run if this is the main module
-main().catch((err: unknown) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+// Run only if this file is the direct entry point
+if (import.meta.main) {
+  main().catch((err: unknown) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}

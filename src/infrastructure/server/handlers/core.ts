@@ -120,9 +120,9 @@ export async function handlePull(
     return resp.pulledJob(job, token, reqId);
   }
 
-  // Standard pull (no lock, but still track for client release)
+  // Standard pull (no lock, but still track for client release unless detached)
   const job = await ctx.queueManager.pull(cmd.queue, cmd.timeout);
-  if (job && ctx.clientId) {
+  if (job && ctx.clientId && !cmd.detach) {
     ctx.queueManager.registerClientJob(ctx.clientId, job.id);
   }
   return resp.nullableJob(job, reqId);

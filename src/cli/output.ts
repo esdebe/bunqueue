@@ -181,10 +181,16 @@ function formatDlqJobs(jobs: Record<string, unknown>[]): string {
   }
 
   return jobs
-    .map(
-      (job) =>
-        `  ${color(str(job.jobId), colors.bold)}\n    Queue: ${str(job.queue)}\n    Error: ${color(str(job.error, 'Unknown'), colors.red)}\n    Failed: ${job.failedAt !== null && job.failedAt !== undefined ? new Date(job.failedAt as number).toISOString() : 'unknown'}`
-    )
+    .map((job) => {
+      const id = str(job.jobId ?? job.id);
+      const failedAt =
+        job.failedAt !== null && job.failedAt !== undefined
+          ? new Date(job.failedAt as number).toISOString()
+          : job.createdAt
+            ? new Date(job.createdAt as number).toISOString()
+            : 'unknown';
+      return `  ${color(id, colors.bold)}\n    Queue: ${str(job.queue)}\n    Error: ${color(str(job.error, 'Unknown'), colors.red)}\n    Failed: ${failedAt}`;
+    })
     .join('\n\n');
 }
 
@@ -203,105 +209,102 @@ function formatLogs(logs: Record<string, unknown>[]): string {
     .join('\n');
 }
 
+/** Unwrap response data - server may nest content in 'data' wrapper */
+function unwrap(response: Record<string, unknown>): Record<string, unknown> {
+  if (
+    'data' in response &&
+    response.data &&
+    typeof response.data === 'object' &&
+    !Array.isArray(response.data)
+  ) {
+    return { ...response, ...(response.data as Record<string, unknown>) };
+  }
+  return response;
+}
+
+/** Try to format collection-type responses (jobs, workers, webhooks, crons, etc.) */
+function formatCollection(r: Record<string, unknown>, command: string): string | null {
+  if ('job' in r) {
+    return r.job === null
+      ? color('No job available', colors.yellow)
+      : formatJob(r.job as Record<string, unknown>);
+  }
+  if ('jobs' in r && Array.isArray(r.jobs)) {
+    return command === 'dlq'
+      ? formatDlqJobs(r.jobs as Record<string, unknown>[])
+      : formatJobsTable(r.jobs as Record<string, unknown>[]);
+  }
+  // Workers/webhooks before stats (their responses also contain stats)
+  if ('workers' in r && Array.isArray(r.workers)) {
+    return formatWorkers(r.workers as Record<string, unknown>[]);
+  }
+  if ('webhooks' in r && Array.isArray(r.webhooks)) {
+    return formatWebhooks(r.webhooks as Record<string, unknown>[]);
+  }
+  if ('crons' in r && Array.isArray(r.crons)) {
+    return formatCronJobs(r.crons as Record<string, unknown>[]);
+  }
+  if ('cronJobs' in r && Array.isArray(r.cronJobs)) {
+    return formatCronJobs(r.cronJobs as Record<string, unknown>[]);
+  }
+  if ('dlqJobs' in r && Array.isArray(r.dlqJobs)) {
+    return formatDlqJobs(r.dlqJobs as Record<string, unknown>[]);
+  }
+  if ('logs' in r && Array.isArray(r.logs)) {
+    return formatLogs(r.logs as Record<string, unknown>[]);
+  }
+  if ('stats' in r && typeof r.stats === 'object' && !Array.isArray(r.stats)) {
+    return formatStats(r.stats as Record<string, unknown>);
+  }
+  if ('counts' in r) {
+    return formatCounts(r.counts as Record<string, number>);
+  }
+  if ('queues' in r && Array.isArray(r.queues) && !('workerId' in r)) {
+    return formatQueues(r.queues as string[]);
+  }
+  return null;
+}
+
 /** Format a successful response based on its content */
 function formatSuccess(response: Record<string, unknown>, command: string): string {
+  // Unwrap nested data wrapper (server wraps workers, webhooks, logs, metrics in {data: {...}})
+  const r = unwrap(response);
+
   // Job created
-  if ('id' in response && typeof response.id === 'string' && command === 'push') {
-    return color(`Job created: ${response.id}`, colors.green);
+  if ('id' in r && typeof r.id === 'string' && command === 'push') {
+    return color(`Job created: ${r.id}`, colors.green);
   }
-
   // Batch jobs created
-  if ('ids' in response && Array.isArray(response.ids)) {
-    return color(`Created ${response.ids.length} jobs: ${response.ids.join(', ')}`, colors.green);
+  if ('ids' in r && Array.isArray(r.ids)) {
+    return color(`Created ${r.ids.length} jobs: ${r.ids.join(', ')}`, colors.green);
   }
 
-  // Single job
-  if ('job' in response) {
-    if (response.job === null) {
-      return color('No job available', colors.yellow);
-    }
-    return formatJob(response.job as Record<string, unknown>);
-  }
+  // Try collection/list formats
+  const collection = formatCollection(r, command);
+  if (collection !== null) return collection;
 
-  // Jobs list
-  if ('jobs' in response && Array.isArray(response.jobs)) {
-    return formatJobsTable(response.jobs as Record<string, unknown>[]);
-  }
-
-  // Stats
-  if ('stats' in response) {
-    return formatStats(response.stats as Record<string, unknown>);
-  }
-
-  // Counts
-  if ('counts' in response) {
-    return formatCounts(response.counts as Record<string, number>);
-  }
-
-  // Queues
-  if ('queues' in response && Array.isArray(response.queues)) {
-    return formatQueues(response.queues as string[]);
-  }
-
-  // Cron jobs
-  if ('cronJobs' in response && Array.isArray(response.cronJobs)) {
-    return formatCronJobs(response.cronJobs as Record<string, unknown>[]);
-  }
-
-  // Workers
-  if ('workers' in response && Array.isArray(response.workers)) {
-    return formatWorkers(response.workers as Record<string, unknown>[]);
-  }
-
-  // Webhooks
-  if ('webhooks' in response && Array.isArray(response.webhooks)) {
-    return formatWebhooks(response.webhooks as Record<string, unknown>[]);
-  }
-
-  // DLQ jobs
-  if ('dlqJobs' in response && Array.isArray(response.dlqJobs)) {
-    return formatDlqJobs(response.dlqJobs as Record<string, unknown>[]);
-  }
-
-  // Logs
-  if ('logs' in response && Array.isArray(response.logs)) {
-    return formatLogs(response.logs as Record<string, unknown>[]);
-  }
-
+  // Worker registered
+  if ('workerId' in r) return color(`Worker registered: ${str(r.workerId)}`, colors.green);
   // State
-  if ('state' in response) {
-    return `State: ${str(response.state)}`;
-  }
-
+  if ('state' in r) return `State: ${str(r.state)}`;
   // Result
-  if ('result' in response) {
-    return `Result: ${JSON.stringify(response.result, null, 2)}`;
-  }
-
+  if ('result' in r) return `Result: ${JSON.stringify(r.result, null, 2)}`;
   // Progress
-  if ('progress' in response) {
-    const msg = response.message ? ` - ${str(response.message)}` : '';
-    return `Progress: ${str(response.progress)}%${msg}`;
+  if ('progress' in r) {
+    const msg = r.message ? ` - ${str(r.message)}` : '';
+    return `Progress: ${str(r.progress)}%${msg}`;
   }
-
   // Paused status
-  if ('paused' in response) {
-    return response.paused
+  if ('paused' in r) {
+    return r.paused
       ? color('Queue is paused', colors.yellow)
       : color('Queue is active', colors.green);
   }
-
   // Count
-  if ('count' in response) {
-    return `Count: ${str(response.count)}`;
-  }
-
+  if ('count' in r) return `Count: ${str(r.count)}`;
   // Metrics (Prometheus format)
-  if ('metrics' in response && typeof response.metrics === 'string') {
-    return response.metrics;
-  }
+  if ('metrics' in r && typeof r.metrics === 'string') return r.metrics;
 
-  // Generic success
   return color('OK', colors.green);
 }
 

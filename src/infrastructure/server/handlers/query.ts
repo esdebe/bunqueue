@@ -15,8 +15,11 @@ export async function handleGetJob(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const job = await ctx.queueManager.getJob(jobId(cmd.id));
-  return job ? resp.job(job, reqId) : resp.error('Job not found', reqId);
+  const jid = jobId(cmd.id);
+  const job = await ctx.queueManager.getJob(jid);
+  if (!job) return resp.error('Job not found', reqId);
+  const state = await ctx.queueManager.getJobState(jid);
+  return { ok: true, job: { ...job, state }, reqId } as Response;
 }
 
 /** Handle GetState command */
@@ -71,19 +74,34 @@ export function handleGetJobByCustomId(
 }
 
 /** Handle GetJobs command - list jobs with filtering and pagination */
-export function handleGetJobs(
+export async function handleGetJobs(
   cmd: Extract<Command, { cmd: 'GetJobs' }>,
   ctx: HandlerContext,
   reqId?: string
-): Response {
+): Promise<Response> {
+  const stateFilter = cmd.state as
+    | 'waiting'
+    | 'delayed'
+    | 'active'
+    | 'completed'
+    | 'failed'
+    | undefined;
   const jobs = ctx.queueManager.getJobs(cmd.queue, {
-    state: cmd.state as 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | undefined,
+    state: stateFilter,
     start: cmd.offset ?? 0,
     end: (cmd.offset ?? 0) + (cmd.limit ?? 100),
     asc: true,
   });
 
-  return resp.jobs(jobs, reqId);
+  // Inject state into each job for display
+  const jobsWithState = await Promise.all(
+    jobs.map(async (job) => {
+      const state = stateFilter ?? (await ctx.queueManager.getJobState(job.id));
+      return { ...job, state };
+    })
+  );
+
+  return resp.jobs(jobsWithState, reqId);
 }
 
 /** Handle GetChildrenValues command - batch get children values for a parent job */

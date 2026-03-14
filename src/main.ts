@@ -32,12 +32,15 @@ const firstArg = process.argv[2];
 const isClientCommand = firstArg && clientCommands.includes(firstArg);
 const isStartCommand = firstArg === 'start';
 const hasHelpOrVersion = process.argv.includes('--help') || process.argv.includes('--version');
+// Route to CLI when flags are passed (e.g. `bunqueue -p 8945`)
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- process.argv[2] can be undefined at runtime
+const hasFlags = firstArg?.startsWith('-');
 
-// Route to CLI for client commands, help, or version
-if (isClientCommand || hasHelpOrVersion || isStartCommand) {
+// Route to CLI for client commands, help, version, start, or when flags are present
+if (isClientCommand || hasHelpOrVersion || isStartCommand || hasFlags) {
   void import('./cli/index').then(({ main }) => main());
 } else {
-  // Direct server mode (no args or only server flags like --tcp-port)
+  // Direct server mode (no args at all)
   startServer();
 }
 

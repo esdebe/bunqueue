@@ -118,6 +118,7 @@ function buildPull(args: string[]): Record<string, unknown> {
   const cmd: Record<string, unknown> = {
     cmd: 'PULL',
     queue,
+    detach: true, // CLI: don't auto-release on disconnect so ack/fail work from separate connection
   };
 
   const timeout = parseNumberArg(values.timeout as string | undefined, 'timeout');

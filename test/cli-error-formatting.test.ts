@@ -153,9 +153,14 @@ describe('Invalid port number handling', () => {
     expect(parseNumberArg(undefined, 'port')).toBeUndefined();
   });
 
-  test('parseBigIntArg rejects non-numeric and negative IDs', () => {
-    expect(() => parseBigIntArg('abc', 'id')).toThrow('Invalid ID for id');
-    expect(() => parseBigIntArg('-1', 'id')).toThrow('Invalid ID');
+  test('parseBigIntArg accepts any non-empty string ID', () => {
+    // UUIDs, numeric IDs, and custom IDs are all valid
+    expect(parseBigIntArg('abc', 'id')).toBe('abc');
+    expect(parseBigIntArg('123', 'id')).toBe('123');
+    expect(parseBigIntArg('019ce984-5cef-7000-976f-8cd68b3cdc66', 'id')).toBe('019ce984-5cef-7000-976f-8cd68b3cdc66');
+    // Empty/whitespace should throw
+    expect(() => parseBigIntArg('', 'id')).toThrow('Invalid ID for id');
+    expect(() => parseBigIntArg('   ', 'id')).toThrow('Invalid ID for id');
   });
 
   test('parseGlobalOptions falls back to default on invalid port', async () => {

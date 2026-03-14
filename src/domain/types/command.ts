@@ -49,6 +49,7 @@ export interface PullCommand extends BaseCommand {
   readonly timeout?: number;
   readonly owner?: string; // Client identifier for lock ownership
   readonly lockTtl?: number; // Lock TTL in ms (default: 30000)
+  readonly detach?: boolean; // Don't auto-release on disconnect (for CLI usage)
 }
 
 export interface PullBatchCommand extends BaseCommand {
