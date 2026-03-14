@@ -117,7 +117,7 @@ export class WorkerManager {
 
   /** Get workers for a specific queue */
   getForQueue(queue: string): Worker[] {
-    return Array.from(this.workers.values()).filter((w) => w.queues.includes(queue));
+    return Array.from(this.workers.values()).filter((w) => w.queues?.includes(queue));
   }
 
   /** Start cleanup interval */

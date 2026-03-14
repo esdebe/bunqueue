@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.25] - 2026-03-14
+
+### Fixed
+- **`GET /queues/:q/workers` crash** — Fixed crash when some workers were registered without a `queues` field (`undefined`/`null`). Now safely skips workers with missing queues and defaults to `[]` on creation.
+
 ## [2.6.24] - 2026-03-14
 
 ### Fixed

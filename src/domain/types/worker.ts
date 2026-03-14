@@ -22,12 +22,12 @@ export interface Worker {
 }
 
 /** Create a new worker */
-export function createWorker(name: string, queues: string[], concurrency: number = 1): Worker {
+export function createWorker(name: string, queues?: string[], concurrency: number = 1): Worker {
   const now = Date.now();
   return {
     id: uuid(),
     name,
-    queues,
+    queues: queues ?? [],
     concurrency,
     registeredAt: now,
     lastSeen: now,

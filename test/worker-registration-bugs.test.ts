@@ -62,5 +62,18 @@ describe('Bug: Worker registration and listing', () => {
       expect(queueBWorkers.length).toBe(2); // worker-b and worker-ab
       expect(queueCWorkers.length).toBe(0);
     });
+
+    test('should not crash when some workers have undefined/null queues', () => {
+      // Register a worker with queues
+      wm.register('worker-a', ['queue-a'], 3);
+      // Register a worker without queues (simulates TCP registration without queues field)
+      wm.register('worker-no-queue', undefined as any);
+      wm.register('worker-null-queue', null as any);
+
+      // Should not throw
+      const workers = wm.getForQueue('queue-a');
+      expect(workers.length).toBe(1);
+      expect(workers[0].name).toBe('worker-a');
+    });
   });
 });
