@@ -30,7 +30,11 @@
   <em>A visual interface for managing queues, jobs, workers, and monitoring — all in real time.</em>
 </p>
 
-https://github.com/egeominotti/bunqueue/blob/main/.github/bunqueue-demo.mp4
+<p align="center">
+  <video src="https://github.com/egeominotti/bunqueue/raw/main/.github/bunqueue-demo.mp4" width="700" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
 
 <p align="center">
   <strong>Want early access?</strong> Reach out at <a href="mailto:egeominotti@gmail.com">egeominotti@gmail.com</a>
