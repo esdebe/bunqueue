@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.27] - 2026-03-15
+
+### Fixed
+- **`getJob` returns null for failed/DLQ jobs** — In embedded mode (no SQLite storage), `getJob()` and `getJobByCustomId()` now correctly query the shard DLQ instead of returning null. (#50)
+- **`getChildrenValues` wired in worker** — Worker job processor now correctly passes the `getChildrenValues` callback.
+
+### Added
+- **WebSocket/SSE integration tests** — 88 new integration tests covering WebSocket and SSE event streaming.
+
 ## [2.6.26] - 2026-03-15
 
 ### Added
