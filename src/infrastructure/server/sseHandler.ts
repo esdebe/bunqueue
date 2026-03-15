@@ -2,14 +2,19 @@
  * SSE Handler - Enterprise-grade Server-Sent Events
  *
  * Features:
+ * - Typed SSE events (event: field) for selective client subscription
  * - Event IDs for client-side deduplication
  * - Last-Event-ID resume on reconnection (ring buffer)
  * - Heartbeat keepalive (30s) to detect dead connections
+ * - Periodic broadcasts: stats (5s), health (10s), storage (30s)
+ * - Dashboard event forwarding (worker, queue control, DLQ, cron, etc.)
  * - Connection limits to prevent resource exhaustion
  * - Automatic dead client cleanup
  */
 
+import type { QueueManager } from '../../application/queueManager';
 import type { JobEvent } from '../../domain/types/queue';
+import { throughputTracker } from '../../application/throughputTracker';
 import { uuid } from '../../shared/hash';
 
 const textEncoder = new TextEncoder();
@@ -30,17 +35,38 @@ export interface SseClient {
 /** Buffered event for Last-Event-ID replay */
 interface BufferedEvent {
   id: number;
+  event: string;
   data: string;
   queue: string;
 }
 
+/** Old eventType → SSE event name (mirrors wsHandler) */
+const EVENT_MAP: Record<string, string> = {
+  pushed: 'job:pushed',
+  pulled: 'job:active',
+  completed: 'job:completed',
+  failed: 'job:failed',
+  progress: 'job:progress',
+  stalled: 'job:stalled',
+  removed: 'job:removed',
+  delayed: 'job:delayed',
+  duplicated: 'job:duplicated',
+  retried: 'job:retried',
+  'waiting-children': 'job:waiting-children',
+  drained: 'queue:drained',
+};
+
 /**
- * SSE Handler - manages Server-Sent Events clients
+ * SSE Handler - manages Server-Sent Events clients with full event parity
  */
 export class SseHandler {
   private readonly clients = new Map<string, SseClient>();
   private eventId = 0;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private statsInterval: ReturnType<typeof setInterval> | null = null;
+  private healthInterval: ReturnType<typeof setInterval> | null = null;
+  private storageInterval: ReturnType<typeof setInterval> | null = null;
+  private queueManager: QueueManager | null = null;
   private readonly eventBuffer: BufferedEvent[] = [];
 
   /** Get client count */
@@ -48,20 +74,57 @@ export class SseHandler {
     return this.clients.size;
   }
 
-  /** Start heartbeat timer — call once after creating the handler */
+  // ── Lifecycle ──────────────────────────────────────────────
+
+  /** Start heartbeat + periodic broadcasts (stats, health, storage) */
+  startBroadcasts(qm: QueueManager): void {
+    this.queueManager = qm;
+
+    this.heartbeatTimer ??= setInterval(() => {
+      this.sendHeartbeat();
+    }, HEARTBEAT_MS);
+
+    this.statsInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastStats(qm);
+    }, 5000);
+
+    this.healthInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastHealth(qm);
+    }, 10000);
+
+    this.storageInterval ??= setInterval(() => {
+      if (this.clients.size > 0) this.broadcastStorage(qm);
+    }, 30000);
+  }
+
+  /** @deprecated Use startBroadcasts() instead */
   startHeartbeat(): void {
     this.heartbeatTimer ??= setInterval(() => {
       this.sendHeartbeat();
     }, HEARTBEAT_MS);
   }
 
-  /** Stop heartbeat timer */
-  stopHeartbeat(): void {
+  /** Stop all timers */
+  private stopTimers(): void {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    if (this.healthInterval) {
+      clearInterval(this.healthInterval);
+      this.healthInterval = null;
+    }
+    if (this.storageInterval) {
+      clearInterval(this.storageInterval);
+      this.storageInterval = null;
+    }
   }
+
+  // ── Heartbeat ──────────────────────────────────────────────
 
   /** Send heartbeat comment to all clients, prune dead ones */
   private sendHeartbeat(): void {
@@ -77,41 +140,152 @@ export class SseHandler {
       }
     }
 
-    for (const id of disconnected) {
-      this.clients.delete(id);
-    }
+    for (const id of disconnected) this.clients.delete(id);
   }
 
-  /** Broadcast event to all matching clients */
+  // ── Job event broadcasting ─────────────────────────────────
+
+  /** Broadcast job event to matching clients (with typed SSE event field) */
   broadcast(event: JobEvent): void {
     const id = ++this.eventId;
-    const data = JSON.stringify(event);
+    const eventName = EVENT_MAP[event.eventType] ?? `job:${event.eventType}`;
 
-    // Buffer for Last-Event-ID replay
-    this.bufferEvent(id, data, event.queue);
+    const eventData: Record<string, unknown> = {
+      queue: event.queue,
+      jobId: event.jobId,
+      timestamp: event.timestamp,
+    };
+    if (event.error) eventData.error = event.error;
+    if (event.progress !== undefined) eventData.progress = event.progress;
+    if (event.prev) eventData.prev = event.prev;
+    if (event.delay !== undefined) eventData.delay = event.delay;
 
-    const sseMessage = `id: ${id}\ndata: ${data}\n\n`;
-    const encoded = textEncoder.encode(sseMessage);
+    const data = JSON.stringify(eventData);
+    this.bufferEvent(id, eventName, data, event.queue);
+
+    const msg = textEncoder.encode(`id: ${id}\nevent: ${eventName}\ndata: ${data}\n\n`);
     const disconnected: string[] = [];
 
     for (const [clientId, client] of this.clients) {
       if (!client.queueFilter || client.queueFilter === event.queue) {
         try {
-          client.controller.enqueue(encoded);
+          client.controller.enqueue(msg);
         } catch {
           disconnected.push(clientId);
         }
       }
     }
 
-    for (const clientId of disconnected) {
-      this.clients.delete(clientId);
+    for (const clientId of disconnected) this.clients.delete(clientId);
+
+    // Emit queue:counts on every job state change (mirrors wsHandler)
+    if (this.queueManager) {
+      const counts = this.queueManager.getQueueJobCounts(event.queue);
+      this.sendTypedEvent('queue:counts', {
+        queue: event.queue,
+        waiting: counts.waiting,
+        active: counts.active,
+        completed: counts.completed,
+        failed: counts.failed,
+        delayed: counts.delayed,
+      });
     }
   }
 
-  /** Buffer event for replay (ring buffer, capped at EVENT_BUFFER_SIZE) */
-  private bufferEvent(id: number, data: string, queue: string): void {
-    this.eventBuffer.push({ id, data, queue });
+  // ── Dashboard / system event broadcasting ──────────────────
+
+  /** Emit a typed event (dashboard events: worker, queue control, DLQ, etc.) */
+  emitEvent(event: string, data: Record<string, unknown>): void {
+    this.sendTypedEvent(event, data);
+  }
+
+  /** Send typed SSE event to all clients (system events bypass queue filter) */
+  private sendTypedEvent(eventName: string, data: Record<string, unknown>): void {
+    if (this.clients.size === 0) return;
+    const id = ++this.eventId;
+    const jsonData = JSON.stringify(data);
+
+    const msg = textEncoder.encode(`id: ${id}\nevent: ${eventName}\ndata: ${jsonData}\n\n`);
+    const disconnected: string[] = [];
+
+    for (const [clientId, client] of this.clients) {
+      try {
+        client.controller.enqueue(msg);
+      } catch {
+        disconnected.push(clientId);
+      }
+    }
+
+    for (const clientId of disconnected) this.clients.delete(clientId);
+  }
+
+  // ── Periodic broadcasts ────────────────────────────────────
+
+  private broadcastStats(qm: QueueManager): void {
+    const stats = qm.getStats();
+    const rates = throughputTracker.getRates();
+    const perQueue = qm.getPerQueueStats();
+    const workerStats = qm.workerManager.getStats();
+    const crons = qm.listCrons();
+
+    const queues: Record<string, object> = {};
+    for (const [name, s] of perQueue) {
+      queues[name] = {
+        waiting: s.waiting ?? 0,
+        active: s.active ?? 0,
+        delayed: s.delayed ?? 0,
+        dlq: s.dlq ?? 0,
+        paused: qm.isPaused(name),
+      };
+    }
+
+    this.sendTypedEvent('stats:snapshot', {
+      waiting: stats.waiting,
+      active: stats.active,
+      delayed: stats.delayed,
+      completed: stats.completed,
+      dlq: stats.dlq,
+      totalPushed: Number(stats.totalPushed),
+      totalCompleted: Number(stats.totalCompleted),
+      totalFailed: Number(stats.totalFailed),
+      pushPerSec: rates.pushPerSec,
+      pullPerSec: rates.pullPerSec,
+      uptime: stats.uptime,
+      queues,
+      workers: { total: workerStats.total, active: workerStats.active },
+      cronJobs: crons.length,
+    });
+  }
+
+  private broadcastHealth(qm: QueueManager): void {
+    const mem = process.memoryUsage();
+    const storage = qm.getStorageStatus();
+
+    this.sendTypedEvent('health:status', {
+      ok: !storage.diskFull,
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(mem.rss / 1024 / 1024),
+        heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+      },
+      connections: { sse: this.clients.size },
+    });
+  }
+
+  private broadcastStorage(qm: QueueManager): void {
+    const memStats = qm.getMemoryStats();
+    const storage = qm.getStorageStatus();
+
+    this.sendTypedEvent('storage:status', {
+      collections: memStats,
+      diskFull: storage.diskFull,
+    });
+  }
+
+  // ── Event buffer (ring buffer for Last-Event-ID replay) ────
+
+  private bufferEvent(id: number, event: string, data: string, queue: string): void {
+    this.eventBuffer.push({ id, event, data, queue });
     if (this.eventBuffer.length > EVENT_BUFFER_SIZE) {
       this.eventBuffer.shift();
     }
@@ -119,17 +293,19 @@ export class SseHandler {
 
   /** Replay missed events for a reconnecting client */
   private replayEvents(client: SseClient, lastEventId: number): void {
-    for (const event of this.eventBuffer) {
-      if (event.id <= lastEventId) continue;
-      if (client.queueFilter && client.queueFilter !== event.queue) continue;
+    for (const buffered of this.eventBuffer) {
+      if (buffered.id <= lastEventId) continue;
+      if (client.queueFilter && buffered.queue && client.queueFilter !== buffered.queue) continue;
       try {
-        const msg = `id: ${event.id}\ndata: ${event.data}\n\n`;
+        const msg = `id: ${buffered.id}\nevent: ${buffered.event}\ndata: ${buffered.data}\n\n`;
         client.controller.enqueue(textEncoder.encode(msg));
       } catch {
         break;
       }
     }
   }
+
+  // ── Client connection ──────────────────────────────────────
 
   /** Create SSE response for a new client */
   createResponse(queueFilter: string | null, corsOrigin: string, lastEventId?: string): Response {
@@ -172,14 +348,14 @@ export class SseHandler {
     });
   }
 
-  /** Close all connections and stop heartbeat */
+  /** Close all connections and stop all timers */
   closeAll(): void {
-    this.stopHeartbeat();
+    this.stopTimers();
     for (const [, client] of this.clients) {
       try {
         client.controller.close();
       } catch {
-        // Ignore
+        /* ignore */
       }
     }
     this.clients.clear();

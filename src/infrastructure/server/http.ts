@@ -82,11 +82,12 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
   // Start periodic broadcasts
   wsHandler.startBroadcasts(queueManager);
-  sseHandler.startHeartbeat();
+  sseHandler.startBroadcasts(queueManager);
 
   // Register dashboard event emitter for non-job events (worker, queue, dlq)
   queueManager.setDashboardEmit((event, data) => {
     wsHandler.emitEvent(event, data);
+    sseHandler.emitEvent(event, data);
   });
 
   // Helper to get CORS origin string
