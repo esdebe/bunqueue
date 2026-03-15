@@ -1128,12 +1128,15 @@ describe('EmbeddedBackend - Job Management', () => {
     expect(success).toBe(false);
   });
 
-  test('discardJob removes a waiting job', async () => {
+  test('discardJob moves a waiting job to DLQ', async () => {
     const { jobId } = await backend.addJob('mgmt-q', 'discard-me', { x: 1 });
     const success = await backend.discardJob(jobId);
     expect(success).toBe(true);
     const job = await backend.getJob(jobId);
-    expect(job).toBeNull();
+    // Job is now in DLQ (failed state), still retrievable via getJob
+    expect(job).not.toBeNull();
+    const state = await backend.getJobState(jobId);
+    expect(state).toBe('failed');
   });
 
   test('discardJob returns false for non-existent job', async () => {
