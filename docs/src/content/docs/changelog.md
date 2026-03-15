@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.26] - 2026-03-15
+
+### Added
+- **Enterprise-grade SSE** — Event IDs for client-side deduplication, Last-Event-ID resume with ring buffer (1000 events), heartbeat keepalive (30s), retry field (3s auto-reconnect), connection limit (1000 max with 503 rejection).
+- **Enterprise-grade WebSocket** — Backpressure detection via getBufferedAmount() (1MB threshold), dead client cleanup in emit/broadcast, connection limit (1000 max), dropped message counter for observability.
+
+### Docs
+- **Worker options** — Documented 8 missing options: limiter, lockDuration, maxStalledCount, skipStalledCheck, skipLockRenewal, drainDelay, removeOnComplete, removeOnFail.
+- **FlowProducer BullMQ v5 API** — Documented add(), addBulk(), getFlow() methods with FlowJob/JobNode interfaces.
+- **Lifecycle functions** — Documented shutdownManager(), closeSharedTcpClient(), closeAllSharedPools().
+- **Environment variables** — Added BUNQUEUE_MODE, BUNQUEUE_HOST, BUNQUEUE_PORT to env-vars reference.
+
 ## [2.6.25] - 2026-03-14
 
 ### Fixed
