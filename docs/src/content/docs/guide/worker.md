@@ -49,6 +49,26 @@ const worker = new Worker('queue', processor, {
   // Lock-Based Ownership (BullMQ-style)
   useLocks: true,           // Enable job locks (default: true)
 
+  // Rate Limiting
+  limiter: {
+    max: 10,              // Max 10 jobs per duration window
+    duration: 1000,       // Window of 1 second
+    groupKey: 'userId',   // Optional: rate limit per group key in job data
+  },
+
+  // Lock & Stall Tuning
+  lockDuration: 30000,    // Job lock TTL in ms (default: 30000)
+  maxStalledCount: 1,     // Max stalls before job moves to failed (default: 1)
+  skipStalledCheck: false, // Skip stall detection (default: false)
+  skipLockRenewal: false,  // Skip heartbeat lock renewal (default: false)
+  drainDelay: 5000,       // Pause when queue is empty (default: 5000)
+
+  // Auto-Cleanup
+  removeOnComplete: true,           // Remove completed jobs immediately
+  // removeOnComplete: 100,          // Keep last 100 completed jobs
+  // removeOnComplete: { age: 3600000, count: 500 }, // Keep by age or count
+  removeOnFail: false,              // Same format as removeOnComplete
+
   // TCP Connection (server mode only)
   connection: {
     host: 'localhost',
@@ -72,6 +92,14 @@ const worker = new Worker('queue', processor, {
 | `batchSize` | `number` | `10` | Jobs to pull per batch (max: 1000) |
 | `pollTimeout` | `number` | `0` | Long-poll timeout in ms (max: 30000) |
 | `useLocks` | `boolean` | `true` | Enable BullMQ-style job locks |
+| `limiter` | `RateLimiterOptions` | — | Rate limiter for job processing (`{ max, duration, groupKey? }`) |
+| `lockDuration` | `number` | `30000` | How long a job lock lasts before expiring (ms) |
+| `maxStalledCount` | `number` | `1` | Max times a job can stall before moving to failed |
+| `skipStalledCheck` | `boolean` | `false` | Skip stalled job detection |
+| `skipLockRenewal` | `boolean` | `false` | Skip lock renewal via heartbeat |
+| `drainDelay` | `number` | `5000` | Pause duration when queue is drained (ms) |
+| `removeOnComplete` | `boolean \| number \| KeepJobs` | `false` | Auto-remove completed jobs. `true` = immediate, `number` = max count, `{ age?, count? }` = by age/count |
+| `removeOnFail` | `boolean \| number \| KeepJobs` | `false` | Auto-remove failed jobs. Same format as `removeOnComplete` |
 
 ## Job Object
 
@@ -422,6 +450,32 @@ const stats = worker.getStats();
 // Graceful shutdown
 await worker.stop();
 ```
+
+## Lifecycle & Shutdown
+
+When using embedded mode, call `shutdownManager()` to cleanly shut down the shared QueueManager (flushes write buffer, closes SQLite). In TCP mode, use `closeSharedTcpClient()` to close the shared TCP connection pool.
+
+```typescript
+import { shutdownManager, closeSharedTcpClient } from 'bunqueue/client';
+
+process.on('SIGINT', async () => {
+  await worker.close();
+
+  // Embedded mode: shut down the shared QueueManager
+  shutdownManager();
+
+  // TCP mode: close the shared TCP connection pool
+  closeSharedTcpClient();
+
+  process.exit(0);
+});
+```
+
+| Function | Mode | Description |
+|----------|------|-------------|
+| `shutdownManager()` | Embedded | Shuts down the shared QueueManager, flushes pending writes, closes SQLite |
+| `closeSharedTcpClient()` | TCP | Closes the shared TCP client connection |
+| `closeAllSharedPools()` | TCP | Closes all shared TCP connection pools |
 
 ## CPU-Intensive Workers (TCP)
 

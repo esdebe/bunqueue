@@ -181,15 +181,87 @@ interface FlowStep<T = unknown> {
 }
 ```
 
+## BullMQ v5 Compatible API
+
+FlowProducer also supports the BullMQ v5 flow API where children are processed **before** their parent. This is the inverse of the bunqueue-native API above.
+
+### `add(flow)` — Add a Flow Tree
+
+```typescript
+const result = await flow.add({
+  name: 'parent-job',
+  queueName: 'my-queue',
+  data: { type: 'report' },
+  children: [
+    { name: 'child-1', queueName: 'my-queue', data: { section: 'intro' } },
+    { name: 'child-2', queueName: 'my-queue', data: { section: 'body' } },
+  ],
+});
+
+// result.job — the parent Job
+// result.children — array of JobNode (each with .job and optional .children)
+```
+
+Children complete first, then the parent becomes available for processing. Inside the parent's worker, use `job.getChildrenValues()` to access child results.
+
+### `addBulk(flows)` — Add Multiple Flows
+
+```typescript
+const results = await flow.addBulk([
+  { name: 'report-1', queueName: 'reports', data: {}, children: [...] },
+  { name: 'report-2', queueName: 'reports', data: {}, children: [...] },
+]);
+```
+
+### `getFlow(opts)` — Retrieve a Flow Tree
+
+```typescript
+const tree = await flow.getFlow({
+  id: 'job-123',          // Root job ID
+  queueName: 'my-queue',  // Queue name
+  depth: 3,               // Max depth to traverse (default: Infinity)
+  maxChildren: 100,       // Max children per node (default: unlimited)
+});
+
+if (tree) {
+  console.log(tree.job.id);       // Root job
+  console.log(tree.children);     // Child nodes (recursive)
+}
+```
+
+### FlowJob Interface
+
+```typescript
+interface FlowJob<T = unknown> {
+  name: string;           // Job name
+  queueName: string;      // Target queue
+  data: T;                // Job data
+  opts?: JobOptions;      // Optional job options
+  children?: FlowJob[];   // Child jobs (processed BEFORE parent)
+}
+```
+
+### JobNode Interface
+
+```typescript
+interface JobNode<T = unknown> {
+  job: Job<T>;            // The job instance
+  children?: JobNode[];   // Child nodes
+}
+```
+
 ## Methods Reference
 
 | Method | Description |
 |--------|-------------|
+| `add(flow)` | BullMQ v5: tree where children complete before parent |
+| `addBulk(flows[])` | BullMQ v5: add multiple flow trees |
+| `getFlow(opts)` | BullMQ v5: retrieve a flow tree by root job ID |
 | `addChain(steps[])` | Sequential execution: A → B → C |
 | `addBulkThen(parallel[], final)` | Parallel then converge: [A, B, C] → D |
 | `addTree(root)` | Hierarchical tree with nested children |
-| `getParentResult(parentId)` | Get result from single parent job |
-| `getParentResults(parentIds[])` | Get results from multiple parent jobs |
+| `getParentResult(parentId)` | Get result from single parent job (embedded only) |
+| `getParentResults(parentIds[])` | Get results from multiple parent jobs (embedded only) |
 
 ## Complete Example
 

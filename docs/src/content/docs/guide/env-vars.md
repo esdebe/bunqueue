@@ -434,6 +434,42 @@ CORS_ALLOW_ORIGIN=https://app.example.com,https://admin.example.com bunqueue sta
 
 ## Client & CLI
 
+### `BUNQUEUE_MODE`
+
+Connection mode for bunqueue client and MCP server.
+
+| Type | Default | Values |
+|------|---------|--------|
+| string | `embedded` | `embedded`, `tcp` |
+
+```bash
+BUNQUEUE_MODE=tcp bun run worker.ts
+```
+
+### `BUNQUEUE_HOST`
+
+Server host for TCP mode connections.
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | `localhost` | `your-server.com` |
+
+```bash
+BUNQUEUE_HOST=your-server.com bun run worker.ts
+```
+
+### `BUNQUEUE_PORT`
+
+Server port for TCP mode connections.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `6789` | `7000` |
+
+```bash
+BUNQUEUE_PORT=7000 bun run worker.ts
+```
+
 ### `BUNQUEUE_EMBEDDED`
 
 Force embedded mode for client library.
