@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.32] - 2026-03-16
+
+### Added
+- **13 new WebSocket/SSE events** — `job:expired`, `flow:completed`, `flow:failed`, `queue:idle`, `queue:threshold`, `worker:overloaded`, `worker:error`, `cron:skipped`, `storage:size-warning`, `server:memory-warning` (+ `flow:*` wildcard). Total event types: 86.
+- **Monitoring checks** — Periodic threshold monitoring runs on cleanup interval (10s). Configurable via env vars: `QUEUE_IDLE_THRESHOLD_MS`, `QUEUE_SIZE_THRESHOLD`, `MEMORY_WARNING_MB`, `STORAGE_WARNING_MB`, `WORKER_OVERLOAD_THRESHOLD_MS`.
+- **Cron overlap detection** — Crons skip execution if the previous instance fired within 80% of the repeat interval, emitting `cron:skipped` instead.
+- **Flow lifecycle events** — `flow:completed` when all children of a parent job finish, `flow:failed` when a child permanently fails (moves to DLQ).
+
+### Changed
+- **SandboxedWorker docs** — Clearly marked as experimental across all documentation pages (worker, migration, CPU-intensive, stall-detection, troubleshooting). Production recommendation to use standard `Worker` instead.
+
 ## [2.6.31] - 2026-03-16
 
 ### Added
