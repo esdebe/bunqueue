@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.31] - 2026-03-16
+
+### Added
+- **SandboxedWorker `autoStart` option** — Automatically restart the worker pool when new jobs arrive after idle shutdown. Set `autoStart: true` with `idleTimeout` to get workers that sleep when idle and wake up when needed. Configurable poll interval via `autoStartPollMs` (default: 5000ms). Closes #51.
+
 ## [2.6.30] - 2026-03-16
 
 ### Added

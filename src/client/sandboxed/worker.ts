@@ -86,7 +86,10 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   private readonly heartbeatInterval: number;
   private readonly idleTimeout: number;
   private readonly idleRecycleMs: number;
+  private readonly autoStart: boolean;
+  private readonly autoStartPollMs: number;
   private lastActivityTime: number = 0;
+  private autoStartTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(queueName: string, options: SandboxedWorkerOptions) {
     super();
@@ -105,6 +108,8 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
     this.idleTimeout = options.idleTimeout ?? 0;
     this.idleRecycleMs = options.idleRecycleMs ?? 30000;
+    this.autoStart = options.autoStart ?? false;
+    this.autoStartPollMs = options.autoStartPollMs ?? 5000;
 
     this.options = {
       processor: options.processor,
@@ -143,6 +148,11 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   async stop(force = false): Promise<void> {
     this.running = false;
 
+    if (this.autoStartTimer) {
+      clearInterval(this.autoStartTimer);
+      this.autoStartTimer = null;
+    }
+
     // Wait for pull loop to exit (it checks this.running)
     if (this.pullPromise) await this.pullPromise;
 
@@ -168,6 +178,34 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     await cleanupWrapperScript(this.wrapperPath);
     if (this.tcp) releaseSharedPool(this.tcp);
     this.emit('closed');
+  }
+
+  /**
+   * Stop workers but keep polling for new jobs.
+   * When a job is found, automatically restart the worker pool.
+   */
+  private async stopAndWatch(): Promise<void> {
+    await this.stop();
+
+    this.autoStartTimer = setInterval(() => {
+      void this.checkAndRestart();
+    }, this.autoStartPollMs);
+  }
+
+  /** Check for waiting jobs and restart if found */
+  private async checkAndRestart(): Promise<void> {
+    try {
+      const count = await this.ops.countWaiting(this.queueName);
+      if (count > 0) {
+        if (this.autoStartTimer) {
+          clearInterval(this.autoStartTimer);
+          this.autoStartTimer = null;
+        }
+        await this.start();
+      }
+    } catch {
+      // Ignore poll errors during watch
+    }
   }
 
   /** Check if the worker is currently running */
@@ -276,12 +314,21 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       } else {
         this.recycleIdleWorkers();
         if (this.idleTimeout > 0 && Date.now() - this.lastActivityTime >= this.idleTimeout) {
-          this.stop().catch((err: unknown) => {
-            log('error', 'Idle timeout stop failed', {
-              queue: this.queueName,
-              error: err instanceof Error ? err.message : String(err),
+          if (this.autoStart) {
+            this.stopAndWatch().catch((err: unknown) => {
+              log('error', 'Idle stop-and-watch failed', {
+                queue: this.queueName,
+                error: err instanceof Error ? err.message : String(err),
+              });
             });
-          });
+          } else {
+            this.stop().catch((err: unknown) => {
+              log('error', 'Idle timeout stop failed', {
+                queue: this.queueName,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+          }
           return;
         }
       }

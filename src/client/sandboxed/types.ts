@@ -33,6 +33,10 @@ export interface SandboxedWorkerOptions {
   idleTimeout?: number;
   /** Recycle individual idle worker processes after this many ms (default: 30000, 0 = disabled) */
   idleRecycleMs?: number;
+  /** Auto-restart worker pool when new jobs arrive after idle shutdown (default: false) */
+  autoStart?: boolean;
+  /** Poll interval in ms for checking new jobs while in idle-shutdown state (default: 5000) */
+  autoStartPollMs?: number;
 }
 
 /** Required options with defaults applied */

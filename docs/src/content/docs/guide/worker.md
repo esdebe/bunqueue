@@ -326,6 +326,8 @@ await worker.start();
 | `maxRestarts` | `number` | `10` | Max restart attempts per worker |
 | `pollInterval` | `number` | `10` | Job poll interval in ms |
 | `heartbeatInterval` | `number` | `5000` (embedded) / `10000` (TCP) | Heartbeat interval for stall detection / lock renewal |
+| `autoStart` | `boolean` | `false` | Auto-restart worker pool when new jobs arrive after idle shutdown |
+| `autoStartPollMs` | `number` | `5000` | Poll interval for checking new jobs while idle-stopped |
 | `connection` | `ConnectionOptions` | — | TCP connection config (omit for embedded) |
 
 ### TCP Mode

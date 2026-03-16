@@ -21,6 +21,7 @@ export interface QueueOps {
   updateProgress(id: JobId, progress: number): Promise<void>;
   addLog(id: JobId, message: string): void;
   sendHeartbeat(ids: string[], tokens: string[]): Promise<void>;
+  countWaiting(queue: string): Promise<number>;
 }
 
 /** Create embedded mode operations using shared QueueManager */
@@ -40,6 +41,10 @@ export function createEmbeddedOps(manager: SharedManager): QueueOps {
         manager.jobHeartbeat(jobId(ids[i]), tokens[i]);
       }
       return Promise.resolve();
+    },
+    countWaiting: (queue) => {
+      const counts = manager.getQueueJobCounts(queue);
+      return Promise.resolve(counts.waiting + counts.delayed);
     },
   };
 }
@@ -74,6 +79,12 @@ export function createTcpOps(tcp: TcpConnectionPool): QueueOps {
       } else {
         await tcp.send({ cmd: 'JobHeartbeatB', ids, tokens });
       }
+    },
+    async countWaiting(queue) {
+      const res = await tcp.send({ cmd: 'GetJobCounts', queue });
+      if (!res.ok) return 0;
+      const counts = res.counts as Record<string, number> | undefined;
+      return (counts?.waiting ?? 0) + (counts?.delayed ?? 0);
     },
   };
 }
