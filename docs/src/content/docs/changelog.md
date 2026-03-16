@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.29] - 2026-03-16
+
+### Added
+- **TCP integration tests** — 4 new test suites: backoff strategies, job move methods, parent failure options, worker advanced methods. TCP test coverage now at 56 suites.
+
 ## [2.6.28] - 2026-03-15
 
 ### Fixed
