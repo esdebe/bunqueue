@@ -102,15 +102,6 @@ describe('Stall Detection - Heartbeat Updates', () => {
   });
 
   /**
-   * Verify that TCP mode heartbeat works (control test)
-   * Skip this test as it requires TCP server
-   */
-  test.skip('TCP mode: heartbeat is sent and received', async () => {
-    // This would require a running TCP server
-    // Just documenting that TCP mode has explicit heartbeat
-  });
-
-  /**
    * Test that a job with regular progress updates does NOT get stalled
    */
   test('job with progress updates should NOT be stalled', async () => {

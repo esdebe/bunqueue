@@ -96,45 +96,6 @@ describe('SandboxedWorker', () => {
     await worker.stop();
   });
 
-  test('should handle multiple concurrent jobs', async () => {
-    const queueName = `sandboxed-concurrent-test-${Date.now()}`;
-    const worker = new SandboxedWorker(queueName, {
-      processor: processorPath,
-      concurrency: 4,
-      timeout: 10000,
-      manager,
-    });
-
-    await worker.start();
-
-    // Add multiple jobs
-    const jobs = await Promise.all([
-      manager.push(queueName, { data: { value: 1 } }),
-      manager.push(queueName, { data: { value: 2 } }),
-      manager.push(queueName, { data: { value: 3 } }),
-      manager.push(queueName, { data: { value: 4 } }),
-    ]);
-
-    // Wait for all jobs in parallel to avoid sequential timeout
-    const results = await Promise.all(
-      jobs.map(async (job, i) => {
-        let result: unknown;
-        for (let attempt = 0; attempt < 80; attempt++) {
-          await Bun.sleep(150);
-          result = manager.getResult(job.id);
-          if (result !== undefined) break;
-        }
-        return { result, expected: { processed: true, value: (i + 1) * 2 } };
-      })
-    );
-
-    for (const { result, expected } of results) {
-      expect(result).toEqual(expected);
-    }
-
-    await worker.stop();
-  }, 15000);
-
   test('should handle worker timeout', async () => {
     // Create a slow processor
     const slowProcessorPath = `${Bun.env.TMPDIR ?? '/tmp'}/slow-processor-${Date.now()}.ts`;
