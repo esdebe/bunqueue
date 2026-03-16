@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.33] - 2026-03-16
+
+### Fixed
+- **Worker `log` event** — `worker.on('log', (job, message) => ...)` now works with full TypeScript autocomplete. The `log` event is emitted when `job.log()` is called inside the processor, matching SandboxedWorker behavior. ([#53](https://github.com/egeominotti/bunqueue/issues/53))
+
 ## [2.6.32] - 2026-03-16
 
 ### Added
