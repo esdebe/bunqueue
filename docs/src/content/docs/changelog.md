@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.36] - 2026-03-17
+
+### Fixed
+- **`/queues/:queue/jobs/list` performance** — Endpoint was taking 300-450ms even with `limit=2` because it scanned the entire jobIndex (O(N) iterations + O(N) individual SQLite lookups) then sorted all results. Now delegates to a single indexed SQLite query with `LIMIT/OFFSET`, reducing response time to <5ms.
+
 ## [2.6.35] - 2026-03-16
 
 ### Changed

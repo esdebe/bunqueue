@@ -318,6 +318,36 @@ export class SqliteStorage {
   // ============ Query Operations ============
 
   /**
+   * Query jobs by queue with optional state filter and pagination.
+   * Uses idx_jobs_queue_state index for O(log n) lookups.
+   */
+  queryJobs(
+    queue: string,
+    options: { state?: string; limit: number; offset: number; asc: boolean }
+  ): Job[] {
+    const order = options.asc ? 'ASC' : 'DESC';
+    let rows: DbJob[];
+
+    if (options.state) {
+      rows = this.db
+        .query<
+          DbJob,
+          [string, string, number, number]
+        >(`SELECT * FROM jobs WHERE queue = ? AND state = ? ORDER BY created_at ${order} LIMIT ? OFFSET ?`)
+        .all(queue, options.state, options.limit, options.offset);
+    } else {
+      rows = this.db
+        .query<
+          DbJob,
+          [string, number, number]
+        >(`SELECT * FROM jobs WHERE queue = ? ORDER BY created_at ${order} LIMIT ? OFFSET ?`)
+        .all(queue, options.limit, options.offset);
+    }
+
+    return rows.map((row) => rowToJob(row));
+  }
+
+  /**
    * Load pending jobs with pagination for efficient recovery.
    * Orders by priority (desc) and run_at (asc) to process urgent jobs first.
    * @param limit Max jobs to return (default: 10000)

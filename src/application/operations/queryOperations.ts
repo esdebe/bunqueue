@@ -178,6 +178,36 @@ export function getJobs(
   ctx: GetJobsContext
 ): Job[] {
   const { state, start = 0, end = 100, asc = true } = options;
+
+  // Fast path: use SQLite pagination (idx_jobs_queue_state index)
+  // Avoids O(N) jobIndex scan + O(N) individual lookups
+  if (ctx.storage) {
+    // Completed: direct SQLite query with LIMIT/OFFSET
+    if (state === 'completed') {
+      return ctx.storage.queryJobs(queue, {
+        state: 'completed',
+        limit: end - start,
+        offset: start,
+        asc,
+      });
+    }
+
+    // No state filter: SQLite has all jobs (DLQ jobs still appear with
+    // their pre-DLQ state; handler resolves real state via getJobState)
+    if (!state) {
+      return ctx.storage.queryJobs(queue, {
+        limit: end - start,
+        offset: start,
+        asc,
+      });
+    }
+
+    // failed: not tracked in jobs table state — fall through to in-memory DLQ
+    // waiting/delayed: SQLite state can be stale — fall through to in-memory PQ
+    // active: fall through to in-memory processingShards
+  }
+
+  // In-memory path (embedded mode or waiting/delayed/active/failed filters)
   const shard = ctx.shards[shardIdx];
   const now = Date.now();
   const jobs: Job[] = [];
