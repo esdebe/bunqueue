@@ -26,6 +26,7 @@ export interface CompletedEvent<R = unknown> {
 export interface FailedEvent {
   jobId: string;
   failedReason: string;
+  data?: unknown;
 }
 
 /** Event payload for 'progress' event */
@@ -120,7 +121,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   on(event: 'retried', listener: (data: RetriedEvent) => void): this;
   on(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   on(event: 'drained', listener: (data: DrainedEvent) => void): this;
-  on(event: 'error', listener: (error: Error) => void): this;
+  on(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
@@ -138,68 +139,70 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   once(event: 'retried', listener: (data: RetriedEvent) => void): this;
   once(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   once(event: 'drained', listener: (data: DrainedEvent) => void): this;
-  once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: string, listener: (...args: any[]) => void): this {
     return super.once(event, listener);
   }
 
+  private dispatchEvent(event: JobEvent): void {
+    switch (event.eventType) {
+      case EventType.Pushed:
+        this.emit('waiting', { jobId: event.jobId });
+        break;
+      case EventType.Pulled:
+        this.emit('active', { jobId: event.jobId });
+        break;
+      case EventType.Completed:
+        this.emit('completed', { jobId: event.jobId, returnvalue: event.data });
+        break;
+      case EventType.Failed:
+        this.emit('failed', {
+          jobId: event.jobId,
+          failedReason: event.error ?? 'Job failed',
+          data: event.data,
+        });
+        if (event.error) {
+          this.emit('error', new Error(event.error), event);
+        }
+        break;
+      case EventType.Progress:
+        this.emit('progress', { jobId: event.jobId, data: event.data });
+        break;
+      case EventType.Stalled:
+        this.emit('stalled', { jobId: event.jobId });
+        break;
+      case EventType.Removed:
+        this.emit('removed', { jobId: event.jobId, prev: event.prev ?? 'unknown' });
+        break;
+      case EventType.Delayed:
+        this.emit('delayed', { jobId: event.jobId, delay: event.delay ?? 0 });
+        break;
+      case EventType.Duplicated:
+        this.emit('duplicated', { jobId: event.jobId });
+        break;
+      case EventType.Retried:
+        this.emit('retried', { jobId: event.jobId, prev: event.prev ?? 'failed' });
+        break;
+      case EventType.WaitingChildren:
+        this.emit('waiting-children', { jobId: event.jobId });
+        break;
+      case EventType.Drained:
+        this.emit('drained', { id: event.jobId });
+        break;
+    }
+  }
+
   private start(): void {
-    // Guard against double subscription (race condition prevention)
     if (this.running || this.unsubscribe) return;
     this.running = true;
 
-    // Subscribe to events from QueueManager
     const manager = getSharedManager();
     const handler = (event: JobEvent) => {
       try {
         if (event.queue !== this.name) return;
-
-        switch (event.eventType) {
-          case EventType.Pushed:
-            this.emit('waiting', { jobId: event.jobId });
-            break;
-          case EventType.Pulled:
-            this.emit('active', { jobId: event.jobId });
-            break;
-          case EventType.Completed:
-            this.emit('completed', { jobId: event.jobId, returnvalue: event.data });
-            break;
-          case EventType.Failed:
-            this.emit('failed', { jobId: event.jobId, failedReason: event.data });
-            // Also emit error event for failed jobs (BullMQ compatibility)
-            if (event.error) {
-              this.emit('error', new Error(event.error));
-            }
-            break;
-          case EventType.Progress:
-            this.emit('progress', { jobId: event.jobId, data: event.data });
-            break;
-          case EventType.Stalled:
-            this.emit('stalled', { jobId: event.jobId });
-            break;
-          // BullMQ v5 additional events
-          case EventType.Removed:
-            this.emit('removed', { jobId: event.jobId, prev: event.prev ?? 'unknown' });
-            break;
-          case EventType.Delayed:
-            this.emit('delayed', { jobId: event.jobId, delay: event.delay ?? 0 });
-            break;
-          case EventType.Duplicated:
-            this.emit('duplicated', { jobId: event.jobId });
-            break;
-          case EventType.Retried:
-            this.emit('retried', { jobId: event.jobId, prev: event.prev ?? 'failed' });
-            break;
-          case EventType.WaitingChildren:
-            this.emit('waiting-children', { jobId: event.jobId });
-            break;
-          case EventType.Drained:
-            this.emit('drained', { id: event.jobId });
-            break;
-        }
+        this.dispatchEvent(event);
       } catch (err) {
-        // Emit error event for any handler errors
         this.emit('error', err instanceof Error ? err : new Error(String(err)));
       }
     };
