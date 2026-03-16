@@ -283,6 +283,10 @@ worker.on('failed', (job, error) => {
 
 ## SandboxedWorker
 
+:::caution[Experimental: Bun Workers]
+`SandboxedWorker` relies on [Bun Workers](https://bun.sh/docs/runtime/workers), which are currently **experimental** in Bun. You may encounter edge-case bugs or breaking changes across Bun versions. Use in production at your own risk and pin your Bun version.
+:::
+
 For CPU-intensive tasks or jobs that might crash, use `SandboxedWorker` to run processors in **isolated Bun Worker processes**.
 
 :::note[Crash Isolation]
