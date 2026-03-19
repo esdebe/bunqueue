@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.44] - 2026-03-20
+
+### Fixed
+- **Cloud: WebSocket ping/pong heartbeat** — Pong responses are now sent regardless of `BUNQUEUE_CLOUD_REMOTE_COMMANDS` config. Previously, ping messages were silently dropped when remote commands were disabled, causing the dashboard to disconnect the agent every ~60s as a zombie connection.
+
 ## [2.6.43] - 2026-03-19
 
 ### Added

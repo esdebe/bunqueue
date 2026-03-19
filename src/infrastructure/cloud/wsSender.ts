@@ -57,13 +57,25 @@ export class WsSender {
       );
     };
 
-    // Handle incoming messages (commands from dashboard)
+    // Handle incoming messages (pings + commands from dashboard)
     this.ws.onmessage = (event) => {
-      if (!this.onCommand || !this.config.remoteCommands) return;
-
       try {
         const msg = JSON.parse(String(event.data)) as Record<string, unknown>;
-        if (msg.type === 'command' && msg.action && msg.id) {
+
+        // Heartbeat — respond immediately to keep connection alive
+        if (msg.type === 'ping') {
+          this.ws?.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+
+        // Commands require remoteCommands enabled + handler registered
+        if (
+          this.onCommand &&
+          this.config.remoteCommands &&
+          msg.type === 'command' &&
+          msg.action &&
+          msg.id
+        ) {
           this.onCommand(msg as unknown as CloudCommand);
         }
       } catch {
