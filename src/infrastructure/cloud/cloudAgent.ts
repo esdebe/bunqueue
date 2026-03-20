@@ -179,6 +179,8 @@ export class CloudAgent {
           error: event.error,
           progress: event.progress,
           data: this.config.includeJobData ? this.redactData(event.data) : undefined,
+          prev: event.prev,
+          delay: event.delay,
         },
       };
 

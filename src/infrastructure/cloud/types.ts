@@ -250,5 +250,7 @@ export interface CloudEvent {
     error?: string;
     progress?: number;
     data?: unknown;
+    prev?: string;
+    delay?: number;
   };
 }

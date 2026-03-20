@@ -60,11 +60,30 @@ export class WsSender {
     // Handle incoming messages (pings + commands from dashboard)
     this.ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(String(event.data)) as Record<string, unknown>;
+        // Handle both text and binary frames (Bun/CF may send either)
+        let raw: string;
+        const d: unknown = event.data;
+        if (typeof d === 'string') {
+          raw = d;
+        } else if (d instanceof ArrayBuffer) {
+          raw = new TextDecoder().decode(d);
+        } else if (d instanceof Buffer) {
+          raw = d.toString('utf-8');
+        } else {
+          raw = String(d);
+        }
+
+        const msg = JSON.parse(raw) as Record<string, unknown>;
 
         // Heartbeat — respond immediately to keep connection alive
         if (msg.type === 'ping') {
+          cloudLog.debug('Received ping, sending pong');
           this.ws?.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+
+        if (msg.type === 'handshake_ack') {
+          cloudLog.debug('Handshake acknowledged');
           return;
         }
 
@@ -78,8 +97,13 @@ export class WsSender {
         ) {
           this.onCommand(msg as unknown as CloudCommand);
         }
-      } catch {
-        // Ignore malformed messages
+      } catch (err) {
+        cloudLog.debug('WS message parse error', {
+          dataType: typeof event.data,
+          isArrayBuffer: event.data instanceof ArrayBuffer,
+          preview: String(event.data).slice(0, 100),
+          error: String(err),
+        });
       }
     };
 

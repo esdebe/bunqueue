@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.45] - 2026-03-20
+
+### Added
+- **Cloud: `prev` and `delay` fields in WebSocket events** — CloudEvent now forwards all JobEvent fields: `prev` (previous state on removed/retried) and `delay` (ms for delayed jobs).
+
+### Fixed
+- **Cloud: WebSocket binary frame handling** — Ping/pong and command messages now handle both text and binary WebSocket frames (ArrayBuffer/Buffer), preventing silent parse failures behind Cloudflare.
+
 ## [2.6.44] - 2026-03-20
 
 ### Fixed
