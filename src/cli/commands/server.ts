@@ -53,7 +53,12 @@ function parseServerArgs(args: string[]): ServerOptions {
       6790
     ),
     host: (values.host as string) ?? Bun.env.HOST ?? '0.0.0.0',
-    dataPath: (values['data-path'] as string) ?? Bun.env.DATA_PATH,
+    dataPath:
+      (values['data-path'] as string) ??
+      Bun.env.BUNQUEUE_DATA_PATH ??
+      Bun.env.BQ_DATA_PATH ??
+      Bun.env.DATA_PATH ??
+      Bun.env.SQLITE_PATH,
     authTokens:
       (values['auth-tokens'] as string)?.split(',').filter(Boolean) ??
       Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ??

@@ -155,8 +155,12 @@ Cleanup runs every 10s. Evicts 10% when full.
 TCP_PORT=6789              HTTP_PORT=6790
 HOST=0.0.0.0               BUNQUEUE_DATA_PATH=./data/bunq.db
 AUTH_TOKENS=token1,token2  CORS_ALLOW_ORIGIN=*
-# Data path aliases (priority: BUNQUEUE_DATA_PATH > BQ_DATA_PATH > DATA_PATH)
-# BQ_DATA_PATH, DATA_PATH also supported for backward compatibility
+METRICS_AUTH=false          # Require auth for /metrics endpoint
+TCP_SOCKET_PATH=           # Unix socket for TCP (overrides host/port)
+HTTP_SOCKET_PATH=          # Unix socket for HTTP
+
+# Data path (priority: BUNQUEUE_DATA_PATH > BQ_DATA_PATH > DATA_PATH > SQLITE_PATH)
+# Or set programmatically: new Queue('q', { embedded: true, dataPath: './data/q.db' })
 
 # S3 Backup
 S3_BACKUP_ENABLED=0        S3_BUCKET=my-bucket
@@ -168,6 +172,21 @@ S3_BACKUP_INTERVAL=21600000  S3_BACKUP_RETENTION=7
 SHUTDOWN_TIMEOUT_MS=30000  STATS_INTERVAL_MS=300000
 WORKER_TIMEOUT_MS=30000    LOCK_TIMEOUT_MS=5000
 WEBHOOK_MAX_RETRIES=3      WEBHOOK_RETRY_DELAY_MS=1000
+
+# Cloud (bunqueue.io dashboard)
+BUNQUEUE_CLOUD_URL=        BUNQUEUE_CLOUD_API_KEY=
+BUNQUEUE_CLOUD_INSTANCE_NAME=  # defaults to hostname
+BUNQUEUE_CLOUD_INTERVAL_MS=5000
+BUNQUEUE_CLOUD_USE_WEBSOCKET=true
+BUNQUEUE_CLOUD_USE_HTTP=true
+BUNQUEUE_CLOUD_REMOTE_COMMANDS=false
+BUNQUEUE_CLOUD_INCLUDE_JOB_DATA=false
+BUNQUEUE_CLOUD_REDACT_FIELDS=  # comma-separated
+BUNQUEUE_CLOUD_EVENTS=         # event filter, comma-separated
+BUNQUEUE_CLOUD_BUFFER_SIZE=720
+BUNQUEUE_CLOUD_CIRCUIT_BREAKER_THRESHOLD=5
+BUNQUEUE_CLOUD_CIRCUIT_BREAKER_RESET_MS=60000
+BUNQUEUE_CLOUD_SIGNING_SECRET=  # HMAC signing
 ```
 
 ## TCP Protocol Commands
@@ -316,8 +335,8 @@ CREATE INDEX idx_jobs_run_at ON jobs(run_at) WHERE state IN ('waiting','delayed'
 ## Testing
 
 ```bash
-bun test                           # All tests (3751 tests)
-bun scripts/tcp/run-all-tests.ts   # TCP tests (24 suites)
+bun test                           # All tests (~5065 tests)
+bun scripts/tcp/run-all-tests.ts   # TCP tests (~52 suites)
 bun run bench                      # Benchmarks
 ```
 
