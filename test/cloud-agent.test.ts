@@ -79,7 +79,7 @@ describe('loadCloudConfig', () => {
 
     const config = loadCloudConfig()!;
     expect(config.signingSecret).toBeNull();
-    expect(config.intervalMs).toBe(5000);
+    expect(config.intervalMs).toBe(15000);
     expect(config.includeJobData).toBe(false);
     expect(config.redactFields).toEqual([]);
     expect(config.eventFilter).toEqual([]);
@@ -315,7 +315,7 @@ describe('HttpSender', () => {
       apiKey: 'dk_test_123',
       signingSecret: null,
       instanceName: 'test',
-      intervalMs: 5000,
+      intervalMs: 15000,
       includeJobData: false,
       redactFields: [],
       eventFilter: [],
@@ -346,7 +346,7 @@ describe('HttpSender', () => {
       apiKey: 'dk_test_123',
       signingSecret: null,
       instanceName: 'test',
-      intervalMs: 5000,
+      intervalMs: 15000,
       includeJobData: false,
       redactFields: [],
       eventFilter: [],
@@ -381,7 +381,7 @@ describe('HttpSender', () => {
       apiKey: 'dk_test_123',
       signingSecret: 'test-secret-key',
       instanceName: 'test',
-      intervalMs: 5000,
+      intervalMs: 15000,
       includeJobData: false,
       redactFields: [],
       eventFilter: [],
@@ -408,7 +408,7 @@ describe('HttpSender', () => {
       apiKey: 'dk_test_123',
       signingSecret: null,
       instanceName: 'test',
-      intervalMs: 5000,
+      intervalMs: 15000,
       includeJobData: false,
       redactFields: [],
       eventFilter: [],

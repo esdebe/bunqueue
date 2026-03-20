@@ -27,7 +27,7 @@ export function loadCloudConfig(dataPath?: string): CloudConfig | null {
     apiKey,
     signingSecret: Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET ?? null,
     instanceName: Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME ?? hostname(),
-    intervalMs: parseInt(Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS ?? '5000', 10),
+    intervalMs: parseInt(Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS ?? '15000', 10),
     includeJobData: Bun.env.BUNQUEUE_CLOUD_INCLUDE_JOB_DATA === 'true',
     redactFields: Bun.env.BUNQUEUE_CLOUD_REDACT_FIELDS?.split(',').filter(Boolean) ?? [],
     eventFilter: Bun.env.BUNQUEUE_CLOUD_EVENTS?.split(',').filter(Boolean) ?? [],
