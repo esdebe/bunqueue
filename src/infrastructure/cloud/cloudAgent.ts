@@ -86,7 +86,14 @@ export class CloudAgent {
         cloudLog.info('Remote commands enabled');
         this.wsSender.setCommandHandler((cmd) => {
           handleCommand(this.queueManager, cmd)
-            .then((result) => this.wsSender?.sendRaw(result))
+            .then((result) => {
+              this.wsSender?.sendRaw(result);
+              // Send immediate snapshot after state-changing commands
+              // so the dashboard reflects the change without waiting 15s
+              if (result.success) {
+                this.sendImmediateSnapshot();
+              }
+            })
             .catch((err: unknown) => {
               cloudLog.debug('Command handler error', { error: String(err) });
             });
@@ -135,11 +142,22 @@ export class CloudAgent {
     cloudLog.info('Disconnected from dashboard');
   }
 
+  /** Send snapshot immediately after a command (debounced 100ms to batch rapid commands) */
+  private immediateSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+  private sendImmediateSnapshot(): void {
+    if (this.immediateSnapshotTimer) return; // already scheduled
+    this.immediateSnapshotTimer = setTimeout(() => {
+      this.immediateSnapshotTimer = null;
+      void this.sendSnapshot(true);
+    }, 100);
+  }
+
   /** Collect and send a snapshot. Prefers WS, falls back to HTTP. */
-  private async sendSnapshot(): Promise<void> {
+  private async sendSnapshot(forceHeavy = false): Promise<void> {
     try {
       this.snapshotCount++;
-      const includeHeavy = this.snapshotCount % this.heavyEveryN === 1 || this.snapshotCount === 1;
+      const includeHeavy =
+        forceHeavy || this.snapshotCount % this.heavyEveryN === 1 || this.snapshotCount === 1;
 
       const snapshot = collectSnapshot({
         queueManager: this.queueManager,
