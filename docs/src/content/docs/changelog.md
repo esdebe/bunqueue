@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.49] - 2026-03-20
+
+### Added
+- **Cloud: 20 new remote commands** — Full dashboard control via WebSocket:
+  - Queue: `obliterate`, `promoteAll`, `retryCompleted`, `rateLimit`, `clearRateLimit`, `concurrency`, `clearConcurrency`, `stallConfig`, `dlqConfig`
+  - Job: `push`, `priority`, `discard`, `delay`, `updateData`, `clearLogs`
+  - Webhook: `add`, `remove`, `set-enabled`
+  - Other: `s3:backup`
+- **Shared `deriveState` and `mapJob` helpers** — Eliminated triplicated state derivation logic in command handlers.
+
 ## [2.6.48] - 2026-03-20
 
 ### Changed
