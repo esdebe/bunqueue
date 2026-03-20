@@ -323,12 +323,20 @@ export class SqliteStorage {
    */
   queryJobs(
     queue: string,
-    options: { state?: string; limit: number; offset: number; asc: boolean }
+    options: { state?: string; states?: string[]; limit: number; offset: number; asc: boolean }
   ): Job[] {
     const order = options.asc ? 'ASC' : 'DESC';
     let rows: DbJob[];
 
-    if (options.state) {
+    if (options.states && options.states.length > 0) {
+      const placeholders = options.states.map(() => '?').join(',');
+      rows = this.db
+        .query<
+          DbJob,
+          (string | number)[]
+        >(`SELECT * FROM jobs WHERE queue = ? AND state IN (${placeholders}) ORDER BY created_at ${order} LIMIT ? OFFSET ?`)
+        .all(queue, ...options.states, options.limit, options.offset);
+    } else if (options.state) {
       rows = this.db
         .query<
           DbJob,

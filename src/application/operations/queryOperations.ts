@@ -152,14 +152,59 @@ export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobS
 }
 
 /** Collect completed jobs for a queue from index + storage */
-function collectCompletedJobs(queue: string, ctx: GetJobsContext): Job[] {
+function collectCompletedJobs(queue: string, ctx: GetJobsContext, maxCollect: number): Job[] {
   const jobs: Job[] = [];
-  for (const [jobId, location] of ctx.jobIndex) {
-    if (location.type === 'completed') {
-      const job = ctx.storage?.getJob(jobId) ?? ctx.completedJobsData?.get(jobId) ?? null;
-      if (job?.queue === queue) {
+  for (const [jId, location] of ctx.jobIndex) {
+    if (location.type === 'completed' && location.queueName === queue) {
+      const job = ctx.storage?.getJob(jId) ?? ctx.completedJobsData?.get(jId) ?? null;
+      if (job) {
         jobs.push(job);
+        if (jobs.length >= maxCollect) break;
       }
+    }
+  }
+  return jobs;
+}
+
+/** Collect active jobs for a queue across all processing shards */
+function collectActiveJobs(
+  queue: string,
+  shardIdx: number,
+  ctx: GetJobsContext,
+  maxCollect: number
+): Job[] {
+  const jobs: Job[] = [];
+  // Own shard first (most likely location)
+  for (const job of ctx.processingShards[shardIdx].values()) {
+    if (job.queue === queue) jobs.push(job);
+    if (jobs.length >= maxCollect) return jobs;
+  }
+  // Other shards
+  for (let i = 0; i < ctx.shardCount; i++) {
+    if (i === shardIdx) continue;
+    for (const job of ctx.processingShards[i].values()) {
+      if (job.queue === queue) jobs.push(job);
+      if (jobs.length >= maxCollect) return jobs;
+    }
+  }
+  return jobs;
+}
+
+/** Collect waiting/delayed jobs in a single pass */
+function collectTemporalJobs(
+  shard: Shard,
+  queue: string,
+  needWaiting: boolean,
+  needDelayed: boolean,
+  maxCollect: number
+): Job[] {
+  const now = Date.now();
+  const jobs: Job[] = [];
+  for (const j of shard.getQueue(queue).values()) {
+    if (jobs.length >= maxCollect) break;
+    const isDelayed = j.runAt > now;
+    if ((isDelayed && needDelayed) || (!isDelayed && needWaiting)) {
+      jobs.push(j);
     }
   }
   return jobs;
@@ -173,37 +218,21 @@ function collectJobsByState(
   ctx: GetJobsContext
 ): Job[] {
   const shard = ctx.shards[shardIdx];
-  const now = Date.now();
   const jobs: Job[] = [];
+  const needWaiting = !states || states.includes('waiting');
+  const needDelayed = !states || states.includes('delayed');
 
-  if (!states || states.includes('waiting')) {
-    jobs.push(
-      ...shard
-        .getQueue(queue)
-        .values()
-        .filter((j) => j.runAt <= now)
-    );
-  }
-  if (!states || states.includes('delayed')) {
-    jobs.push(
-      ...shard
-        .getQueue(queue)
-        .values()
-        .filter((j) => j.runAt > now)
-    );
+  if (needWaiting || needDelayed) {
+    jobs.push(...collectTemporalJobs(shard, queue, needWaiting, needDelayed, Infinity));
   }
   if (!states || states.includes('active')) {
-    for (let i = 0; i < ctx.shardCount; i++) {
-      for (const job of ctx.processingShards[i].values()) {
-        if (job.queue === queue) jobs.push(job);
-      }
-    }
+    jobs.push(...collectActiveJobs(queue, shardIdx, ctx, Infinity));
   }
   if (!states || states.includes('failed')) {
     jobs.push(...shard.getDlq(queue));
   }
   if (!states || states.includes('completed')) {
-    jobs.push(...collectCompletedJobs(queue, ctx));
+    jobs.push(...collectCompletedJobs(queue, ctx, Infinity));
   }
   return jobs;
 }
@@ -231,23 +260,21 @@ export function getJobs(
         : state
       : [state];
 
+  const limit = end - start;
+
   // Fast path: use SQLite pagination (idx_jobs_queue_state index)
-  // Avoids O(N) jobIndex scan + O(N) individual lookups
+  // Routes ALL state combinations through SQLite when available — O(log n + k)
   if (ctx.storage) {
-    if (states?.length === 1 && states[0] === 'completed') {
-      return ctx.storage.queryJobs(queue, {
-        state: 'completed',
-        limit: end - start,
-        offset: start,
-        asc,
-      });
-    }
     if (!states) {
-      return ctx.storage.queryJobs(queue, { limit: end - start, offset: start, asc });
+      return ctx.storage.queryJobs(queue, { limit, offset: start, asc });
     }
+    if (states.length === 1) {
+      return ctx.storage.queryJobs(queue, { state: states[0], limit, offset: start, asc });
+    }
+    return ctx.storage.queryJobs(queue, { states, limit, offset: start, asc });
   }
 
-  // In-memory path (embedded mode or waiting/delayed/active/failed filters)
+  // In-memory path (embedded mode only)
   const jobs = collectJobsByState(queue, shardIdx, states, ctx);
   jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
   return jobs.slice(start, end);
