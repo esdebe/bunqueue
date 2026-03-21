@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.64] - 2026-03-21
+
+### Fixed
+- **No-lock ack fails after stall re-queue (data loss)** — When a worker with `useLocks=false` processed a job that stall detection re-queued, the `ack()` call threw "Job not found" with no recovery path, leaving the job stuck in the queue forever. The existing Issue #33 handler (`completeStallRetriedJob`) only fired when a lock token was present. Now the handler also fires for tokenless acks when the job was stall-retried (`attempts > 0`), preventing false completions of freshly-pushed jobs.
+
 ## [2.6.63] - 2026-03-21
 
 ### Performance

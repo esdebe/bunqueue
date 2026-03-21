@@ -331,12 +331,15 @@ export class QueueManager {
     try {
       await ackJob(jobId, result, this.contextFactory.getAckContext());
     } catch (err) {
-      // Job removed from processing by stall detection but lock still valid.
-      // Only applies when caller has a lock token (worker with ownership).
+      // Job removed from processing by stall detection and re-queued.
       // Try to complete from queue to prevent duplicate execution (Issue #33).
-      if (token && err instanceof Error && err.message.includes('not found')) {
-        if (await this.completeStallRetriedJob(jobId, result)) {
-          lockMgr.releaseLock(jobId, lockCtx, token);
+      // With token: always attempt (worker had ownership via lock).
+      // Without token: only if job was stall-retried (attempts > 0), to avoid
+      // completing freshly-pushed jobs that were never pulled.
+      if (err instanceof Error && err.message.includes('not found')) {
+        const shouldRecover = token ?? this.isStallRetried(jobId);
+        if (shouldRecover && (await this.completeStallRetriedJob(jobId, result))) {
+          if (token) lockMgr.releaseLock(jobId, lockCtx, token);
           return;
         }
       }
@@ -428,6 +431,16 @@ export class QueueManager {
     if (loc?.type === 'processing' && lockCtx.jobLocks.has(jobId)) {
       throw new Error(`Invalid or expired lock token for job ${jobId}`);
     }
+  }
+
+  /** Check if a queued job was stall-retried (has been processed before). */
+  private isStallRetried(jobId: JobId): boolean {
+    const loc = this.jobIndex.get(jobId);
+    if (loc?.type !== 'queue') return false;
+    const shard = this.shards[loc.shardIdx];
+    const pq = shard.getQueue(loc.queueName);
+    const job = pq.find(jobId);
+    return job !== null && job.attempts > 0;
   }
 
   /**
