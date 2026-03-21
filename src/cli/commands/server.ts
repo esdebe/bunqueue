@@ -130,6 +130,17 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
     auth: authTokens ? 'enabled' : 'disabled',
   });
 
+  // Initialize bunqueue Cloud agent (remote dashboard telemetry)
+  const { CloudAgent } = await import('../../infrastructure/cloud/cloudAgent');
+  const cloudAgent = CloudAgent.create(qm, options.dataPath ?? undefined);
+  if (cloudAgent) {
+    cloudAgent.setServerHandles({
+      getConnectionCount: () => tcpServer.getConnectionCount(),
+      getWsClientCount: () => httpServer.getWsClientCount(),
+      getSseClientCount: () => httpServer.getSseClientCount(),
+    });
+  }
+
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';
   const bold = '\x1b[1m';
@@ -161,10 +172,14 @@ ${dim}────────────────────────�
   // Handle shutdown
   const shutdown = () => {
     serverLog.info('Shutting down...');
-    tcpServer.stop();
-    httpServer.stop();
-    qm.shutdown();
-    process.exit(0);
+    const doStop = async () => {
+      if (cloudAgent) await cloudAgent.stop();
+      tcpServer.stop();
+      httpServer.stop();
+      qm.shutdown();
+      process.exit(0);
+    };
+    void doStop();
   };
 
   process.on('SIGINT', shutdown);
