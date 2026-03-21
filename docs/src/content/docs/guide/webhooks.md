@@ -261,7 +261,7 @@ After all attempts are exhausted, the webhook delivery is abandoned and logged.
 
 A webhook delivery is considered successful if:
 - HTTP status code is 2xx (200-299)
-- Response is received within 30 seconds
+- Response is received within 10 seconds
 
 ### Failure Handling
 

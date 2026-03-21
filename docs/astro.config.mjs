@@ -38,15 +38,7 @@ export default defineConfig({
         '@root': path.resolve(__dirname, '..'),
       },
     },
-    build: {
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            search: ['@pagefind/default-ui'],
-          },
-        },
-      },
-    },
+    build: {},
   },
 
   integrations: [
@@ -58,9 +50,9 @@ export default defineConfig({
         src: './src/assets/logo.svg',
         replacesTitle: true,
       },
-      social: {
-        github: 'https://github.com/egeominotti/bunqueue',
-      },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/egeominotti/bunqueue' },
+      ],
       editLink: {
         baseUrl: 'https://github.com/egeominotti/bunqueue/edit/main/docs/',
       },
