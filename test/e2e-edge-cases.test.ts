@@ -18,7 +18,7 @@ function setup() {
   let manager: QueueManager;
   beforeEach(async () => {
     await cleanup();
-    manager = new QueueManager({ dataPath: TEST_DB });
+    manager = new QueueManager({ dataPath: TEST_DB, validateWebhookUrls: false });
   });
   afterEach(async () => {
     manager.shutdown();

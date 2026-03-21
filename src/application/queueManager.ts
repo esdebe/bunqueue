@@ -155,7 +155,7 @@ export class QueueManager {
     }
 
     // Initialize managers
-    this.webhookManager = new WebhookManager();
+    this.webhookManager = new WebhookManager({ validateUrls: config.validateWebhookUrls });
     this.workerManager = new WorkerManager();
     this.eventsManager = new EventsManager(this.webhookManager);
 

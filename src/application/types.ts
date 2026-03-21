@@ -27,6 +27,7 @@ export interface QueueManagerConfig {
   dependencyCheckMs?: number;
   stallCheckMs?: number;
   dlqMaintenanceMs?: number;
+  validateWebhookUrls?: boolean;
 }
 
 export const DEFAULT_CONFIG = {

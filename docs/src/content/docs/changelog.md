@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.62] - 2026-03-21
+
+### Fixed
+- **E2E webhook tests failing after SSRF validation** — Added `validateWebhookUrls` option to `QueueManagerConfig` so tests using localhost can disable URL validation.
+
 ## [2.6.60] - 2026-03-21
 
 ### Fixed
