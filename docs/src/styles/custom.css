@@ -1,31 +1,41 @@
 /* bunqueue Theme - Bun-inspired Light Design */
 
-:root {
-  /* Bun-style brand colors - Light theme default */
-  --sl-color-accent-low: #fdf2f8;
-  --sl-color-accent: #db2777;
-  --sl-color-accent-high: #9d174d;
+/* Starlight 0.38 uses @layer — unlayered :root always wins.
+   Gray scale INVERTS between themes: white↔black, gray-1↔gray-6.
+   We set :root as dark defaults, then [data-theme='light'] inverts. */
 
-  /* Text colors */
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #fafafa;
-  --sl-color-gray-2: #f4f4f5;
+:root {
+  /* Brand colors — dark mode defaults */
+  --sl-color-accent-low: #3d2a3d;
+  --sl-color-accent: #f9a8d4;
+  --sl-color-accent-high: #fce7f3;
+
+  /* Gray scale — dark mode (light values = high numbers) */
+  --sl-color-white: #fafafa;
+  --sl-color-gray-1: #f4f4f5;
+  --sl-color-gray-2: #e4e4e7;
   --sl-color-gray-3: #71717a;
   --sl-color-gray-4: #52525b;
   --sl-color-gray-5: #27272a;
   --sl-color-gray-6: #18181b;
   --sl-color-black: #09090b;
 
-  /* Background colors - Light */
-  --sl-color-bg: #ffffff;
-  --sl-color-bg-sidebar: #fafafa;
-  --sl-color-bg-nav: rgba(255, 255, 255, 0.9);
+  /* Backgrounds — dark */
+  --sl-color-bg: #09090b;
+  --sl-color-bg-sidebar: #0a0a0c;
+  --sl-color-bg-nav: rgba(9, 9, 11, 0.9);
+  --sl-color-bg-inline-code: #27272a;
+  --sl-color-bg-accent: #f9a8d4;
 
-  --sl-color-text: #18181b;
-  --sl-color-text-accent: #db2777;
+  /* Text — dark */
+  --sl-color-text: #fafafa;
+  --sl-color-text-accent: #f9a8d4;
+  --sl-color-text-invert: #3d2a3d;
 
-  --sl-color-hairline: #e4e4e7;
-  --sl-color-hairline-light: #f4f4f5;
+  /* Borders — dark */
+  --sl-color-hairline: #27272a;
+  --sl-color-hairline-light: #18181b;
+  --sl-color-hairline-shade: #09090b;
 
   /* Fonts */
   --sl-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -36,21 +46,39 @@
   --sl-sidebar-width: 18rem;
 }
 
-/* Dark theme */
-:root[data-theme='dark'] {
-  --sl-color-accent-low: #3d2a3d;
-  --sl-color-accent: #f9a8d4;
-  --sl-color-accent-high: #fce7f3;
+/* Light theme — inverted gray scale + pink accent */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #fdf2f8;
+  --sl-color-accent: #db2777;
+  --sl-color-accent-high: #9d174d;
 
-  --sl-color-bg: #09090b;
-  --sl-color-bg-sidebar: #0a0a0c;
-  --sl-color-bg-nav: rgba(9, 9, 11, 0.9);
+  /* Gray scale INVERTED for light mode */
+  --sl-color-white: #18181b;
+  --sl-color-gray-1: #27272a;
+  --sl-color-gray-2: #52525b;
+  --sl-color-gray-3: #71717a;
+  --sl-color-gray-4: #a1a1aa;
+  --sl-color-gray-5: #e4e4e7;
+  --sl-color-gray-6: #f4f4f5;
+  --sl-color-gray-7: #f8f8fa;
+  --sl-color-black: #ffffff;
 
-  --sl-color-text: #fafafa;
-  --sl-color-text-accent: #f9a8d4;
+  /* Backgrounds — light */
+  --sl-color-bg: #ffffff;
+  --sl-color-bg-sidebar: #fafafa;
+  --sl-color-bg-nav: rgba(255, 255, 255, 0.9);
+  --sl-color-bg-inline-code: #f4f4f5;
+  --sl-color-bg-accent: #db2777;
 
-  --sl-color-hairline: #27272a;
-  --sl-color-hairline-light: #18181b;
+  /* Text — light */
+  --sl-color-text: #18181b;
+  --sl-color-text-accent: #db2777;
+  --sl-color-text-invert: #ffffff;
+
+  /* Borders — light */
+  --sl-color-hairline: #e4e4e7;
+  --sl-color-hairline-light: #f4f4f5;
+  --sl-color-hairline-shade: #d4d4d8;
 }
 
 /* Smooth scrolling */
@@ -1128,39 +1156,48 @@ nav.sidebar .top-level > li:last-child {
 /* Feature grid */
 .hp-features {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--sl-color-hairline);
-  background: var(--sl-color-hairline);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
   margin-bottom: 4rem;
-}
-
-:root[data-theme='dark'] .hp-features {
-  border-color: rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.06);
 }
 
 .hp-feature-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 1.5rem;
+  gap: 0.35rem;
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--sl-color-hairline);
   background: var(--sl-color-bg);
   transition: all 0.2s ease;
 }
 
 .hp-feature-item:hover {
-  background: var(--sl-color-bg-sidebar);
+  border-color: var(--sl-color-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(219, 39, 119, 0.1);
 }
 
 :root[data-theme='dark'] .hp-feature-item {
-  background: #09090b;
+  background: rgba(24, 24, 27, 0.5);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme='dark'] .hp-feature-item:hover {
-  background: rgba(24, 24, 27, 0.8);
+  border-color: rgba(249, 168, 212, 0.3);
+  box-shadow: 0 4px 20px rgba(249, 168, 212, 0.06);
+}
+
+svg.hp-feature-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--sl-color-accent);
+  margin-bottom: 0.35rem;
+  flex-shrink: 0;
+}
+
+:root[data-theme='dark'] svg.hp-feature-icon {
+  color: #f9a8d4;
 }
 
 .hp-feature-item strong {
@@ -1169,7 +1206,7 @@ nav.sidebar .top-level > li:last-child {
   color: var(--sl-color-text);
 }
 
-.hp-feature-item span {
+.hp-feature-item span:not(.hp-feature-icon) {
   font-size: 0.8rem;
   color: var(--sl-color-gray-3);
 }
@@ -1310,6 +1347,7 @@ nav.sidebar .top-level > li:last-child {
 
   .hp-features {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
   }
 
   .hp-heading {

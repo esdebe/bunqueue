@@ -89,13 +89,11 @@ S3_REGION=auto
 The backup runs on a timer (default: every 6 hours):
 
 <Steps>
-
 1. **Checkpoint WAL** - forces all pending writes to the main database file
 2. **Create consistent snapshot** - SQLite's backup API ensures a point-in-time consistent copy
 3. **Compress** - the backup is compressed before upload
 4. **Upload to S3** - stored with a timestamp-based key
 5. **Cleanup old backups** - removes backups older than retention period
-
 </Steps>
 
 <Aside type="note">
@@ -119,7 +117,6 @@ bunqueue-backups/
 To restore from a backup:
 
 <Steps>
-
 1. **Stop bunqueue**
 
    ```bash
@@ -150,7 +147,6 @@ To restore from a backup:
    systemctl start bunqueue
    # or: docker start bunqueue
    ```
-
 </Steps>
 
 bunqueue will recover the queue state from the restored database, reloading pending jobs, cron schedules, and DLQ entries.

@@ -157,13 +157,11 @@ Use the HTTP health endpoint for load balancer checks, Docker HEALTHCHECK, and K
 bunqueue handles SIGTERM for graceful shutdown:
 
 <Steps>
-
 1. Stop accepting new connections
 2. Wait for active jobs to complete (up to `SHUTDOWN_TIMEOUT_MS`)
 3. Flush the write buffer to SQLite
 4. Close the database
 5. Exit cleanly
-
 </Steps>
 
 ```bash
