@@ -10,6 +10,13 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.74] - 2026-03-23
+
+### Changed
+- **Cloud: dynamic ingest interval** — Snapshot interval now adapts automatically to payload size: < 50KB → 5s, 50–200KB → 10s, 200–500KB → 20s, > 500KB → 30s. Previously fixed at 15s regardless of load.
+- **Cloud: unbounded job collection** — Removed the 10k total cap on `recentJobs[]`. Each state is now collected in full, bounded only by in-memory eviction limits (50k completed FIFO, etc).
+- **Cloud: removed `/batch` ingest endpoint** — Recovery now resends buffered snapshots one-by-one to the standard `/api/v1/ingest` endpoint, simplifying the protocol.
+
 ## [2.6.73] - 2026-03-23
 
 ### Added
