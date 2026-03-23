@@ -104,17 +104,16 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
   const mem = process.memoryUsage();
 
   const queueNames = queueManager.listQueues();
-  const perQueue = queueManager.getPerQueueStats();
   const queues = queueNames.map((name) => {
     const counts = queueManager.getQueueJobCounts(name);
     return {
       name,
       waiting: counts.waiting,
+      prioritized: counts.prioritized,
       delayed: counts.delayed,
       active: counts.active,
       completed: counts.completed,
       failed: counts.failed,
-      dlq: perQueue.get(name)?.dlq ?? 0,
       paused: queueManager.isPaused(name),
       totalCompleted: counts.totalCompleted,
       totalFailed: counts.totalFailed,
@@ -139,7 +138,7 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
 
   // ─── Full data (every snapshot) ───
   const allQueueNames = queues.map((q) => q.name);
-  const dlqQueues = queues.filter((q) => q.dlq > 0);
+  const dlqQueues = queues.filter((q) => q.failed > 0);
 
   // Live jobs: waiting/active/delayed/failed — bounded by processing capacity
   const recentJobs = collectLiveJobs(queueManager, allQueueNames);
@@ -206,6 +205,7 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
 
     stats: {
       waiting: stats.waiting,
+      prioritized: stats.prioritized,
       delayed: stats.delayed,
       active: stats.active,
       dlq: stats.dlq,

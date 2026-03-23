@@ -46,6 +46,7 @@ import { handleCron, handleCronGet, handleCronDelete, handleCronList } from './h
 
 import {
   handleUpdate,
+  handleUpdateParent,
   handleChangePriority,
   handlePromote,
   handleMoveToDelayed,
@@ -171,6 +172,8 @@ export async function routeManagementCommand(
       return handleProgress(cmd, ctx, reqId);
     case 'Update':
       return handleUpdate(cmd, ctx, reqId);
+    case 'UpdateParent':
+      return handleUpdateParent(cmd, ctx, reqId);
     case 'ChangePriority':
       return handleChangePriority(cmd, ctx, reqId);
     case 'Promote':

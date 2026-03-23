@@ -54,6 +54,8 @@ export interface AckContext {
   emitDashboardEvent?: (event: string, data: Record<string, unknown>) => void;
   hasPendingDeps?: () => boolean;
   onRepeat?: (job: Job) => void;
+  /** Called when a child job with failParentOnFailure terminally fails */
+  onChildTerminalFailure?: (childJob: Job, error: string | undefined) => void;
 }
 
 /**
@@ -240,6 +242,11 @@ export async function failJob(
       timestamp: Date.now(),
       prev: 'failed',
     });
+  }
+
+  // BullMQ v5: failParentOnFailure — propagate terminal failure to parent
+  if (!wasRetried && job.failParentOnFailure && job.parentId && ctx.onChildTerminalFailure) {
+    ctx.onChildTerminalFailure(job, error);
   }
 }
 

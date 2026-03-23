@@ -12,6 +12,7 @@ import { jobId as toJobId } from '../domain/types/job';
 /** Job counts per state */
 export interface JobCounts {
   waiting: number;
+  prioritized: number;
   delayed: number;
   active: number;
   completed: number;
@@ -403,6 +404,7 @@ export class EmbeddedBackend implements McpBackend {
     const isPaused = this.manager.isPaused(queue);
     return Promise.resolve({
       waiting: counts.waiting,
+      prioritized: counts.prioritized,
       delayed: counts.delayed,
       active: counts.active,
       completed: counts.completed,
@@ -867,6 +869,7 @@ export class TcpBackend implements McpBackend {
     const res = await this.send({ cmd: 'GetJobCounts', queue });
     return {
       waiting: (res.waiting as number) ?? 0,
+      prioritized: (res.prioritized as number) ?? 0,
       delayed: (res.delayed as number) ?? 0,
       active: (res.active as number) ?? 0,
       completed: (res.completed as number) ?? 0,

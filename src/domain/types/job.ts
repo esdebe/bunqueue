@@ -19,6 +19,7 @@ export function generateJobId(): JobId {
 /** Job state enumeration */
 export const enum JobState {
   Waiting = 'waiting',
+  Prioritized = 'prioritized',
   Delayed = 'delayed',
   Active = 'active',
   Completed = 'completed',

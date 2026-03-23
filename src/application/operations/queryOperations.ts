@@ -132,15 +132,18 @@ export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobS
       const result = await withReadLock(ctx.shardLocks[location.shardIdx], () => {
         const shard = ctx.shards[location.shardIdx];
         const queueJob = shard.getQueue(location.queueName).find(jobId);
-        if (queueJob) return { job: queueJob, waitingDeps: false };
+        if (queueJob) return { job: queueJob, waitingDeps: false, waitingChildren: false };
         const depsJob = shard.waitingDeps.get(jobId);
-        if (depsJob) return { job: depsJob, waitingDeps: true };
+        if (depsJob) return { job: depsJob, waitingDeps: true, waitingChildren: false };
+        const childrenJob = shard.waitingChildren.get(jobId);
+        if (childrenJob) return { job: childrenJob, waitingDeps: false, waitingChildren: true };
         return null;
       });
       if (!result) return 'unknown';
-      if (result.waitingDeps) return 'waiting-children' as JobState;
+      if (result.waitingDeps || result.waitingChildren) return 'waiting-children' as JobState;
       const now = Date.now();
-      return result.job.runAt > now ? JobState.Delayed : JobState.Waiting;
+      if (result.job.runAt > now) return JobState.Delayed;
+      return result.job.priority > 0 ? JobState.Prioritized : JobState.Waiting;
     }
     case 'processing':
       return JobState.Active;
@@ -190,21 +193,26 @@ function collectActiveJobs(
   return jobs;
 }
 
-/** Collect waiting/delayed jobs in a single pass */
+/** Collect waiting/delayed/prioritized jobs in a single pass */
 function collectTemporalJobs(
   shard: Shard,
   queue: string,
-  needWaiting: boolean,
-  needDelayed: boolean,
+  needs: { waiting: boolean; prioritized: boolean; delayed: boolean },
   maxCollect: number
 ): Job[] {
+  const { waiting: needWaiting, prioritized: needPrioritized, delayed: needDelayed } = needs;
   const now = Date.now();
   const jobs: Job[] = [];
   for (const j of shard.getQueue(queue).values()) {
     if (jobs.length >= maxCollect) break;
     const isDelayed = j.runAt > now;
-    if ((isDelayed && needDelayed) || (!isDelayed && needWaiting)) {
+    if (isDelayed && needDelayed) {
       jobs.push(j);
+    } else if (!isDelayed) {
+      // BullMQ v5: priority>0 → "prioritized", priority=0 → "waiting"
+      if (j.priority > 0 ? needPrioritized : needWaiting) {
+        jobs.push(j);
+      }
     }
   }
   return jobs;
@@ -220,10 +228,18 @@ function collectJobsByState(
   const shard = ctx.shards[shardIdx];
   const jobs: Job[] = [];
   const needWaiting = !states || states.includes('waiting');
+  const needPrioritized = !states || states.includes('prioritized');
   const needDelayed = !states || states.includes('delayed');
 
-  if (needWaiting || needDelayed) {
-    jobs.push(...collectTemporalJobs(shard, queue, needWaiting, needDelayed, Infinity));
+  if (needWaiting || needPrioritized || needDelayed) {
+    jobs.push(
+      ...collectTemporalJobs(
+        shard,
+        queue,
+        { waiting: needWaiting, prioritized: needPrioritized, delayed: needDelayed },
+        Infinity
+      )
+    );
   }
   if (!states || states.includes('active')) {
     jobs.push(...collectActiveJobs(queue, shardIdx, ctx, Infinity));
@@ -264,9 +280,44 @@ export function getJobs(
 
   // Fast path: use SQLite pagination (idx_jobs_queue_state index)
   // Routes ALL state combinations through SQLite when available — O(log n + k)
+  // Note: SQLite stores 'waiting' (never 'prioritized'), so we translate
+  // 'prioritized' → query 'waiting' with priority > 0, and filter results.
   if (ctx.storage) {
     if (!states) {
       return ctx.storage.queryJobs(queue, { limit, offset: start, asc });
+    }
+    // Translate 'prioritized' → 'waiting' for SQLite, then filter in-memory
+    const hasPrioritized = states.includes('prioritized');
+    const hasWaiting = states.includes('waiting');
+    if (hasPrioritized || hasWaiting) {
+      // Map both to 'waiting' in SQLite, then filter by priority
+      const sqlStates = states
+        .map((s) => (s === 'prioritized' ? 'waiting' : s))
+        .filter((s, i, arr) => arr.indexOf(s) === i); // dedupe
+      let jobs: Job[];
+      if (sqlStates.length === 1) {
+        jobs = ctx.storage.queryJobs(queue, {
+          state: sqlStates[0],
+          limit: limit * 2,
+          offset: start,
+          asc,
+        });
+      } else {
+        jobs = ctx.storage.queryJobs(queue, {
+          states: sqlStates,
+          limit: limit * 2,
+          offset: start,
+          asc,
+        });
+      }
+      // Post-filter: 'prioritized' = priority > 0, 'waiting' = priority <= 0
+      if (hasPrioritized && !hasWaiting) {
+        jobs = jobs.filter((j) => j.priority > 0);
+      } else if (hasWaiting && !hasPrioritized) {
+        jobs = jobs.filter((j) => j.priority <= 0);
+      }
+      // else: both requested, no filter needed
+      return jobs.slice(0, limit);
     }
     if (states.length === 1) {
       return ctx.storage.queryJobs(queue, { state: states[0], limit, offset: start, asc });

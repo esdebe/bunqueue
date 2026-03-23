@@ -10,6 +10,28 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.71] - 2026-03-23
+
+### Added
+- **BullMQ v5 `prioritized` state** — Jobs with `priority > 0` now report state `'prioritized'` instead of `'waiting'`, matching BullMQ v5 exactly. Affects `getJobState()`, `getJobCounts()`, Prometheus metrics, cloud snapshot, SSE/WebSocket events, and MCP adapter.
+- **BullMQ v5 `waiting-children` state** — Parent jobs in flows correctly report `'waiting-children'` state while waiting for child jobs to complete.
+- **`failParentOnFailure`** — When a child job terminally fails with `failParentOnFailure: true`, the parent job is automatically moved to `failed` state. Handles race conditions where child fails before parent linkage is established.
+- **Flow atomicity** — `FlowProducer.add()` and `addBulk()` now automatically roll back all created jobs if any part of the flow fails during creation.
+- **`FlowOpts` with `queuesOptions`** — Pass per-queue default job options as second argument to `flow.add(flowJob, { queuesOptions: { queueName: { attempts: 5 } } })`.
+- **FlowProducer extends EventEmitter** — BullMQ v5 compatible. `close()` returns `Promise<void>`, `closing` property tracks shutdown, `disconnect()` alias.
+- **Job move operations** — `moveActiveToWait`, `changeWaitingDelay`, `moveToWaitingChildren` state transitions with proper resource cleanup (concurrency slots, unique keys, group locks).
+
+### Fixed
+- **TOCTOU in `moveParentToFailed`** — Re-checks `jobIndex` inside write lock to prevent duplicate DLQ entries when multiple children with `failParentOnFailure` fail concurrently.
+- **Unhandled promise rejections** — `moveParentToFailed` calls now have `.catch()` handlers instead of fire-and-forget `void`.
+- **SQLite `queryJobs(state='prioritized')`** — Translates `'prioritized'` to `WHERE state='waiting' AND priority > 0` since SQLite never stores 'prioritized' as a state value.
+- **`moveActiveToWait` resource leak** — Now calls `releaseJobResources()` to free concurrency/uniqueKey/group slots before re-queueing.
+- **Move operations handle `prioritized` state** — `moveJobToWait` and `moveJobToDelayed` now correctly handle jobs in `'prioritized'` state.
+- **Cloud snapshot** — Added `prioritized` to stats and per-queue data. Per-queue data now uses `failed` instead of `dlq` (BullMQ v5 compatible).
+
+### Changed
+- **Documentation** — Updated state machine diagrams, API types, FlowProducer guide, migration guide with BullMQ v5 parity tables, cloud contract with new snapshot fields.
+
 ## [2.6.67] - 2026-03-22
 
 ### Changed

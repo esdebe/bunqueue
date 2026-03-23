@@ -506,6 +506,8 @@ export class Queue<T = unknown> {
       {
         ...this.addCtx,
         getWaitingAsync: (s?: number, e?: number) => this.getWaitingAsync(s, e),
+        getPrioritizedAsync: (s?: number, e?: number) =>
+          this.getJobsAsync({ state: 'prioritized', start: s, end: e }),
       } as never,
       start,
       end
@@ -515,6 +517,8 @@ export class Queue<T = unknown> {
     return bullmqCompatOps.getPrioritizedCount<T>({
       ...this.addCtx,
       getWaitingAsync: (s?: number, e?: number) => this.getWaitingAsync(s, e),
+      getPrioritizedAsync: (s?: number, e?: number) =>
+        this.getJobsAsync({ state: 'prioritized', start: s, end: e }),
     } as never);
   }
   getWaitingChildren(start?: number, end?: number) {

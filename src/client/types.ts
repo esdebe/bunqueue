@@ -4,7 +4,15 @@
  */
 
 /** Job state type */
-export type JobStateType = 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown';
+export type JobStateType =
+  | 'waiting'
+  | 'prioritized'
+  | 'delayed'
+  | 'active'
+  | 'completed'
+  | 'failed'
+  | 'waiting-children'
+  | 'unknown';
 
 /** Job JSON representation (BullMQ v5 compatible) */
 export interface JobJson<T = unknown> {

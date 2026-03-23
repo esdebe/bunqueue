@@ -15,6 +15,7 @@ interface CountsContext {
 
 export interface JobCounts {
   waiting: number;
+  prioritized: number;
   active: number;
   completed: number;
   failed: number;
@@ -25,7 +26,15 @@ export interface JobCounts {
 /** Get job counts (sync, embedded only) */
 export function getJobCounts(ctx: CountsContext): JobCounts {
   if (!ctx.embedded) {
-    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+    return {
+      waiting: 0,
+      prioritized: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      delayed: 0,
+      paused: 0,
+    };
   }
 
   const manager = getSharedManager();
@@ -34,6 +43,7 @@ export function getJobCounts(ctx: CountsContext): JobCounts {
   const isPaused = manager.isPaused(ctx.name);
   return {
     waiting: counts.waiting,
+    prioritized: counts.prioritized,
     active: counts.active,
     completed: counts.completed,
     failed: counts.failed,
@@ -49,12 +59,21 @@ export async function getJobCountsAsync(ctx: CountsContext): Promise<JobCounts> 
   // Use GetJobCounts for queue-specific counts
   const response = await ctx.tcp!.send({ cmd: 'GetJobCounts', queue: ctx.name });
   if (!response.ok) {
-    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+    return {
+      waiting: 0,
+      prioritized: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      delayed: 0,
+      paused: 0,
+    };
   }
 
   const counts = response.counts as
     | {
         waiting?: number;
+        prioritized?: number;
         active?: number;
         completed?: number;
         failed?: number;
@@ -65,6 +84,7 @@ export async function getJobCountsAsync(ctx: CountsContext): Promise<JobCounts> 
 
   return {
     waiting: counts?.waiting ?? 0,
+    prioritized: counts?.prioritized ?? 0,
     active: counts?.active ?? 0,
     completed: counts?.completed ?? 0,
     failed: counts?.failed ?? 0,

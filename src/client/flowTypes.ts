@@ -74,3 +74,12 @@ export interface GetFlowOpts {
   /** Maximum number of children to fetch per level (default: unlimited) */
   maxChildren?: number;
 }
+
+/**
+ * FlowOpts - BullMQ v5 compatible options for flow creation.
+ * Allows setting default job options per queue when adding flows.
+ */
+export interface FlowOpts {
+  /** Default job options per queue name */
+  queuesOptions?: Record<string, Partial<JobOptions>>;
+}

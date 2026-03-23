@@ -130,25 +130,36 @@ This is HTTP-level rate limiting per client IP. For per-queue job throughput lim
 Understanding the job lifecycle is essential for using the API effectively. A job flows through these states:
 
 ```
-                    ┌──────────┐
-        push ──────►│ waiting  │◄──── promote (from delayed)
-                    └────┬─────┘
-                         │ pull
-                    ┌────▼─────┐
-                    │  active  │◄──── retry (from failed, if attempts remain)
-                    └────┬─────┘
-                    ┌────┴────┐
-               ack  │         │ fail
-           ┌────────▼┐   ┌───▼──────┐
-           │completed│   │  failed  │
-           └─────────┘   └────┬─────┘
-                              │ max attempts exceeded
-                         ┌────▼─────┐
-                         │   DLQ    │
-                         └──────────┘
+push (priority=0) ──► waiting ──────────────┐
+push (priority>0) ──► prioritized ──────────┤
+push (delay>0) ────► delayed ───────────────┤
+                      │ (delay expires)      │
+                      ▼                      │
+                    waiting / prioritized ───┤
+                                             │ pull
+                                             ▼
+                  ┌── retry ◄────── active ──────────┐
+                  │                   │               │ fail (terminal)
+                  ▼              ack  │               ▼
+               waiting /     ┌───────▼──────┐   ┌────────┐
+               prioritized   │  completed   │   │ failed │
+                             └──────────────┘   └────────┘
+
+                     Flow dependencies:
+                     active ──► waiting-children ──► waiting
+                                 (all children complete)
 ```
 
-**Delayed jobs:** When `delay > 0` is set at push time, the job enters `delayed` state and becomes `waiting` after the delay expires. A delayed job can be promoted to `waiting` immediately via the Promote endpoint.
+**States:**
+- **waiting** — Job is queued with priority = 0
+- **prioritized** — Job is queued with priority > 0 (processed before waiting jobs)
+- **delayed** — Job waiting for its delay to expire, then moves to waiting/prioritized
+- **active** — Job is being processed by a worker
+- **completed** — Job finished successfully
+- **failed** — Job failed after all retries (stored in DLQ with attempt history)
+- **waiting-children** — Parent job waiting for child flow jobs to complete
+
+**Delayed jobs:** When `delay > 0` is set at push time, the job enters `delayed` state and becomes `waiting` (or `prioritized` if priority > 0) after the delay expires. A delayed job can be promoted immediately via the Promote endpoint.
 
 **Durable mode:** When `durable: true` is set, the job is written to SQLite synchronously before returning. Without it, jobs are buffered in memory (10ms write buffer) for ~10x higher throughput, with a small window of potential data loss on crash.
 

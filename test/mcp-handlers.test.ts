@@ -873,7 +873,8 @@ describe('MCP Prompts - debug_queue data gathering', () => {
       backend.getCountsPerPriority('debug-q'),
     ]);
 
-    expect(counts.waiting).toBe(2);
+    // BullMQ v5: priority > 0 jobs are in 'prioritized' state
+    expect(counts.prioritized).toBe(2);
     expect(paused).toBe(false);
     expect(Array.isArray(dlqEntries)).toBe(true);
     expect(Array.isArray(activeJobs)).toBe(true);

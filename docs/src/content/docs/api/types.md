@@ -15,8 +15,46 @@ bunqueue is written in TypeScript and provides comprehensive type definitions. A
 ### JobStateType
 
 ```typescript
-type JobStateType = 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown';
+type JobStateType =
+  | 'waiting'             // In queue, priority = 0
+  | 'prioritized'         // In queue, priority > 0 (BullMQ v5)
+  | 'delayed'             // Waiting for delay to expire
+  | 'active'              // Currently being processed
+  | 'completed'           // Successfully finished
+  | 'failed'              // Failed after all retries (DLQ)
+  | 'waiting-children'    // Waiting for child jobs to complete (flows)
+  | 'unknown';            // Job not found or invalid state
 ```
+
+:::note[BullMQ v5 State Machine]
+bunqueue implements the full BullMQ v5 job state machine:
+
+```
+push (priority=0) ──► waiting ──────────┐
+push (priority>0) ──► prioritized ──────┤
+push (delay>0) ────► delayed ───────────┤
+                      │ (delay expires) │
+                      ▼                 │
+                    waiting/prioritized ┤
+                                        │ pull
+                                        ▼
+                 ┌── retry ◄── active ──────┐
+                 │              │            │ fail (terminal)
+                 ▼         ack  │            ▼
+              waiting/     ┌────▼─────┐  ┌──────┐
+              prioritized  │completed │  │failed│
+                           └──────────┘  └──────┘
+
+                    Flow dependencies:
+                    active ──► waiting-children ──► waiting
+                                (children complete)
+```
+
+**Key differences from BullMQ v5:**
+- `failed` = BullMQ's failed state. Internally stored in DLQ with metadata (reason, attempt history).
+- `prioritized` = BullMQ's prioritized state. Jobs with `priority > 0` are in a separate logical state but share the same priority queue data structure.
+- `waiting-children` = Parent jobs waiting for child flows to complete before becoming processable.
+:::
 
 ### Job
 
@@ -842,6 +880,44 @@ interface FlowProducerOptions {
   /** TCP connection options */
   connection?: ConnectionOptions;
 }
+```
+
+:::note
+FlowProducer extends `EventEmitter` (BullMQ v5 compatible). You can listen for events using `.on()`, `.once()`, etc. The `close()` method returns `Promise<void>` and the `closing` property tracks shutdown state.
+:::
+
+### FlowOpts
+
+Per-flow options passed as the second argument to `flow.add(flowJob, opts)`.
+
+```typescript
+interface FlowOpts {
+  /**
+   * Default job options per queue name.
+   * Applied as defaults — per-job opts override these.
+   */
+  queuesOptions?: Record<string, Partial<JobOptions>>;
+}
+```
+
+**Example:**
+```typescript
+await flow.add(
+  {
+    name: 'parent',
+    queueName: 'reports',
+    children: [
+      { name: 'fetch', queueName: 'api', data: { url: '...' } },
+      { name: 'parse', queueName: 'cpu', data: {} },
+    ],
+  },
+  {
+    queuesOptions: {
+      api: { attempts: 5, backoff: 2000 },  // All jobs in 'api' queue
+      cpu: { timeout: 60000 },               // All jobs in 'cpu' queue
+    },
+  }
+);
 ```
 
 ### FlowJob

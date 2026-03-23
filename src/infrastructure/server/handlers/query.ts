@@ -54,6 +54,7 @@ export function handleGetJobCounts(
   return resp.counts(
     {
       waiting: counts.waiting,
+      prioritized: counts.prioritized,
       delayed: counts.delayed,
       active: counts.active,
       completed: counts.completed,

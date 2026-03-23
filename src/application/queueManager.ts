@@ -11,6 +11,7 @@ import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry, CreateWorkerOptions } from '../domain/types/worker';
 import type { StallConfig } from '../domain/types/stall';
 import type { DlqConfig, DlqEntry, DlqStats } from '../domain/types/dlq';
+import { FailureReason } from '../domain/types/dlq';
 import { Shard } from '../domain/queue/shard';
 import { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
@@ -25,6 +26,7 @@ import { pullJob, pullJobBatch } from './operations/pull';
 import { ackJob, ackJobBatch, ackJobBatchWithResults, failJob } from './operations/ack';
 import * as queueControl from './operations/queueControl';
 import * as jobMgmt from './operations/jobManagement';
+import * as jobTransitions from './operations/jobStateTransitions';
 import * as queryOps from './operations/queryOperations';
 import * as dlqOps from './dlqManager';
 import * as logsOps from './jobLogsManager';
@@ -220,6 +222,7 @@ export class QueueManager {
       hasPendingDeps: this.hasPendingDeps.bind(this),
       onRepeat: this.handleRepeat.bind(this),
       emitDashboardEvent: this.emitDashboardEvent.bind(this),
+      onChildTerminalFailure: this.failParentOnChildFailure.bind(this),
     };
   }
 
@@ -617,6 +620,9 @@ export class QueueManager {
     const childJob = await this.getJob(childJobId);
     if (!childJob) return;
 
+    // Update domain parentId field (cast to bypass readonly for flow linkage)
+    (childJob as { parentId: JobId | null }).parentId = parentJobId;
+
     // Update the job's data to include parent reference
     const jobData = childJob.data as Record<string, unknown>;
     jobData.__parentId = parentJobId;
@@ -639,6 +645,16 @@ export class QueueManager {
       if (parentJob) {
         this.storage.updateJobChildrenIds(parentJobId, parentJob.childrenIds);
       }
+    }
+
+    // Handle race condition: child may have already terminally failed
+    // before parent linkage was established (parentId was 'pending').
+    // If so, propagate failParentOnFailure now with the real parent ID.
+    const childLoc = this.jobIndex.get(childJobId);
+    if (childLoc?.type === 'dlq' && childJob.failParentOnFailure) {
+      this.moveParentToFailed(parentJobId, childJob, 'Child job failed').catch(() => {
+        // Best-effort: parent may already be in DLQ or removed
+      });
     }
   }
 
@@ -864,6 +880,18 @@ export class QueueManager {
     return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
   }
 
+  async moveActiveToWait(jobId: JobId): Promise<boolean> {
+    return jobTransitions.moveActiveToWait(jobId, this.contextFactory.getJobMgmtContext());
+  }
+
+  async changeWaitingDelay(jobId: JobId, delay: number): Promise<boolean> {
+    return jobTransitions.changeWaitingDelay(jobId, delay, this.contextFactory.getJobMgmtContext());
+  }
+
+  async moveToWaitingChildren(jobId: JobId): Promise<boolean> {
+    return jobTransitions.moveToWaitingChildren(jobId, this.contextFactory.getJobMgmtContext());
+  }
+
   async extendLock(
     jobId: JobId | string,
     token: string | null,
@@ -1025,6 +1053,84 @@ export class QueueManager {
         childrenCount: parent.childrenIds.length,
       });
     }
+  }
+
+  /**
+   * BullMQ v5: failParentOnFailure — when a child terminally fails
+   * and has failParentOnFailure: true, also fail the parent job.
+   */
+  private failParentOnChildFailure(childJob: Job, error: string | undefined): void {
+    const parentId = childJob.parentId;
+    if (!parentId) return;
+
+    this.moveParentToFailed(parentId, childJob, error).catch(() => {
+      // Best-effort: parent may already be in DLQ or removed
+    });
+  }
+
+  /** Move a parent job to DLQ/failed state because a child failed */
+  private async moveParentToFailed(
+    parentId: JobId,
+    childJob: Job,
+    error: string | undefined
+  ): Promise<void> {
+    const parentJob = await this.getJob(parentId);
+    if (!parentJob) return;
+
+    const parentLoc = this.jobIndex.get(parentId);
+    if (!parentLoc) return;
+
+    // Only fail parent if it's in a queue (waitingDeps/waitingChildren) state
+    if (parentLoc.type !== 'queue') return;
+
+    const idx = shardIndex(parentJob.queue);
+    await withWriteLock(this.shardLocks[idx], () => {
+      // Re-check inside lock to prevent duplicate DLQ entries (TOCTOU guard)
+      if (this.jobIndex.get(parentId)?.type !== 'queue') return;
+
+      const shard = this.shards[idx];
+
+      // Remove from waitingDeps if present
+      if (shard.waitingDeps.has(parentId)) {
+        shard.waitingDeps.delete(parentId);
+        shard.unregisterDependencies(parentId, parentJob.dependsOn);
+      }
+
+      // Remove from waitingChildren if present
+      if (shard.waitingChildren.has(parentId)) {
+        shard.waitingChildren.delete(parentId);
+      }
+
+      // Remove from queue if present
+      const queue = shard.getQueue(parentJob.queue);
+      if (queue.find(parentId)) {
+        queue.remove(parentId);
+        shard.decrementQueued(parentId);
+      }
+
+      // Add parent to DLQ with child_failed reason
+      const failError = `Child job ${childJob.id} failed: ${error ?? 'unknown error'}`;
+      const entry = shard.addToDlq(parentJob, FailureReason.Unknown, failError);
+      this.jobIndex.set(parentId, { type: 'dlq', queueName: parentJob.queue });
+      this.storage?.saveDlqEntry(entry);
+    });
+
+    // Broadcast failed event for parent
+    this.eventsManager.broadcast({
+      eventType: 'failed' as EventType,
+      queue: parentJob.queue,
+      jobId: parentId,
+      timestamp: Date.now(),
+      error: `Child job ${childJob.id} failed: ${error ?? 'unknown error'}`,
+      data: parentJob.data,
+    });
+
+    this.dashboardEmit?.('flow:failed', {
+      parentJobId: String(parentId),
+      failedChildId: String(childJob.id),
+      queue: parentJob.queue,
+      error: error ?? 'Child job failed',
+    });
   }
 
   private onJobsCompleted(completedIds: JobId[]): void {

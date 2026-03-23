@@ -3,6 +3,7 @@
  * BullMQ v5 compatible
  */
 
+import { EventEmitter } from 'events';
 import { getSharedManager } from './manager';
 import { TcpConnectionPool, getSharedPool, releaseSharedPool } from './tcpPool';
 import { jobId } from '../domain/types/job';
@@ -14,6 +15,7 @@ import type {
   FlowJob,
   JobNode,
   GetFlowOpts,
+  FlowOpts,
 } from './flowTypes';
 import {
   createFlowJobObject,
@@ -31,6 +33,7 @@ export type {
   FlowJob,
   JobNode,
   GetFlowOpts,
+  FlowOpts,
 } from './flowTypes';
 
 const FORCE_EMBEDDED = Bun.env.BUNQUEUE_EMBEDDED === '1';
@@ -59,12 +62,14 @@ const FORCE_EMBEDDED = Bun.env.BUNQUEUE_EMBEDDED === '1';
  * );
  * ```
  */
-export class FlowProducer {
+export class FlowProducer extends EventEmitter {
+  closing: Promise<void> = Promise.resolve();
   private readonly embedded: boolean;
   private readonly tcp: TcpConnectionPool | null;
   private readonly useSharedPool: boolean;
 
   constructor(opts: FlowProducerOptions = {}) {
+    super();
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
 
     if (this.embedded) {
@@ -107,18 +112,19 @@ export class FlowProducer {
   }
 
   /** Close the connection pool (only if using dedicated pool) */
-  close(): void {
+  close(): Promise<void> {
     if (this.tcp && !this.useSharedPool) {
       this.tcp.close();
     } else if (this.tcp && this.useSharedPool) {
       releaseSharedPool(this.tcp);
     }
+    this.closing = Promise.resolve();
+    return this.closing;
   }
 
   /** Disconnect from the server (BullMQ v5 compatible). Alias for close(). */
   disconnect(): Promise<void> {
-    this.close();
-    return Promise.resolve();
+    return this.close();
   }
 
   /** Wait until the FlowProducer is ready (BullMQ v5 compatible). */
@@ -132,13 +138,34 @@ export class FlowProducer {
   // ============================================================================
 
   /** Add a flow (BullMQ v5 compatible). Children are processed BEFORE their parent. */
-  async add<T = unknown>(flow: FlowJob<T>): Promise<JobNode<T>> {
-    return this.addFlowNode(flow, null);
+  async add<T = unknown>(flow: FlowJob<T>, opts?: FlowOpts): Promise<JobNode<T>> {
+    const createdJobIds: string[] = [];
+    try {
+      return await this.addFlowNode(flow, null, createdJobIds, opts);
+    } catch (error) {
+      // Atomic rollback: clean up all created jobs
+      await cleanupJobs(this.pushCtx, createdJobIds);
+      throw error;
+    }
   }
 
   /** Add multiple flows (BullMQ v5 compatible). */
   async addBulk<T = unknown>(flows: FlowJob<T>[]): Promise<JobNode<T>[]> {
-    return Promise.all(flows.map((flow) => this.add(flow)));
+    const results: JobNode<T>[] = [];
+    const allCreatedJobIds: string[] = [];
+    try {
+      for (const flow of flows) {
+        const createdJobIds: string[] = [];
+        const result = await this.addFlowNode(flow, null, createdJobIds);
+        allCreatedJobIds.push(...createdJobIds);
+        results.push(result);
+      }
+      return results;
+    } catch (error) {
+      // Atomic rollback: clean up all created jobs from all flows
+      await cleanupJobs(this.pushCtx, allCreatedJobIds);
+      throw error;
+    }
   }
 
   /** Get a flow tree starting from a job (BullMQ v5 compatible). */
@@ -396,7 +423,9 @@ export class FlowProducer {
 
   private async addFlowNode<T>(
     node: FlowJob<T>,
-    parentRef: { id: string; queue: string } | null
+    parentRef: { id: string; queue: string } | null,
+    createdJobIds: string[],
+    flowOpts?: FlowOpts
   ): Promise<JobNode<T>> {
     const childNodes: JobNode<T>[] = [];
     const childIds: string[] = [];
@@ -405,13 +434,19 @@ export class FlowProducer {
       const tempParentRef = { id: 'pending', queue: node.queueName };
       // Siblings are independent — create them concurrently
       const results = await Promise.all(
-        node.children.map((child) => this.addFlowNode(child, tempParentRef))
+        node.children.map((child) =>
+          this.addFlowNode(child, tempParentRef, createdJobIds, flowOpts)
+        )
       );
       for (const childNode of results) {
         childNodes.push(childNode);
         childIds.push(childNode.job.id);
       }
     }
+
+    // Merge node opts with per-queue defaults from FlowOpts
+    const queueDefaults = flowOpts?.queuesOptions?.[node.queueName];
+    const mergedOpts = queueDefaults ? { ...queueDefaults, ...node.opts } : (node.opts ?? {});
 
     const jobData: Record<string, unknown> = {
       name: node.name,
@@ -426,10 +461,12 @@ export class FlowProducer {
     const jobIdStr = await pushJobWithParent(this.pushCtx, {
       queueName: node.queueName,
       data: jobData,
-      opts: node.opts ?? {},
+      opts: mergedOpts,
       parentRef,
       childIds,
     });
+    createdJobIds.push(jobIdStr);
+
     const job = createFlowJobObject<T>(
       jobIdStr,
       node.name,

@@ -68,6 +68,7 @@ export interface ContextCallbacks {
   hasPendingDeps: () => boolean;
   onRepeat: (job: Job) => void;
   emitDashboardEvent?: (event: string, data: Record<string, unknown>) => void;
+  onChildTerminalFailure?: (childJob: Job, error: string | undefined) => void;
 }
 
 /**
@@ -193,6 +194,7 @@ export class ContextFactory {
       hasPendingDeps: this.callbacks.hasPendingDeps,
       onRepeat: this.callbacks.onRepeat,
       emitDashboardEvent: this.callbacks.emitDashboardEvent,
+      onChildTerminalFailure: this.callbacks.onChildTerminalFailure,
     };
   }
 

@@ -8,6 +8,7 @@ import type { StatsContext } from './types';
 
 export interface QueueStats {
   waiting: number;
+  prioritized: number;
   delayed: number;
   active: number;
   dlq: number;
@@ -23,6 +24,7 @@ export interface QueueStats {
 
 export interface PerQueueStats {
   waiting: number;
+  prioritized: number;
   delayed: number;
   active: number;
   dlq: number;
@@ -47,33 +49,44 @@ export interface MemoryStats {
 }
 
 /**
- * Get queue statistics - O(32) using running counters
+ * Get queue statistics - uses running counters + priority scan
  */
 export function getStats(
   ctx: StatsContext,
   cronScheduler: { getStats(): { total: number; pending: number } }
 ): QueueStats {
   let waiting = 0,
+    prioritized = 0,
     delayed = 0,
     active = 0,
     dlq = 0;
 
-  // O(32) instead of O(n) - use running counters from each shard
+  const now = Date.now();
+
   for (let i = 0; i < SHARD_COUNT; i++) {
     const shardStats = ctx.shards[i].getStats();
-    const queuedTotal = shardStats.queuedJobs;
-    const delayedInShard = shardStats.delayedJobs;
-
-    // waiting = queued jobs that are not delayed
-    waiting += Math.max(0, queuedTotal - delayedInShard);
-    delayed += delayedInShard;
+    delayed += shardStats.delayedJobs;
     dlq += shardStats.dlqJobs;
     active += ctx.processingShards[i].size;
+
+    // Scan queues to split waiting vs prioritized (BullMQ v5 compat)
+    for (const queue of ctx.shards[i].queues.values()) {
+      for (const job of queue.values()) {
+        if (job.runAt <= now) {
+          if (job.priority > 0) {
+            prioritized++;
+          } else {
+            waiting++;
+          }
+        }
+      }
+    }
   }
 
   const cronStats = cronScheduler.getStats();
   return {
     waiting,
+    prioritized,
     delayed,
     active,
     dlq,
@@ -152,11 +165,14 @@ export function getPerQueueStats(
     const queue = shard.queues.get(name);
 
     let waiting = 0;
+    let prioritized = 0;
     let delayed = 0;
     if (queue) {
       for (const job of queue.values()) {
         if (job.runAt > now) {
           delayed++;
+        } else if (job.priority > 0) {
+          prioritized++;
         } else {
           waiting++;
         }
@@ -165,7 +181,7 @@ export function getPerQueueStats(
 
     const dlq = shard.getDlqCount(name);
 
-    result.set(name, { waiting, delayed, active: 0, dlq });
+    result.set(name, { waiting, prioritized, delayed, active: 0, dlq });
   }
 
   // Count active jobs per queue from all processing shards
@@ -189,6 +205,7 @@ export function getQueueJobCounts(
   ctx: StatsContext
 ): {
   waiting: number;
+  prioritized: number;
   delayed: number;
   active: number;
   completed: number;
@@ -201,13 +218,16 @@ export function getQueueJobCounts(
   const queue = shard.queues.get(queueName);
   const now = Date.now();
 
-  // Count waiting vs delayed jobs in the queue
+  // Count waiting vs prioritized vs delayed jobs in the queue
   let waiting = 0;
+  let prioritized = 0;
   let delayed = 0;
   if (queue) {
     for (const job of queue.values()) {
       if (job.runAt > now) {
         delayed++;
+      } else if (job.priority > 0) {
+        prioritized++;
       } else {
         waiting++;
       }
@@ -240,7 +260,7 @@ export function getQueueJobCounts(
   const totalCompleted = Number(perQueue?.totalCompleted ?? 0n);
   const totalFailed = Number(perQueue?.totalFailed ?? 0n);
 
-  return { waiting, delayed, active, completed, failed, totalCompleted, totalFailed };
+  return { waiting, prioritized, delayed, active, completed, failed, totalCompleted, totalFailed };
 }
 
 /**

@@ -51,6 +51,7 @@ export interface CloudSnapshot {
 
   stats: {
     waiting: number;
+    prioritized: number;
     delayed: number;
     active: number;
     dlq: number;
@@ -105,11 +106,11 @@ export interface CloudSnapshot {
   queues: Array<{
     name: string;
     waiting: number;
+    prioritized: number;
     delayed: number;
     active: number;
     completed: number;
     failed: number;
-    dlq: number;
     paused: boolean;
     totalCompleted: number;
     totalFailed: number;

@@ -53,5 +53,5 @@ export type {
   JobDependencies,
   JobDependenciesCount,
 } from './types';
-export type { FlowStep, FlowResult, FlowJob, JobNode, FlowProducerOptions } from './flow';
+export type { FlowStep, FlowResult, FlowJob, JobNode, FlowProducerOptions, FlowOpts } from './flow';
 export type { SandboxedWorkerOptions } from './sandboxedWorker';

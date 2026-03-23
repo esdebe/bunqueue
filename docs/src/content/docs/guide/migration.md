@@ -258,6 +258,34 @@ await queue.add('task', data, {
 });
 ```
 
+## BullMQ v5 State Parity
+
+bunqueue implements the full BullMQ v5 job state machine:
+
+| State | BullMQ v5 | bunqueue | Notes |
+|-------|-----------|----------|-------|
+| `waiting` | ✅ | ✅ | Jobs with priority = 0 |
+| `prioritized` | ✅ | ✅ | Jobs with priority > 0 |
+| `delayed` | ✅ | ✅ | Jobs waiting for delay |
+| `active` | ✅ | ✅ | Currently processing |
+| `completed` | ✅ | ✅ | Successfully finished |
+| `failed` | ✅ | ✅ | Failed after all retries (DLQ) |
+| `waiting-children` | ✅ | ✅ | Waiting for child flows |
+
+## BullMQ v5 Flow Parity
+
+| Feature | BullMQ v5 | bunqueue | Notes |
+|---------|-----------|----------|-------|
+| `FlowProducer.add()` | ✅ | ✅ | Children before parent |
+| `FlowProducer.addBulk()` | ✅ | ✅ | With atomic rollback |
+| `FlowProducer.getFlow()` | ✅ | ✅ | Retrieve flow tree |
+| `FlowOpts.queuesOptions` | ✅ | ✅ | Per-queue defaults |
+| `failParentOnFailure` | ✅ | ✅ | Propagate child failure to parent |
+| `removeDependencyOnFailure` | ✅ | ✅ | Remove dep on failure |
+| `EventEmitter` | ✅ | ✅ | FlowProducer extends EventEmitter |
+| `close()` returns Promise | ✅ | ✅ | Async shutdown |
+| Atomic flow creation | ✅ (Redis Lua) | ✅ (rollback) | Different mechanism, same guarantee |
+
 ## Features Comparison
 
 | Feature | BullMQ | bunqueue | Notes |

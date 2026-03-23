@@ -11,6 +11,7 @@ import { latencyTracker } from './latencyTracker';
 /** Stats data structure */
 export interface QueueStats {
   waiting: number;
+  prioritized: number;
   delayed: number;
   active: number;
   dlq: number;
@@ -38,6 +39,10 @@ export function generatePrometheusMetrics(
     '# HELP bunqueue_jobs_waiting Number of jobs waiting in queue',
     '# TYPE bunqueue_jobs_waiting gauge',
     `bunqueue_jobs_waiting ${stats.waiting}`,
+    '',
+    '# HELP bunqueue_jobs_prioritized Number of prioritized jobs (priority > 0)',
+    '# TYPE bunqueue_jobs_prioritized gauge',
+    `bunqueue_jobs_prioritized ${stats.prioritized}`,
     '',
     '# HELP bunqueue_jobs_delayed Number of delayed jobs',
     '# TYPE bunqueue_jobs_delayed gauge',
@@ -111,6 +116,13 @@ export function generatePrometheusMetrics(
     lines.push('# TYPE bunqueue_queue_jobs_waiting gauge');
     for (const [queue, qs] of perQueueStats) {
       lines.push(`bunqueue_queue_jobs_waiting{queue="${queue}"} ${qs.waiting}`);
+    }
+
+    lines.push('');
+    lines.push('# HELP bunqueue_queue_jobs_prioritized Number of prioritized jobs per queue');
+    lines.push('# TYPE bunqueue_queue_jobs_prioritized gauge');
+    for (const [queue, qs] of perQueueStats) {
+      lines.push(`bunqueue_queue_jobs_prioritized{queue="${queue}"} ${qs.prioritized}`);
     }
 
     lines.push('');

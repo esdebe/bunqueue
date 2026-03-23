@@ -372,14 +372,18 @@ const paused = await queue.isPausedAsync(); // async
 ### BullMQ Compatibility Methods
 
 ```typescript
-// Get waiting jobs sorted by priority (highest first)
+// Get prioritized jobs (priority > 0, separate state from 'waiting')
 const prioritized = await queue.getPrioritized(0, 10);
 const count = await queue.getPrioritizedCount();
 
-// Get jobs waiting for children to complete
+// Get jobs waiting for children to complete (flow dependencies)
 const waitingChildren = await queue.getWaitingChildren(0, 10);
 const count = await queue.getWaitingChildrenCount();
 ```
+
+:::note[Prioritized State]
+In BullMQ v5, jobs with `priority > 0` have a distinct state called `'prioritized'`, separate from `'waiting'` (priority = 0). This affects `getJobState()`, `getJobCounts()`, and all state-based queries. Jobs in both states are pullable — prioritized jobs are dequeued before waiting jobs.
+:::
 
 ## Queue Control
 

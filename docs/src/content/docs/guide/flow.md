@@ -185,7 +185,11 @@ interface FlowStep<T = unknown> {
 
 FlowProducer also supports the BullMQ v5 flow API where children are processed **before** their parent. This is the inverse of the bunqueue-native API above.
 
-### `add(flow)` — Add a Flow Tree
+:::note[EventEmitter]
+FlowProducer extends Node.js `EventEmitter` (BullMQ v5 compatible). The `close()` method returns `Promise<void>`, and the `closing` property tracks shutdown state.
+:::
+
+### `add(flow, opts?)` — Add a Flow Tree
 
 ```typescript
 const result = await flow.add({
@@ -204,6 +208,33 @@ const result = await flow.add({
 
 Children complete first, then the parent becomes available for processing. Inside the parent's worker, use `job.getChildrenValues()` to access child results.
 
+**Atomicity:** If any part of the flow fails during creation, all already-created jobs are automatically rolled back (cancelled). This ensures you never end up with partial flows.
+
+### `add()` with FlowOpts
+
+Pass per-queue default job options as the second argument:
+
+```typescript
+const result = await flow.add(
+  {
+    name: 'report',
+    queueName: 'reports',
+    children: [
+      { name: 'fetch', queueName: 'api', data: { url: '...' } },
+      { name: 'render', queueName: 'cpu', data: {} },
+    ],
+  },
+  {
+    queuesOptions: {
+      api: { attempts: 5, backoff: 2000 },  // defaults for all 'api' jobs
+      cpu: { timeout: 60000 },               // defaults for all 'cpu' jobs
+    },
+  }
+);
+```
+
+Per-job `opts` override `queuesOptions` defaults.
+
 ### `addBulk(flows)` — Add Multiple Flows
 
 ```typescript
@@ -212,6 +243,8 @@ const results = await flow.addBulk([
   { name: 'report-2', queueName: 'reports', data: {}, children: [...] },
 ]);
 ```
+
+**Atomicity:** If any flow in the batch fails, all jobs from all flows are rolled back.
 
 ### `getFlow(opts)` — Retrieve a Flow Tree
 
@@ -228,6 +261,46 @@ if (tree) {
   console.log(tree.children);     // Child nodes (recursive)
 }
 ```
+
+## failParentOnFailure
+
+When a child job fails terminally (no more retries) and has `failParentOnFailure: true`, the parent job is automatically moved to `failed` state — even if other children are still running.
+
+```typescript
+const result = await flow.add({
+  name: 'report',
+  queueName: 'reports',
+  data: {},
+  children: [
+    {
+      name: 'critical-fetch',
+      queueName: 'api',
+      data: { url: '...' },
+      opts: {
+        failParentOnFailure: true,  // Parent fails if this child fails
+        attempts: 3,
+      },
+    },
+    {
+      name: 'optional-fetch',
+      queueName: 'api',
+      data: { url: '...' },
+      opts: {
+        // No failParentOnFailure — parent continues if this fails
+        attempts: 1,
+      },
+    },
+  ],
+});
+```
+
+**Related options:**
+| Option | Behavior |
+|--------|----------|
+| `failParentOnFailure` | Parent moves to `failed` when this child terminally fails |
+| `removeDependencyOnFailure` | Remove this child's dependency link on failure (parent ignores it) |
+| `continueParentOnFailure` | Parent continues processing even if this child fails |
+| `ignoreDependencyOnFailure` | Move to parent's failed dependencies instead of blocking |
 
 ### FlowJob Interface
 
@@ -254,14 +327,17 @@ interface JobNode<T = unknown> {
 
 | Method | Description |
 |--------|-------------|
-| `add(flow)` | BullMQ v5: tree where children complete before parent |
-| `addBulk(flows[])` | BullMQ v5: add multiple flow trees |
+| `add(flow, opts?)` | BullMQ v5: tree where children complete before parent |
+| `addBulk(flows[])` | BullMQ v5: add multiple flow trees (atomic) |
 | `getFlow(opts)` | BullMQ v5: retrieve a flow tree by root job ID |
 | `addChain(steps[])` | Sequential execution: A → B → C |
 | `addBulkThen(parallel[], final)` | Parallel then converge: [A, B, C] → D |
 | `addTree(root)` | Hierarchical tree with nested children |
 | `getParentResult(parentId)` | Get result from single parent job (embedded only) |
 | `getParentResults(parentIds[])` | Get results from multiple parent jobs (embedded only) |
+| `close()` | Close connection pool, returns `Promise<void>` |
+| `disconnect()` | Alias for `close()` |
+| `waitUntilReady()` | Wait until FlowProducer is connected |
 
 ## Complete Example
 

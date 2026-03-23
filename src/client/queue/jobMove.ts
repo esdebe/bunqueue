@@ -13,7 +13,16 @@ interface JobMoveContext {
   tcp: TcpConnectionPool | null;
   getJobState: (
     id: string
-  ) => Promise<'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown'>;
+  ) => Promise<
+    | 'waiting'
+    | 'prioritized'
+    | 'delayed'
+    | 'active'
+    | 'completed'
+    | 'failed'
+    | 'waiting-children'
+    | 'unknown'
+  >;
   getJobDependencies: (
     id: string
   ) => Promise<{ processed: Record<string, unknown>; unprocessed: string[] }>;
@@ -56,15 +65,32 @@ export async function moveJobToWait(
 ): Promise<boolean> {
   if (ctx.embedded) {
     const manager = getSharedManager();
-    const job = await manager.getJob(jobId(id));
-    if (!job) return false;
+    const state = await ctx.getJobState(id);
 
-    await manager.push(job.queue, {
-      data: job.data,
-      priority: job.priority,
-      customId: job.customId ?? undefined,
-    });
-    return true;
+    if (state === 'failed') {
+      // Job is in DLQ - use retryDlq to move back to waiting
+      const job = await manager.getJob(jobId(id));
+      if (!job) return false;
+      const count = manager.retryDlq(job.queue, jobId(id));
+      return count > 0;
+    }
+
+    if (state === 'active') {
+      // Job is being processed - move back to queue
+      return manager.moveActiveToWait(jobId(id));
+    }
+
+    if (state === 'delayed') {
+      // Delayed job - promote to waiting
+      return manager.promote(jobId(id));
+    }
+
+    if (state === 'waiting' || state === 'prioritized') {
+      // Already in queue (waiting or prioritized)
+      return true;
+    }
+
+    return false;
   }
 
   const response = await ctx.tcp!.send({ cmd: 'MoveToWait', id });
@@ -80,7 +106,24 @@ export async function moveJobToDelayed(
 ): Promise<void> {
   if (ctx.embedded) {
     const delay = Math.max(0, timestamp - Date.now());
-    await getSharedManager().changeDelay(jobId(id), delay);
+    const manager = getSharedManager();
+    const state = await ctx.getJobState(id);
+
+    if (state === 'failed') {
+      // Job is in DLQ - retry it first, then set delay
+      const job = await manager.getJob(jobId(id));
+      if (!job) return;
+      const count = manager.retryDlq(job.queue, jobId(id));
+      if (count > 0 && delay > 0) {
+        await manager.changeWaitingDelay(jobId(id), delay);
+      }
+    } else if (state === 'waiting' || state === 'prioritized' || state === 'delayed') {
+      // Job is in queue - update its runAt directly
+      await manager.changeWaitingDelay(jobId(id), delay);
+    } else {
+      // Active or other state - use existing changeDelay (handles processing)
+      await manager.changeDelay(jobId(id), delay);
+    }
   } else {
     await ctx.tcp!.send({ cmd: 'MoveToDelayed', id, timestamp });
   }
@@ -95,11 +138,7 @@ export async function moveJobToWaitingChildren(
 ): Promise<boolean> {
   if (ctx.embedded) {
     const manager = getSharedManager();
-    const job = await manager.getJob(jobId(id));
-    if (!job) return false;
-
-    const deps = await ctx.getJobDependencies(id);
-    return deps.unprocessed.length > 0;
+    return manager.moveToWaitingChildren(jobId(id));
   }
   return false;
 }

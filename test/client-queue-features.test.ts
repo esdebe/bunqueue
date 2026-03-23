@@ -843,7 +843,7 @@ describe('BullMQ Compatibility Operations', () => {
     });
 
     it('should return jobs with correct structure', async () => {
-      await queue.add('check-struct', { v: 42 });
+      await queue.add('check-struct', { v: 42 }, { priority: 5 });
 
       const jobs = await queue.getPrioritized(0, 100);
       expect(jobs.length).toBeGreaterThanOrEqual(1);
@@ -1205,11 +1205,10 @@ describe('Feature Integration', () => {
     await queue.add('p1', { v: 1 }, { priority: 1 });
     await queue.add('p2', { v: 2 }, { priority: 10 });
 
-    const waitingCount = await queue.getWaitingCount();
     const prioritizedCount = await queue.getPrioritizedCount();
 
-    // getPrioritized delegates to getWaiting, so counts should match
-    expect(prioritizedCount).toBe(waitingCount);
+    // BullMQ v5: priority > 0 jobs are in 'prioritized' state, not 'waiting'
+    expect(prioritizedCount).toBe(2);
   });
 
   it('should add job, complete it, and verify completed metrics increase', async () => {

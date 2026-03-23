@@ -31,6 +31,7 @@ X-Signature: <hmac-sha256>  (optional, if signing secret configured)
 
   "stats": {
     "waiting": 234,
+    "prioritized": 45,
     "delayed": 12,
     "active": 50,
     "dlq": 5,
@@ -86,9 +87,11 @@ X-Signature: <hmac-sha256>  (optional, if signing secret configured)
     {
       "name": "emails",
       "waiting": 120,
+      "prioritized": 25,
       "delayed": 5,
       "active": 25,
-      "dlq": 3,
+      "completed": 5200,
+      "failed": 3,
       "paused": false,
       "totalCompleted": 5200,
       "totalFailed": 180
@@ -96,9 +99,11 @@ X-Signature: <hmac-sha256>  (optional, if signing secret configured)
     {
       "name": "orders",
       "waiting": 89,
+      "prioritized": 15,
       "delayed": 4,
       "active": 20,
-      "dlq": 2,
+      "completed": 4100,
+      "failed": 2,
       "paused": false,
       "totalCompleted": 4100,
       "totalFailed": 120

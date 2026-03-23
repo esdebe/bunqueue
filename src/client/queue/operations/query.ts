@@ -98,10 +98,7 @@ export async function getJob<T>(ctx: QueryContext, id: string): Promise<Job<T> |
 }
 
 /** Get job state by ID */
-export async function getJobState(
-  ctx: QueryContext,
-  id: string
-): Promise<'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown'> {
+export async function getJobState(ctx: QueryContext, id: string): Promise<JobStateType> {
   if (ctx.embedded) {
     const state = await getSharedManager().getJobState(jobId(id));
     return mapState(state);
@@ -112,15 +109,15 @@ export async function getJobState(
   return mapState(response.state as string | undefined);
 }
 
-function mapState(
-  state: string | undefined
-): 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown' {
+function mapState(state: string | undefined): JobStateType {
   switch (state) {
     case 'waiting':
+    case 'prioritized':
     case 'delayed':
     case 'active':
     case 'completed':
     case 'failed':
+    case 'waiting-children':
       return state;
     case 'processing':
       return 'active';

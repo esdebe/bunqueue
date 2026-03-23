@@ -51,6 +51,20 @@ export async function handlePromote(
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
 }
 
+/** Handle UpdateParent command - update child's parent reference */
+export async function handleUpdateParent(
+  cmd: Extract<Command, { cmd: 'UpdateParent' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    await ctx.queueManager.updateJobParent(jobId(cmd.childId), jobId(cmd.parentId));
+    return resp.ok(undefined, reqId);
+  } catch {
+    return resp.error('Failed to update parent', reqId);
+  }
+}
+
 /** Handle MoveToDelayed command */
 export async function handleMoveToDelayed(
   cmd: Extract<Command, { cmd: 'MoveToDelayed' }>,

@@ -45,6 +45,7 @@ export async function pushJob(
       customId: opts.jobId,
       removeOnComplete,
       removeOnFail,
+      failParentOnFailure: opts.failParentOnFailure,
       dependsOn: dependsOn?.map((id) => jobId(id)),
     });
     return String(job.id);
@@ -63,6 +64,7 @@ export async function pushJob(
     jobId: opts.jobId,
     removeOnComplete: opts.removeOnComplete,
     removeOnFail: opts.removeOnFail,
+    failParentOnFailure: opts.failParentOnFailure,
     dependsOn,
   });
 
@@ -100,6 +102,7 @@ export async function pushJobWithParent(
       customId: opts.jobId,
       removeOnComplete,
       removeOnFail,
+      failParentOnFailure: opts.failParentOnFailure,
       parentId: parentRef ? jobId(parentRef.id) : undefined,
       dependsOn: childJobIds.length > 0 ? childJobIds : undefined,
       childrenIds: childJobIds.length > 0 ? childJobIds : undefined,
@@ -127,6 +130,7 @@ export async function pushJobWithParent(
     jobId: opts.jobId,
     removeOnComplete: opts.removeOnComplete,
     removeOnFail: opts.removeOnFail,
+    failParentOnFailure: opts.failParentOnFailure,
     parentId: parentRef?.id,
     childrenIds: childIds.length > 0 ? childIds : undefined,
     dependsOn: childIds.length > 0 ? childIds : undefined,
@@ -135,7 +139,17 @@ export async function pushJobWithParent(
   if (!response.ok) {
     throw new Error((response.error as string | undefined) ?? 'Failed to add job');
   }
-  return response.id as string;
+
+  const parentJobId = response.id as string;
+
+  // Update children with real parent ID (like embedded mode does)
+  if (childIds.length > 0) {
+    for (const childId of childIds) {
+      await ctx.tcp.send({ cmd: 'UpdateParent', childId, parentId: parentJobId });
+    }
+  }
+
+  return parentJobId;
 }
 
 /** Cleanup jobs that were created before a failure occurred */

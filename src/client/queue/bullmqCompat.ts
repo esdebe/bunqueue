@@ -31,16 +31,17 @@ interface BullMQContext<T = unknown> {
     opts?: GetDependenciesOpts
   ) => Promise<JobDependenciesCount>;
   getWaitingAsync: (start?: number, end?: number) => Promise<Job<T>[]>;
+  getPrioritizedAsync: (start?: number, end?: number) => Promise<Job<T>[]>;
 }
 
-/** Get jobs sorted by priority (same as waiting in bunqueue) */
+/** Get jobs in the "prioritized" state (priority > 0, BullMQ v5) */
 export function getPrioritized<T>(ctx: BullMQContext<T>, start = 0, end = -1): Promise<Job<T>[]> {
-  return ctx.getWaitingAsync(start, end);
+  return ctx.getPrioritizedAsync(start, end);
 }
 
-/** Get count of prioritized jobs */
+/** Get count of prioritized jobs (priority > 0) */
 export async function getPrioritizedCount<T>(ctx: BullMQContext<T>): Promise<number> {
-  const jobs = await ctx.getWaitingAsync(0, 1000);
+  const jobs = await ctx.getPrioritizedAsync(0, 1000);
   return jobs.length;
 }
 

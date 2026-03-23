@@ -184,6 +184,7 @@ export class SseHandler {
       this.sendTypedEvent('queue:counts', {
         queue: event.queue,
         waiting: counts.waiting,
+        prioritized: counts.prioritized,
         active: counts.active,
         completed: counts.completed,
         failed: counts.failed,

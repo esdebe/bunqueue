@@ -476,6 +476,12 @@ export interface CompactMemoryCommand extends BaseCommand {
   readonly cmd: 'CompactMemory';
 }
 
+export interface UpdateParentCommand extends BaseCommand {
+  readonly cmd: 'UpdateParent';
+  readonly childId: string;
+  readonly parentId: string;
+}
+
 export interface MoveToWaitCommand extends BaseCommand {
   readonly cmd: 'MoveToWait';
   readonly id: string;
@@ -599,6 +605,7 @@ export type Command =
   | ChangeDelayCommand
   | SetWebhookEnabledCommand
   | CompactMemoryCommand
+  | UpdateParentCommand
   | MoveToWaitCommand
   | PromoteJobsCommand
   | DashboardOverviewCommand

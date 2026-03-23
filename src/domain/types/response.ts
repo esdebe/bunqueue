@@ -72,6 +72,7 @@ export interface ResultResponse extends BaseResponse {
 /** Job counts by state */
 export interface JobCounts {
   readonly waiting: number;
+  readonly prioritized: number;
   readonly delayed: number;
   readonly active: number;
   readonly completed: number;
