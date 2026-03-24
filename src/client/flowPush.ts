@@ -46,6 +46,9 @@ export async function pushJob(
       removeOnComplete,
       removeOnFail,
       failParentOnFailure: opts.failParentOnFailure,
+      removeDependencyOnFailure: opts.removeDependencyOnFailure,
+      ignoreDependencyOnFailure: opts.ignoreDependencyOnFailure,
+      continueParentOnFailure: opts.continueParentOnFailure,
       dependsOn: dependsOn?.map((id) => jobId(id)),
     });
     return String(job.id);
@@ -65,6 +68,9 @@ export async function pushJob(
     removeOnComplete: opts.removeOnComplete,
     removeOnFail: opts.removeOnFail,
     failParentOnFailure: opts.failParentOnFailure,
+    removeDependencyOnFailure: opts.removeDependencyOnFailure,
+    ignoreDependencyOnFailure: opts.ignoreDependencyOnFailure,
+    continueParentOnFailure: opts.continueParentOnFailure,
     dependsOn,
   });
 
@@ -103,6 +109,9 @@ export async function pushJobWithParent(
       removeOnComplete,
       removeOnFail,
       failParentOnFailure: opts.failParentOnFailure,
+      removeDependencyOnFailure: opts.removeDependencyOnFailure,
+      ignoreDependencyOnFailure: opts.ignoreDependencyOnFailure,
+      continueParentOnFailure: opts.continueParentOnFailure,
       parentId: parentRef ? jobId(parentRef.id) : undefined,
       dependsOn: childJobIds.length > 0 ? childJobIds : undefined,
       childrenIds: childJobIds.length > 0 ? childJobIds : undefined,
@@ -131,6 +140,9 @@ export async function pushJobWithParent(
     removeOnComplete: opts.removeOnComplete,
     removeOnFail: opts.removeOnFail,
     failParentOnFailure: opts.failParentOnFailure,
+    removeDependencyOnFailure: opts.removeDependencyOnFailure,
+    ignoreDependencyOnFailure: opts.ignoreDependencyOnFailure,
+    continueParentOnFailure: opts.continueParentOnFailure,
     parentId: parentRef?.id,
     childrenIds: childIds.length > 0 ? childIds : undefined,
     dependsOn: childIds.length > 0 ? childIds : undefined,

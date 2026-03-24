@@ -134,11 +134,22 @@ export function createJobProxy<T>(id: string, name: string, data: T, ctx: JobPro
 
     // Additional methods
     discard: () => {},
-    getFailedChildrenValues: () => Promise.resolve({}),
-    getIgnoredChildrenFailures: () => Promise.resolve({}),
-    removeChildDependency: () => Promise.resolve(false),
+    getFailedChildrenValues: async () => {
+      const res = await tcp.send({ cmd: 'GetFailedChildrenValues', id });
+      return (res.values as Record<string, string> | undefined) ?? {};
+    },
+    getIgnoredChildrenFailures: async () => {
+      const res = await tcp.send({ cmd: 'GetIgnoredChildrenFailures', id });
+      return (res.values as Record<string, string> | undefined) ?? {};
+    },
+    removeChildDependency: async () => {
+      const res = await tcp.send({ cmd: 'RemoveChildDependency', id });
+      return res.ok === true;
+    },
     removeDeduplicationKey: () => Promise.resolve(false),
-    removeUnprocessedChildren: () => Promise.resolve(),
+    removeUnprocessedChildren: async () => {
+      await tcp.send({ cmd: 'RemoveUnprocessedChildren', id });
+    },
   };
 }
 

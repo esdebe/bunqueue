@@ -10,6 +10,19 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.75] - 2026-03-24
+
+### Added
+- **`removeDependencyOnFailure`** — When a child job terminally fails with this option set, it is silently removed from the parent's pending dependencies. If it was the last pending child, the parent is promoted to the waiting queue and processed normally.
+- **`ignoreDependencyOnFailure`** — Same as `removeDependencyOnFailure` but also stores the failure reason so the parent worker can retrieve it via `job.getIgnoredChildrenFailures()`.
+- **`continueParentOnFailure`** — When a child job with this option fails, the parent is immediately promoted to the waiting queue (even if other children are still pending). The parent worker can then call `job.getFailedChildrenValues()` to inspect which children failed and why, and `job.removeUnprocessedChildren()` to cancel remaining unstarted children.
+- **`job.getFailedChildrenValues()`** — Returns `Record<string, string>` mapping child keys (`"queue:jobId"`) to their error messages. Populated by `continueParentOnFailure` child failures.
+- **`job.getIgnoredChildrenFailures()`** — Returns `Record<string, string>` of failure reasons for children that failed with `ignoreDependencyOnFailure`.
+- **`job.removeChildDependency()`** — Removes a child job's pending dependency from its parent. If this was the last pending child, the parent is promoted to the queue. Throws if the job has no parent.
+- **`job.removeUnprocessedChildren()`** — Cancels all unprocessed (waiting/delayed) children of a parent job. Active, completed, and failed children are unaffected.
+- TCP commands for new methods: `GetFailedChildrenValues`, `GetIgnoredChildrenFailures`, `RemoveChildDependency`, `RemoveUnprocessedChildren`.
+- All four new options are fully propagated through `FlowProducer.add()`, `FlowProducer.addBulk()`, and the TCP `PUSH` command.
+
 ## [2.6.74] - 2026-03-23
 
 ### Changed

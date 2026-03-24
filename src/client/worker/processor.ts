@@ -49,6 +49,10 @@ export async function processJob<T, R>(
     log: createLogHandler(embedded, tcp, emitter, jobHolder),
     getState: createGetStateHandler(embedded, tcp),
     getChildrenValues: createGetChildrenValuesHandler(embedded, tcp),
+    getFailedChildrenValues: createGetFailedChildrenValuesHandler(embedded, tcp),
+    getIgnoredChildrenFailures: createGetIgnoredChildrenFailuresHandler(embedded, tcp),
+    removeChildDependency: createRemoveChildDependencyHandler(embedded, tcp),
+    removeUnprocessedChildren: createRemoveUnprocessedChildrenHandler(embedded, tcp),
   });
 
   jobHolder.current = job;
@@ -146,6 +150,65 @@ function createGetChildrenValuesHandler(embedded: boolean, tcp: TcpConnection | 
       return data?.values ?? {};
     }
     return {};
+  };
+}
+
+function createGetFailedChildrenValuesHandler(
+  embedded: boolean,
+  tcp: TcpConnection | null
+): (id: string) => Promise<Record<string, string>> {
+  return async (id: string) => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return manager.getFailedChildrenValues(jobId(id));
+    }
+    if (!tcp) return {};
+    const res = await tcp.send({ cmd: 'GetFailedChildrenValues', id });
+    return (res.values as Record<string, string> | undefined) ?? {};
+  };
+}
+
+function createGetIgnoredChildrenFailuresHandler(
+  embedded: boolean,
+  tcp: TcpConnection | null
+): (id: string) => Promise<Record<string, string>> {
+  return async (id: string) => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return manager.getIgnoredChildrenFailures(jobId(id));
+    }
+    if (!tcp) return {};
+    const res = await tcp.send({ cmd: 'GetIgnoredChildrenFailures', id });
+    return (res.values as Record<string, string> | undefined) ?? {};
+  };
+}
+
+function createRemoveChildDependencyHandler(
+  embedded: boolean,
+  tcp: TcpConnection | null
+): (id: string) => Promise<boolean> {
+  return async (id: string) => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return manager.removeChildDependency(jobId(id));
+    }
+    if (!tcp) return false;
+    const res = await tcp.send({ cmd: 'RemoveChildDependency', id });
+    return res.ok === true;
+  };
+}
+
+function createRemoveUnprocessedChildrenHandler(
+  embedded: boolean,
+  tcp: TcpConnection | null
+): (id: string) => Promise<void> {
+  return async (id: string) => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return manager.removeUnprocessedChildren(jobId(id));
+    }
+    if (!tcp) return;
+    await tcp.send({ cmd: 'RemoveUnprocessedChildren', id });
   };
 }
 

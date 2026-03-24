@@ -69,6 +69,7 @@ export interface ContextCallbacks {
   onRepeat: (job: Job) => void;
   emitDashboardEvent?: (event: string, data: Record<string, unknown>) => void;
   onChildTerminalFailure?: (childJob: Job, error: string | undefined) => void;
+  onChildDependencyOption?: (childJob: Job, error: string | undefined) => void;
 }
 
 /**
@@ -195,6 +196,7 @@ export class ContextFactory {
       onRepeat: this.callbacks.onRepeat,
       emitDashboardEvent: this.callbacks.emitDashboardEvent,
       onChildTerminalFailure: this.callbacks.onChildTerminalFailure,
+      onChildDependencyOption: this.callbacks.onChildDependencyOption,
     };
   }
 

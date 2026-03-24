@@ -37,6 +37,11 @@ export interface PushCommand extends BaseCommand {
   readonly durable?: boolean;
   /** Repeat configuration for recurring jobs */
   readonly repeat?: { every?: number; limit?: number; count?: number };
+  /** BullMQ v5 flow failure propagation options */
+  readonly failParentOnFailure?: boolean;
+  readonly removeDependencyOnFailure?: boolean;
+  readonly ignoreDependencyOnFailure?: boolean;
+  readonly continueParentOnFailure?: boolean;
 }
 
 export interface PushBatchCommand extends BaseCommand {
@@ -482,6 +487,30 @@ export interface UpdateParentCommand extends BaseCommand {
   readonly parentId: string;
 }
 
+/** Get failed children values for a parent job */
+export interface GetFailedChildrenValuesCommand extends BaseCommand {
+  readonly cmd: 'GetFailedChildrenValues';
+  readonly id: string;
+}
+
+/** Get ignored children failures for a parent job */
+export interface GetIgnoredChildrenFailuresCommand extends BaseCommand {
+  readonly cmd: 'GetIgnoredChildrenFailures';
+  readonly id: string;
+}
+
+/** Remove a child's dependency from its parent */
+export interface RemoveChildDependencyCommand extends BaseCommand {
+  readonly cmd: 'RemoveChildDependency';
+  readonly id: string;
+}
+
+/** Remove all unprocessed children of a parent job */
+export interface RemoveUnprocessedChildrenCommand extends BaseCommand {
+  readonly cmd: 'RemoveUnprocessedChildren';
+  readonly id: string;
+}
+
 export interface MoveToWaitCommand extends BaseCommand {
   readonly cmd: 'MoveToWait';
   readonly id: string;
@@ -612,6 +641,10 @@ export type Command =
   | DashboardQueuesCommand
   | DashboardQueueCommand
   | AuthCommand
+  | GetFailedChildrenValuesCommand
+  | GetIgnoredChildrenFailuresCommand
+  | RemoveChildDependencyCommand
+  | RemoveUnprocessedChildrenCommand
   | HelloCommand;
 
 /** Extract command type */

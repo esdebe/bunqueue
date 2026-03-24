@@ -72,6 +72,10 @@ export async function handlePush(
       removeOnFail: cmd.removeOnFail,
       durable: cmd.durable,
       repeat: cmd.repeat,
+      failParentOnFailure: cmd.failParentOnFailure,
+      removeDependencyOnFailure: cmd.removeDependencyOnFailure,
+      ignoreDependencyOnFailure: cmd.ignoreDependencyOnFailure,
+      continueParentOnFailure: cmd.continueParentOnFailure,
     });
 
     return resp.ok(job.id, reqId);

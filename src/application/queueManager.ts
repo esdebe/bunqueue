@@ -82,6 +82,12 @@ export class QueueManager {
   // Repeat chain: maps completed job ID -> successor repeat job ID
   private readonly repeatChain = new Map<JobId, JobId>();
 
+  // BullMQ v5 flow failure tracking
+  /** Stores failed children values for continueParentOnFailure — parentId → { childKey: error } */
+  private readonly failedChildrenValues = new Map<JobId, Record<string, string>>();
+  /** Stores ignored children failures for ignoreDependencyOnFailure — parentId → { childKey: error } */
+  private readonly ignoredChildrenFailures = new Map<JobId, Record<string, string>>();
+
   // Cron scheduler
   private readonly cronScheduler: CronScheduler;
 
@@ -223,6 +229,7 @@ export class QueueManager {
       onRepeat: this.handleRepeat.bind(this),
       emitDashboardEvent: this.emitDashboardEvent.bind(this),
       onChildTerminalFailure: this.failParentOnChildFailure.bind(this),
+      onChildDependencyOption: this.onChildDependencyOption.bind(this),
     };
   }
 
@@ -655,6 +662,14 @@ export class QueueManager {
       this.moveParentToFailed(parentJobId, childJob, 'Child job failed').catch(() => {
         // Best-effort: parent may already be in DLQ or removed
       });
+    }
+    if (
+      childLoc?.type === 'dlq' &&
+      (childJob.removeDependencyOnFailure ||
+        childJob.ignoreDependencyOnFailure ||
+        childJob.continueParentOnFailure)
+    ) {
+      this.onChildDependencyOption(childJob, 'Child job failed');
     }
   }
 
@@ -1168,6 +1183,250 @@ export class QueueManager {
       queue: parentJob.queue,
       error: error ?? 'Child job failed',
     });
+  }
+
+  /**
+   * Handle child dependency options: removeDependencyOnFailure, ignoreDependencyOnFailure, continueParentOnFailure
+   */
+  private onChildDependencyOption(childJob: Job, error: string | undefined): void {
+    if (!childJob.parentId) return;
+
+    if (childJob.continueParentOnFailure) {
+      this.continueParentOnChildFailure(childJob, error).catch(() => {});
+    } else {
+      // removeDependencyOnFailure or ignoreDependencyOnFailure
+      this.removeChildFromParentDeps(childJob, error, childJob.ignoreDependencyOnFailure).catch(
+        () => {}
+      );
+    }
+  }
+
+  /**
+   * continueParentOnFailure: move parent to queue immediately when a child fails.
+   * Stores the failure info for getFailedChildrenValues().
+   */
+  private async continueParentOnChildFailure(
+    childJob: Job,
+    error: string | undefined
+  ): Promise<void> {
+    const parentId = childJob.parentId;
+    if (!parentId) return;
+    const parentJob = await this.getJob(parentId);
+    if (!parentJob) return;
+
+    const parentLoc = this.jobIndex.get(parentId);
+    if (parentLoc?.type !== 'queue') return;
+
+    // Store failed child value
+    const childKey = `${childJob.queue}:${childJob.id}`;
+    const existing = this.failedChildrenValues.get(parentId) ?? {};
+    existing[childKey] = error ?? 'unknown error';
+    this.failedChildrenValues.set(parentId, existing);
+
+    const idx = shardIndex(parentJob.queue);
+    let promoted = false;
+    await withWriteLock(this.shardLocks[idx], () => {
+      // TOCTOU guard
+      if (this.jobIndex.get(parentId)?.type !== 'queue') return;
+
+      const shard = this.shards[idx];
+
+      // Remove from waitingDeps
+      if (shard.waitingDeps.has(parentId)) {
+        shard.waitingDeps.delete(parentId);
+        shard.unregisterDependencies(parentId, parentJob.dependsOn);
+      }
+      // Remove from waitingChildren
+      if (shard.waitingChildren.has(parentId)) {
+        shard.waitingChildren.delete(parentId);
+      }
+      // Add to queue
+      const queue = shard.getQueue(parentJob.queue);
+      if (!queue.find(parentId)) {
+        const now = Date.now();
+        parentJob.runAt = now;
+        queue.push(parentJob);
+        shard.incrementQueued(parentId, false, parentJob.createdAt, parentJob.queue, now);
+        this.jobIndex.set(parentId, { type: 'queue', shardIdx: idx, queueName: parentJob.queue });
+        shard.notify();
+        promoted = true;
+      }
+    });
+
+    if (promoted) {
+      this.eventsManager.broadcast({
+        eventType: 'waiting' as EventType,
+        queue: parentJob.queue,
+        jobId: parentId,
+        timestamp: Date.now(),
+        prev: 'waiting-children',
+      });
+    }
+  }
+
+  /**
+   * removeDependencyOnFailure / ignoreDependencyOnFailure:
+   * Remove child from parent's pending deps. If last dep, promote parent.
+   * If ignoreDependencyOnFailure, also store failure reason.
+   */
+  private async removeChildFromParentDeps(
+    childJob: Job,
+    error: string | undefined,
+    storeIgnored: boolean
+  ): Promise<void> {
+    const parentId = childJob.parentId;
+    if (!parentId) return;
+    const parentJob = await this.getJob(parentId);
+    if (!parentJob) return;
+
+    const parentLoc = this.jobIndex.get(parentId);
+    if (parentLoc?.type !== 'queue') return;
+
+    if (storeIgnored) {
+      const childKey = `${childJob.queue}:${childJob.id}`;
+      const existing = this.ignoredChildrenFailures.get(parentId) ?? {};
+      existing[childKey] = error ?? 'unknown error';
+      this.ignoredChildrenFailures.set(parentId, existing);
+    }
+
+    const idx = shardIndex(parentJob.queue);
+    let promoted = false;
+    await withWriteLock(this.shardLocks[idx], () => {
+      if (this.jobIndex.get(parentId)?.type !== 'queue') return;
+
+      const shard = this.shards[idx];
+      const parentInDeps = shard.waitingDeps.get(parentId);
+      if (!parentInDeps) return;
+
+      // Remove child from parent's dependsOn
+      const depIndex = parentJob.dependsOn.indexOf(childJob.id);
+      if (depIndex !== -1) {
+        parentJob.dependsOn.splice(depIndex, 1);
+        shard.unregisterDependencies(parentId, [childJob.id]);
+      }
+
+      // If no more pending deps, promote parent
+      const allDone =
+        parentJob.dependsOn.length === 0 ||
+        parentJob.dependsOn.every((dep) => this.completedJobs.has(dep));
+
+      if (allDone) {
+        shard.waitingDeps.delete(parentId);
+        const now = Date.now();
+        parentJob.runAt = now;
+        shard.getQueue(parentJob.queue).push(parentJob);
+        shard.incrementQueued(parentId, false, parentJob.createdAt, parentJob.queue, now);
+        this.jobIndex.set(parentId, { type: 'queue', shardIdx: idx, queueName: parentJob.queue });
+        shard.notify();
+        promoted = true;
+      }
+    });
+
+    if (promoted) {
+      this.eventsManager.broadcast({
+        eventType: 'waiting' as EventType,
+        queue: parentJob.queue,
+        jobId: parentId,
+        timestamp: Date.now(),
+        prev: 'waiting-children',
+      });
+    }
+  }
+
+  /**
+   * Get failed children values for a parent job (populated by continueParentOnFailure).
+   */
+  async getFailedChildrenValues(parentJobId: JobId): Promise<Record<string, string>> {
+    return this.failedChildrenValues.get(parentJobId) ?? {};
+  }
+
+  /**
+   * Get ignored children failures for a parent job (populated by ignoreDependencyOnFailure).
+   */
+  async getIgnoredChildrenFailures(parentJobId: JobId): Promise<Record<string, string>> {
+    return this.ignoredChildrenFailures.get(parentJobId) ?? {};
+  }
+
+  /**
+   * Remove a child job's dependency from its parent.
+   * If this was the last pending child, promotes parent to queue.
+   * Throws if the job has no parent.
+   */
+  async removeChildDependency(childJobId: JobId): Promise<boolean> {
+    const childJob = await this.getJob(childJobId);
+    if (!childJob) throw new Error(`Job not found: ${childJobId}`);
+    if (!childJob.parentId) throw new Error(`Job ${childJobId} has no parent`);
+
+    const parentId = childJob.parentId;
+    const parentJob = await this.getJob(parentId);
+    if (!parentJob) return false;
+
+    const parentLoc = this.jobIndex.get(parentId);
+    if (parentLoc?.type !== 'queue') return false;
+
+    const idx = shardIndex(parentJob.queue);
+    let promoted = false;
+    await withWriteLock(this.shardLocks[idx], () => {
+      if (this.jobIndex.get(parentId)?.type !== 'queue') return;
+
+      const shard = this.shards[idx];
+      const parentInDeps = shard.waitingDeps.get(parentId);
+      if (!parentInDeps) return;
+
+      const depIndex = parentJob.dependsOn.indexOf(childJobId);
+      if (depIndex !== -1) {
+        parentJob.dependsOn.splice(depIndex, 1);
+        shard.unregisterDependencies(parentId, [childJobId]);
+      }
+
+      const allDone =
+        parentJob.dependsOn.length === 0 ||
+        parentJob.dependsOn.every((dep) => this.completedJobs.has(dep));
+
+      if (allDone) {
+        shard.waitingDeps.delete(parentId);
+        const now = Date.now();
+        parentJob.runAt = now;
+        shard.getQueue(parentJob.queue).push(parentJob);
+        shard.incrementQueued(parentId, false, parentJob.createdAt, parentJob.queue, now);
+        this.jobIndex.set(parentId, { type: 'queue', shardIdx: idx, queueName: parentJob.queue });
+        shard.notify();
+        promoted = true;
+      }
+    });
+
+    if (promoted) {
+      this.eventsManager.broadcast({
+        eventType: 'waiting' as EventType,
+        queue: parentJob.queue,
+        jobId: parentId,
+        timestamp: Date.now(),
+        prev: 'waiting-children',
+      });
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove all unprocessed (waiting/delayed) children of a parent job.
+   * Active, completed, and failed children are not affected.
+   */
+  async removeUnprocessedChildren(parentJobId: JobId): Promise<void> {
+    const parent = await this.getJob(parentJobId);
+    if (!parent?.childrenIds || parent.childrenIds.length === 0) return;
+
+    for (const childId of parent.childrenIds) {
+      const loc = this.jobIndex.get(childId);
+      // Only cancel children in 'queue' state (waiting/delayed), not active/completed/failed
+      if (loc?.type === 'queue') {
+        try {
+          await this.cancel(childId);
+        } catch {
+          // Best-effort
+        }
+      }
+    }
   }
 
   private onJobsCompleted(completedIds: JobId[]): void {

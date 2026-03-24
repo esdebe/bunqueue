@@ -321,3 +321,61 @@ export async function handlePromoteJobs(
   }
   return { ok: true, count, reqId } as Response;
 }
+
+// ============ Flow Dependency Commands ============
+
+/** Handle GetFailedChildrenValues command */
+export async function handleGetFailedChildrenValues(
+  cmd: Extract<Command, { cmd: 'GetFailedChildrenValues' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    const values = await ctx.queueManager.getFailedChildrenValues(jobId(cmd.id));
+    return { ok: true, values, reqId } as Response;
+  } catch {
+    return { ok: true, values: {}, reqId } as Response;
+  }
+}
+
+/** Handle GetIgnoredChildrenFailures command */
+export async function handleGetIgnoredChildrenFailures(
+  cmd: Extract<Command, { cmd: 'GetIgnoredChildrenFailures' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    const values = await ctx.queueManager.getIgnoredChildrenFailures(jobId(cmd.id));
+    return { ok: true, values, reqId } as Response;
+  } catch {
+    return { ok: true, values: {}, reqId } as Response;
+  }
+}
+
+/** Handle RemoveChildDependency command */
+export async function handleRemoveChildDependency(
+  cmd: Extract<Command, { cmd: 'RemoveChildDependency' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    const removed = await ctx.queueManager.removeChildDependency(jobId(cmd.id));
+    return { ok: removed, reqId } as Response;
+  } catch (err) {
+    return resp.error(err instanceof Error ? err.message : String(err), reqId);
+  }
+}
+
+/** Handle RemoveUnprocessedChildren command */
+export async function handleRemoveUnprocessedChildren(
+  cmd: Extract<Command, { cmd: 'RemoveUnprocessedChildren' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  try {
+    await ctx.queueManager.removeUnprocessedChildren(jobId(cmd.id));
+    return resp.ok(undefined, reqId);
+  } catch (err) {
+    return resp.error(err instanceof Error ? err.message : String(err), reqId);
+  }
+}

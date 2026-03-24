@@ -68,6 +68,10 @@ import {
   handleGetStallConfig,
   handleSetDlqConfig,
   handleGetDlqConfig,
+  handleGetFailedChildrenValues,
+  handleGetIgnoredChildrenFailures,
+  handleRemoveChildDependency,
+  handleRemoveUnprocessedChildren,
 } from './handlers/advanced';
 
 import {
@@ -194,6 +198,14 @@ export async function routeManagementCommand(
       return handleExtendLock(cmd, ctx, reqId);
     case 'ExtendLocks':
       return handleExtendLocks(cmd, ctx, reqId);
+    case 'GetFailedChildrenValues':
+      return handleGetFailedChildrenValues(cmd, ctx, reqId);
+    case 'GetIgnoredChildrenFailures':
+      return handleGetIgnoredChildrenFailures(cmd, ctx, reqId);
+    case 'RemoveChildDependency':
+      return handleRemoveChildDependency(cmd, ctx, reqId);
+    case 'RemoveUnprocessedChildren':
+      return handleRemoveUnprocessedChildren(cmd, ctx, reqId);
     default:
       return null;
   }

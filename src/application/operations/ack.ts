@@ -62,6 +62,8 @@ export interface AckContext {
   onRepeat?: (job: Job) => void;
   /** Called when a child job with failParentOnFailure terminally fails */
   onChildTerminalFailure?: (childJob: Job, error: string | undefined) => void;
+  /** Called when a child job with removeDependencyOnFailure/ignoreDependencyOnFailure/continueParentOnFailure terminally fails */
+  onChildDependencyOption?: (childJob: Job, error: string | undefined) => void;
 }
 
 /**
@@ -263,6 +265,16 @@ export async function failJob(
   // BullMQ v5: failParentOnFailure — propagate terminal failure to parent
   if (!wasRetried && job.failParentOnFailure && job.parentId && ctx.onChildTerminalFailure) {
     ctx.onChildTerminalFailure(job, error);
+  }
+
+  // removeDependencyOnFailure / ignoreDependencyOnFailure / continueParentOnFailure
+  if (
+    !wasRetried &&
+    job.parentId &&
+    ctx.onChildDependencyOption &&
+    (job.removeDependencyOnFailure || job.ignoreDependencyOnFailure || job.continueParentOnFailure)
+  ) {
+    ctx.onChildDependencyOption(job, error);
   }
 }
 
