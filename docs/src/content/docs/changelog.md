@@ -10,11 +10,6 @@ head:
 
 All notable changes to bunqueue are documented here.
 
-## [2.6.77] - 2026-03-24
-
-### Changed
-- **Docs: FlowProducer** — Added dedicated sections with examples for `removeDependencyOnFailure`, `ignoreDependencyOnFailure`, `continueParentOnFailure`, and all new job methods (`getFailedChildrenValues`, `getIgnoredChildrenFailures`, `removeChildDependency`, `removeUnprocessedChildren`)
-
 ## [2.6.76] - 2026-03-24
 
 ### Added
