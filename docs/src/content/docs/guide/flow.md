@@ -302,6 +302,140 @@ const result = await flow.add({
 | `continueParentOnFailure` | Parent continues processing even if this child fails |
 | `ignoreDependencyOnFailure` | Move to parent's failed dependencies instead of blocking |
 
+## removeDependencyOnFailure
+
+When a child terminally fails with `removeDependencyOnFailure: true`, it is silently removed from the parent's pending dependencies. The parent continues as if the child never existed. If it was the last pending child, the parent is promoted to the waiting queue immediately.
+
+```typescript
+const result = await flow.add({
+  name: 'report',
+  queueName: 'reports',
+  data: {},
+  children: [
+    {
+      name: 'optional-step',
+      queueName: 'workers',
+      data: {},
+      opts: {
+        removeDependencyOnFailure: true,  // Parent ignores this failure
+      },
+    },
+    {
+      name: 'required-step',
+      queueName: 'workers',
+      data: {},
+    },
+  ],
+});
+// If optional-step fails → parent continues waiting for required-step
+// If required-step completes → parent is promoted and processed normally
+```
+
+## ignoreDependencyOnFailure
+
+Same as `removeDependencyOnFailure`, but also records the failure reason so the parent worker can inspect it via `job.getIgnoredChildrenFailures()`.
+
+```typescript
+const result = await flow.add({
+  name: 'report',
+  queueName: 'reports',
+  data: {},
+  children: [
+    {
+      name: 'enrichment',
+      queueName: 'workers',
+      data: {},
+      opts: {
+        ignoreDependencyOnFailure: true,
+      },
+    },
+  ],
+});
+
+const worker = new Worker('reports', async (job) => {
+  // Check which children failed (but were ignored)
+  const ignored = await job.getIgnoredChildrenFailures();
+  // { 'workers:job-abc': 'Error: enrichment API timeout' }
+
+  if (Object.keys(ignored).length > 0) {
+    console.log('Some enrichment steps failed, continuing with partial data');
+  }
+
+  return { partial: Object.keys(ignored).length > 0 };
+}, { embedded: true });
+```
+
+## continueParentOnFailure
+
+When a child fails with `continueParentOnFailure: true`, the parent is **immediately** promoted to the waiting queue — even if other children are still pending. The parent worker can inspect failures and optionally cancel remaining unstarted children.
+
+```typescript
+const result = await flow.add({
+  name: 'pipeline',
+  queueName: 'main',
+  data: {},
+  children: [
+    { name: 'step-a', queueName: 'workers', data: {}, opts: { continueParentOnFailure: true } },
+    { name: 'step-b', queueName: 'workers', data: {}, opts: { continueParentOnFailure: true } },
+    { name: 'step-c', queueName: 'workers', data: {} },
+  ],
+});
+
+const worker = new Worker('main', async (job) => {
+  // Get all children that failed with continueParentOnFailure
+  const failed = await job.getFailedChildrenValues();
+  // { 'workers:job-abc': 'Error: step-a failed', 'workers:job-xyz': 'Error: step-b failed' }
+
+  if (Object.keys(failed).length > 0) {
+    // Cancel remaining unstarted children (step-c if still waiting)
+    await job.removeUnprocessedChildren();
+    return { status: 'partial', failedSteps: failed };
+  }
+
+  return { status: 'complete' };
+}, { embedded: true });
+```
+
+## Job Methods for Flows
+
+These methods are available on job instances inside a worker processor:
+
+### `job.getFailedChildrenValues()`
+
+Returns `Record<string, string>` mapping child keys (`"queue:jobId"`) to their error messages. Populated when children fail with `continueParentOnFailure: true`.
+
+```typescript
+const failed = await job.getFailedChildrenValues();
+// { 'workers:job-abc': 'Error: timeout', 'api:job-xyz': 'Error: 503' }
+```
+
+### `job.getIgnoredChildrenFailures()`
+
+Returns `Record<string, string>` of failure reasons for children that failed with `ignoreDependencyOnFailure: true`.
+
+```typescript
+const ignored = await job.getIgnoredChildrenFailures();
+// { 'enrichment:job-123': 'Error: API unavailable' }
+```
+
+### `job.removeChildDependency()`
+
+Removes this job's pending dependency from its parent. If this was the last pending child, the parent is promoted to the waiting queue. Throws if the job has no parent.
+
+```typescript
+// Inside a child worker — manually remove self from parent's deps
+await job.removeChildDependency();
+```
+
+### `job.removeUnprocessedChildren()`
+
+Cancels all unprocessed (waiting/delayed) children of a parent job. Active, completed, and failed children are unaffected. Useful inside a `continueParentOnFailure` handler to clean up remaining work.
+
+```typescript
+// Inside the parent worker — cancel any children still waiting
+await job.removeUnprocessedChildren();
+```
+
 ### FlowJob Interface
 
 ```typescript
@@ -338,6 +472,16 @@ interface JobNode<T = unknown> {
 | `close()` | Close connection pool, returns `Promise<void>` |
 | `disconnect()` | Alias for `close()` |
 | `waitUntilReady()` | Wait until FlowProducer is connected |
+
+### Job Instance Methods (inside worker processor)
+
+| Method | Description |
+|--------|-------------|
+| `job.getChildrenValues()` | Get results of all completed children |
+| `job.getFailedChildrenValues()` | Get errors from children that failed with `continueParentOnFailure` |
+| `job.getIgnoredChildrenFailures()` | Get errors from children that failed with `ignoreDependencyOnFailure` |
+| `job.removeChildDependency()` | Remove self from parent's pending dependencies |
+| `job.removeUnprocessedChildren()` | Cancel all waiting/delayed children of this job |
 
 ## Complete Example
 
