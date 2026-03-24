@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.76] - 2026-03-24
+
+### Added
+- Integration test scripts for monitoring, query operations, cron event-driven scheduling, and sandboxed workers (TCP + embedded modes)
+- Unit tests for issues #29 (sandboxed worker `log` method), #38 (sandboxed processor cleanup), #41 (sandboxed idle RAM)
+
 ## [2.6.75] - 2026-03-24
 
 ### Added
