@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.79] - 2026-03-25
+
+### Fixed
+- **Issue #63 follow-up**: `getStallConfig()` and `getDlqConfig()` in TCP mode now return the correct config after calling `setStallConfig()`/`setDlqConfig()` instead of always returning hardcoded defaults. Added client-side cache so sync getters reflect the last-set values immediately
+
 ## [2.6.78] - 2026-03-25
 
 ### Fixed

@@ -36,6 +36,15 @@ describe('Issue #63: disable stall config', () => {
     expect(queue.getStallConfig().enabled).toBe(true);
   });
 
+  it('getStallConfig should reflect setStallConfig immediately (issue #63 screenshot)', () => {
+    // Reproduces the exact user scenario from the screenshot
+    queue.setStallConfig({ enabled: false });
+    const config = queue.getStallConfig();
+
+    // BUG before fix: returned { enabled: true } always in TCP mode
+    expect(config.enabled).toBe(false);
+  });
+
   it('cloud queue:detail response should include enabled field in stallConfig', async () => {
     // Import cloud commands to test the response shape
     const { COMMANDS } = await import('../src/infrastructure/cloud/commands');

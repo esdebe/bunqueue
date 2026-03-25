@@ -15,11 +15,16 @@ interface DlqContext {
   tcp: TcpConnectionPool | null;
 }
 
+/** Client-side cache for TCP mode */
+const tcpDlqConfigCache = new Map<string, Partial<DlqConfig>>();
+
 /** Set DLQ configuration */
 export function setDlqConfig(ctx: DlqContext, config: Partial<DlqConfig>): void {
   if (ctx.embedded) {
     dlqOps.setDlqConfig(ctx.name, config);
   } else if (ctx.tcp) {
+    const current = tcpDlqConfigCache.get(ctx.name) ?? {};
+    tcpDlqConfigCache.set(ctx.name, { ...current, ...config });
     void ctx.tcp.send({ cmd: 'SetDlqConfig', queue: ctx.name, config });
   }
 }
@@ -27,7 +32,9 @@ export function setDlqConfig(ctx: DlqContext, config: Partial<DlqConfig>): void 
 /** Get DLQ configuration */
 export function getDlqConfig(ctx: DlqContext): DlqConfig {
   if (ctx.embedded) return dlqOps.getDlqConfigEmbedded(ctx.name);
-  // Return empty defaults synchronously; use getDlqConfigAsync for TCP
+  // Return cached config if available
+  const cached = tcpDlqConfigCache.get(ctx.name);
+  if (cached) return cached as DlqConfig;
   return {} as DlqConfig;
 }
 
