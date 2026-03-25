@@ -750,15 +750,15 @@ Recurring tasks using cron expressions (server mode) or intervals (embedded mode
 
 ```typescript
 // Server mode: use upsertJobScheduler
-await scheduledQueue.upsertJobScheduler('daily-cleanup', {
-  pattern: '0 3 * * *', // Every day at 3:00 AM
-  data: { task: 'cleanup', params: { olderThanDays: 30 } },
-});
+await scheduledQueue.upsertJobScheduler('daily-cleanup',
+  { pattern: '0 3 * * *' }, // RepeatOpts
+  { data: { task: 'cleanup', params: { olderThanDays: 30 } } } // JobTemplate
+);
 
-await scheduledQueue.upsertJobScheduler('health-check', {
-  every: 300000, // Every 5 minutes
-  data: { task: 'health-check' },
-});
+await scheduledQueue.upsertJobScheduler('health-check',
+  { every: 300000 }, // RepeatOpts: every 5 minutes
+  { data: { task: 'health-check' } } // JobTemplate
+);
 ```
 
 ### Embedded Mode (with setInterval)

@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.78] - 2026-03-25
+
+### Fixed
+- **Issue #61**: `JobTemplate` is now generic `JobTemplate<T>` — `data` field correctly inherits the Queue's type parameter instead of being `unknown`. Fixed incorrect docs in `use-cases` showing `data` in the second parameter instead of the third. Exported `RepeatOpts`, `JobTemplate`, `SchedulerInfo` types from `bunqueue/client`
+- **Issue #63**: Cloud dashboard `queue:detail` response now includes `enabled` field in `stallConfig`, allowing the dashboard to properly display and toggle stall detection
+- **Issue #64**: Added WAL checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`) before `db.close()` to prevent stale locks and `disk I/O error` on rapid restarts in embedded mode
+
+### Added
+- **`skipMissedOnRestart`** option for cron jobs — when enabled, cron jobs that were missed during server downtime are skipped and rescheduled to the next future run instead of being executed immediately on restart. Default: `false` (preserves existing catch-up behavior)
+- Schema migration v8: `skip_missed_on_restart` column on `cron_jobs` table
+
 ## [2.6.77] - 2026-03-24
 
 ### Fixed

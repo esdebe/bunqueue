@@ -54,4 +54,5 @@ export type {
   JobDependenciesCount,
 } from './types';
 export type { FlowStep, FlowResult, FlowJob, JobNode, FlowProducerOptions, FlowOpts } from './flow';
+export type { RepeatOpts, JobTemplate, SchedulerInfo } from './queue/scheduler';
 export type { SandboxedWorkerOptions } from './sandboxedWorker';

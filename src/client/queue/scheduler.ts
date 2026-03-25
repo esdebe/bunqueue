@@ -13,7 +13,7 @@ interface SchedulerContext {
   tcp: TcpConnectionPool | null;
 }
 
-interface RepeatOpts {
+export interface RepeatOpts {
   pattern?: string;
   every?: number;
   limit?: number;
@@ -23,11 +23,13 @@ interface RepeatOpts {
   offset?: number;
   jobId?: string;
   timezone?: string;
+  /** Skip missed runs on restart instead of executing them (default: false) */
+  skipMissedOnRestart?: boolean;
 }
 
-interface JobTemplate {
+export interface JobTemplate<T = unknown> {
   name?: string;
-  data?: unknown;
+  data?: T;
   opts?: JobOptions;
 }
 
@@ -78,6 +80,7 @@ export async function upsertJobScheduler(
       schedule: cronPattern,
       repeatEvery,
       timezone: repeatOpts.timezone ?? 'UTC',
+      skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
       ...dedupFields,
     });
     return {
@@ -95,6 +98,7 @@ export async function upsertJobScheduler(
     schedule: cronPattern,
     repeatEvery,
     timezone: repeatOpts.timezone,
+    skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
     ...dedupFields,
   });
 

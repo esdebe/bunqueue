@@ -316,6 +316,8 @@ export interface CronCommand extends BaseCommand {
   readonly uniqueKey?: string;
   /** Deduplication options for cron-spawned jobs */
   readonly dedup?: { ttl?: number; extend?: boolean; replace?: boolean };
+  /** Skip missed runs on restart instead of executing them */
+  readonly skipMissedOnRestart?: boolean;
 }
 
 export interface CronDeleteCommand extends BaseCommand {

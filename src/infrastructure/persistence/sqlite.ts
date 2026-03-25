@@ -454,7 +454,8 @@ export class SqliteStorage {
           cron.maxLimit,
           cron.timezone,
           cron.uniqueKey,
-          cron.dedup ? pack(cron.dedup) : null
+          cron.dedup ? pack(cron.dedup) : null,
+          cron.skipMissedOnRestart ? 1 : 0
         );
     });
   }
@@ -476,6 +477,7 @@ export class SqliteStorage {
       dedup: row.dedup
         ? (unpack(row.dedup, null, `loadCronDedup:${row.name}`) as CronJob['dedup'])
         : null,
+      skipMissedOnRestart: row.skip_missed_on_restart === 1,
     }));
   }
 
@@ -502,6 +504,15 @@ export class SqliteStorage {
     } catch (err) {
       storageLog.error('Failed to flush write buffer on close', {
         bufferedJobs: this.writeBuffer.pendingCount,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // WAL checkpoint before close to prevent stale locks on restart
+    try {
+      this.db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (err) {
+      storageLog.error('WAL checkpoint failed on close', {
         error: err instanceof Error ? err.message : String(err),
       });
     }

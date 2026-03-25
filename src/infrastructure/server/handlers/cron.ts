@@ -27,6 +27,7 @@ export function handleCron(
       timezone: cmd.timezone,
       uniqueKey: cmd.uniqueKey,
       dedup: cmd.dedup,
+      skipMissedOnRestart: cmd.skipMissedOnRestart,
     });
     ctx.queueManager.emitDashboardEvent(existing ? 'cron:updated' : 'cron:created', {
       name: cron.name,

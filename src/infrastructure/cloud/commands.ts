@@ -127,7 +127,11 @@ export const COMMANDS: Partial<Record<string, Handler>> = {
       queue,
       paused,
       counts,
-      stallConfig: { stallInterval: stallConfig.stallInterval, maxStalls: stallConfig.maxStalls },
+      stallConfig: {
+        enabled: stallConfig.enabled,
+        stallInterval: stallConfig.stallInterval,
+        maxStalls: stallConfig.maxStalls,
+      },
       dlqConfig: { maxRetries: dlqConfig.maxAutoRetries, maxAge: dlqConfig.maxAge ?? 0 },
       dlqEntries: dlqEntries.map((e) => ({
         jobId: String(e.job.id),

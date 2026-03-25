@@ -35,6 +35,7 @@ import * as stallOps from './stall';
 import * as dlqOps from './dlq';
 import * as rateLimitOps from './rateLimit';
 import * as schedulerOps from './scheduler';
+import type { RepeatOpts, JobTemplate, SchedulerInfo } from './scheduler';
 import * as deduplicationOps from './deduplication';
 import * as jobMoveOps from './jobMove';
 import * as workersOps from './workers';
@@ -434,9 +435,9 @@ export class Queue<T = unknown> {
   // ============ Scheduler Operations ============
   upsertJobScheduler(
     schedulerId: string,
-    repeatOpts: Parameters<typeof schedulerOps.upsertJobScheduler>[2],
-    jobTemplate?: Parameters<typeof schedulerOps.upsertJobScheduler>[3]
-  ) {
+    repeatOpts: RepeatOpts,
+    jobTemplate?: JobTemplate<T>
+  ): Promise<SchedulerInfo | null> {
     return schedulerOps.upsertJobScheduler(this.ctx, schedulerId, repeatOpts, jobTemplate);
   }
   removeJobScheduler(schedulerId: string) {

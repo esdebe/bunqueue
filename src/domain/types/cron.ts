@@ -26,6 +26,8 @@ export interface CronJob {
   readonly uniqueKey: string | null;
   /** Deduplication options for cron-spawned jobs */
   readonly dedup: CronDedup | null;
+  /** Skip missed runs on restart instead of executing them (default: false) */
+  readonly skipMissedOnRestart: boolean;
 }
 
 /** Input for creating a cron job */
@@ -43,6 +45,8 @@ export interface CronJobInput {
   uniqueKey?: string;
   /** Deduplication options for cron-spawned jobs */
   dedup?: CronDedup;
+  /** Skip missed runs on restart instead of executing them (default: false) */
+  skipMissedOnRestart?: boolean;
 }
 
 /** Create a new cron job */
@@ -64,6 +68,7 @@ export function createCronJob(input: CronJobInput, nextRun: number): CronJob {
     maxLimit: input.maxLimit ?? null,
     uniqueKey: input.uniqueKey ?? null,
     dedup: input.dedup ?? null,
+    skipMissedOnRestart: input.skipMissedOnRestart ?? false,
   };
 }
 

@@ -53,6 +53,7 @@ export async function routeResourceRoutes(
         timezone: body['timezone'] as string | undefined,
         uniqueKey: body['uniqueKey'] as string | undefined,
         dedup: body['dedup'] as { ttl?: number; extend?: boolean; replace?: boolean } | undefined,
+        skipMissedOnRestart: body['skipMissedOnRestart'] as boolean | undefined,
       } as Parameters<typeof handleCommand>[0],
       ctx
     );

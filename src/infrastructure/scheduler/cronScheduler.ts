@@ -201,8 +201,17 @@ export class CronScheduler {
    * Load cron jobs from storage
    */
   load(crons: CronJob[]): void {
+    const now = Date.now();
     const entries: CronHeapEntry[] = [];
     for (const cron of crons) {
+      // If skipMissedOnRestart is enabled, recalculate nextRun to the future
+      if (cron.skipMissedOnRestart && cron.nextRun < now) {
+        if (cron.schedule) {
+          cron.nextRun = getNextCronRun(cron.schedule, now, cron.timezone ?? undefined);
+        } else if (cron.repeatEvery) {
+          cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
+        }
+      }
       const gen = this.generation++;
       this.cronJobs.set(cron.name, { cron, generation: gen });
       entries.push({ cron, generation: gen });
