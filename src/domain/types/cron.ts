@@ -47,6 +47,8 @@ export interface CronJobInput {
   dedup?: CronDedup;
   /** Skip missed runs on restart instead of executing them (default: false) */
   skipMissedOnRestart?: boolean;
+  /** Fire immediately on creation, then continue on schedule */
+  immediately?: boolean;
 }
 
 /** Create a new cron job */

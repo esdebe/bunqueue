@@ -9,6 +9,7 @@
 process.env.BUNQUEUE_EMBEDDED = '1';
 
 import { Queue, Worker } from '../../src/client';
+import { shutdownManager } from '../../src/client/manager';
 
 async function main() {
   console.log('=== Test CronScheduler Event-Driven Timer ===\n');
@@ -150,12 +151,19 @@ async function main() {
   console.log(`Passed: ${passed}`);
   console.log(`Failed: ${failed}`);
 
+  // Shutdown shared QueueManager singleton (clears all background task intervals
+  // and the CronScheduler's 60s safety fallback setInterval that keeps the process alive)
+  shutdownManager();
+
   if (failed > 0) {
     process.exit(1);
   }
+
+  process.exit(0);
 }
 
 main().catch((err) => {
   console.error('Fatal error:', err);
+  shutdownManager();
   process.exit(1);
 });

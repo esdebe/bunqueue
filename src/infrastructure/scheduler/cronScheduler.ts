@@ -152,6 +152,18 @@ export class CronScheduler {
 
     // Create cron job with generation tracking
     const cron = createCronJob(input, nextRun);
+
+    // Preserve existing executions count when upserting
+    const existing = this.cronJobs.get(cron.name);
+    if (existing) {
+      cron.executions = existing.cron.executions;
+    }
+
+    // Handle immediately option: set nextRun to now so it fires on next tick
+    if (input.immediately) {
+      cron.nextRun = Date.now();
+    }
+
     const gen = this.generation++;
     this.cronJobs.set(cron.name, { cron, generation: gen });
     this.cronHeap.push({ cron, generation: gen });
@@ -211,6 +223,8 @@ export class CronScheduler {
         } else if (cron.repeatEvery) {
           cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
         }
+        // Persist the recalculated nextRun to the DB
+        this.persistCron?.(cron.name, cron.executions, cron.nextRun);
       }
       const gen = this.generation++;
       this.cronJobs.set(cron.name, { cron, generation: gen });

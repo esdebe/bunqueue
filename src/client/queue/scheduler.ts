@@ -81,6 +81,7 @@ export async function upsertJobScheduler(
       repeatEvery,
       timezone: repeatOpts.timezone ?? 'UTC',
       skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
+      immediately: repeatOpts.immediately,
       ...dedupFields,
     });
     return {
