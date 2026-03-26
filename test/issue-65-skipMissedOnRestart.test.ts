@@ -183,6 +183,50 @@ describe('Issue #65: skipMissedOnRestart in add() path', () => {
     scheduler.stop();
   });
 
+  // BUG 4b: immediately should NOT fire on upsert (only first creation)
+  // This is the root cause of the TCP-mode report: user passes immediately+skipMissedOnRestart,
+  // and on every restart upsertJobScheduler calls add() which re-fires immediately
+  it('immediately should NOT fire on upsert, only on first creation', async () => {
+    const pushedJobs: Array<{ queue: string; input: JobInput }> = [];
+    const scheduler = new CronScheduler();
+
+    scheduler.setPushCallback(async (queue, input) => {
+      pushedJobs.push({ queue, input });
+    });
+    scheduler.setPersistCallback(() => {});
+
+    // First creation: immediately should fire
+    scheduler.add({
+      name: 'immediate-upsert',
+      queue: 'test-queue',
+      data: { type: 'immediate' },
+      schedule: '0 * * * *',
+      immediately: true,
+    });
+
+    await tickScheduler(scheduler);
+    expect(pushedJobs.length).toBe(1);
+
+    // Upsert (same name): immediately should NOT fire again
+    const cron = scheduler.add({
+      name: 'immediate-upsert',
+      queue: 'test-queue',
+      data: { type: 'immediate' },
+      schedule: '0 * * * *',
+      immediately: true,
+      skipMissedOnRestart: true,
+    });
+
+    // nextRun should be in the future, NOT Date.now()
+    expect(cron.nextRun).toBeGreaterThan(Date.now() + 1000);
+
+    await tickScheduler(scheduler);
+    // Should still be 1 (the first creation), not 2
+    expect(pushedJobs.length).toBe(1);
+
+    scheduler.stop();
+  });
+
   // BUG 5: add() after load() creates duplicate with reset state
   it('add() after load() should update existing cron, not create fresh one', () => {
     const scheduler = new CronScheduler();

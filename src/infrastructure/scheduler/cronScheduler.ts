@@ -160,7 +160,8 @@ export class CronScheduler {
     }
 
     // Handle immediately option: set nextRun to now so it fires on next tick
-    if (input.immediately) {
+    // Only on first creation, not on upsert (otherwise it overrides skipMissedOnRestart)
+    if (input.immediately && !existing) {
       cron.nextRun = Date.now();
     }
 

@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.84] - 2026-03-26
+
+### Fixed
+- **`immediately: true` conflicting with `skipMissedOnRestart`** ([#65](https://github.com/egeominotti/bunqueue/issues/65)):
+  - `immediately` now only fires on **first creation**, not on subsequent upserts
+  - Previously, every call to `upsertJobScheduler` with `immediately: true` would override `skipMissedOnRestart` and fire the cron immediately — even after a server restart
+  - This was the root cause of the TCP-mode report: the user's app called `upsertJobScheduler` on every startup with both flags, causing the cron to fire immediately despite `skipMissedOnRestart`
+
 ## [2.6.83] - 2026-03-26
 
 ### Fixed
