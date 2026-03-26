@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.83] - 2026-03-26
+
+### Fixed
+- **`immediately: true` now works in TCP mode** ([#65](https://github.com/egeominotti/bunqueue/issues/65)):
+  - Added `immediately` field to TCP `Cron` command type
+  - Wired `immediately` through TCP handler (`handleCron`) and client TCP path (`upsertJobScheduler`)
+  - Full TCP parity: `immediately`, `skipMissedOnRestart` now work identically in both embedded and TCP modes
+
 ## [2.6.82] - 2026-03-26
 
 ### Fixed

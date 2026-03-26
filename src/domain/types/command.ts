@@ -318,6 +318,8 @@ export interface CronCommand extends BaseCommand {
   readonly dedup?: { ttl?: number; extend?: boolean; replace?: boolean };
   /** Skip missed runs on restart instead of executing them */
   readonly skipMissedOnRestart?: boolean;
+  /** Fire immediately on creation, then continue on schedule */
+  readonly immediately?: boolean;
 }
 
 export interface CronDeleteCommand extends BaseCommand {

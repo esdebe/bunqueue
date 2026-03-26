@@ -28,6 +28,7 @@ export function handleCron(
       uniqueKey: cmd.uniqueKey,
       dedup: cmd.dedup,
       skipMissedOnRestart: cmd.skipMissedOnRestart,
+      immediately: cmd.immediately,
     });
     ctx.queueManager.emitDashboardEvent(existing ? 'cron:updated' : 'cron:created', {
       name: cron.name,
