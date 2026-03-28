@@ -29,6 +29,7 @@ export class CloudAgent {
   private readonly httpSender: HttpSender;
   private readonly wsSender: WsSender | null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
+  private statsUpdateTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribeEvents: (() => void) | null = null;
   private sequenceId = 0;
   private snapshotCount = 0;
@@ -72,7 +73,7 @@ export class CloudAgent {
       ws: this.config.useWebSocket,
     });
 
-    // Channel 1: HTTP snapshots — dynamic interval based on compressed payload size
+    // Channel 1: HTTP snapshots
     if (this.config.useHttp) {
       void this.sendSnapshot().then(() => {
         this.scheduleNext();
@@ -87,9 +88,10 @@ export class CloudAgent {
           handleCommand(this.queueManager, cmd)
             .then((result) => {
               this.wsSender?.sendRaw(result);
-              if (result.success) {
-                this.sendImmediateSnapshot();
-              }
+              // HTTP ingest disabled — dashboard uses WS commands
+              // if (result.success) {
+              //   this.sendImmediateSnapshot();
+              // }
             })
             .catch((err: unknown) => {
               cloudLog.debug('Command handler error', { error: String(err) });
@@ -112,6 +114,11 @@ export class CloudAgent {
     if (this.snapshotTimer) {
       clearTimeout(this.snapshotTimer);
       this.snapshotTimer = null;
+    }
+
+    if (this.statsUpdateTimer) {
+      clearInterval(this.statsUpdateTimer);
+      this.statsUpdateTimer = null;
     }
 
     if (this.unsubscribeEvents) {
@@ -141,16 +148,6 @@ export class CloudAgent {
     cloudLog.info('Disconnected from dashboard');
   }
 
-  /** Send snapshot immediately after a command (debounced 100ms to batch rapid commands) */
-  private immediateSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
-  private sendImmediateSnapshot(): void {
-    if (this.immediateSnapshotTimer) return; // already scheduled
-    this.immediateSnapshotTimer = setTimeout(() => {
-      this.immediateSnapshotTimer = null;
-      void this.sendSnapshot(true);
-    }, 100);
-  }
-
   /** Compute next interval from last compressed payload size */
   private computeInterval(): number {
     const kb = this.httpSender.lastCompressedKB;
@@ -172,7 +169,7 @@ export class CloudAgent {
     }, intervalMs);
   }
 
-  /** Collect and send a snapshot via HTTP. Events are always embedded. */
+  /** Collect and send a snapshot via HTTP */
   private async sendSnapshot(_forceHeavy = false): Promise<void> {
     try {
       this.snapshotCount++;

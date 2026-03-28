@@ -10,7 +10,7 @@ import { EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry, CreateWorkerOptions } from '../domain/types/worker';
 import type { StallConfig } from '../domain/types/stall';
-import type { DlqConfig, DlqEntry, DlqStats } from '../domain/types/dlq';
+import type { DlqConfig, DlqEntry, DlqFilter, DlqStats } from '../domain/types/dlq';
 import { FailureReason } from '../domain/types/dlq';
 import { Shard } from '../domain/queue/shard';
 import { SqliteStorage } from '../infrastructure/persistence/sqlite';
@@ -782,8 +782,12 @@ export class QueueManager {
     return dlqOps.getDlqJobs(queue, this.contextFactory.getDlqContext(), count);
   }
 
-  getDlqEntries(queue: string): DlqEntry[] {
-    return dlqOps.getDlqEntries(queue, this.contextFactory.getDlqContext());
+  getDlqEntries(queue: string, filter?: DlqFilter): DlqEntry[] {
+    return dlqOps.getDlqEntries(queue, this.contextFactory.getDlqContext(), filter);
+  }
+
+  getDlqCount(queue: string): number {
+    return this.shards[shardIndex(queue)].getDlqCount(queue);
   }
 
   getDlqStats(queue: string): DlqStats {

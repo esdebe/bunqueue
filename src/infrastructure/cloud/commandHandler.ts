@@ -35,6 +35,8 @@ export interface CloudCommand {
   keepLogs?: number;
   max?: number;
   concurrency?: number;
+  sort?: string;
+  search?: string;
 }
 
 /** Result sent back to dashboard */
@@ -44,6 +46,33 @@ export interface CloudCommandResult {
   success: boolean;
   data?: unknown;
   error?: string;
+}
+
+/**
+ * Normalize object keys: PascalCase/UpperCase → camelCase.
+ * Skips user data fields (data, result, backoffConfig, repeat) — those are passed as-is.
+ * NOTE: All command handlers already return camelCase keys, so this is only needed
+ * for nested objects from QueueManager that may use PascalCase (e.g. getDlqConfig).
+ * We check first char to skip already-camelCase objects (fast path).
+ */
+const USER_DATA_KEYS = new Set(['data', 'result', 'backoffConfig', 'repeat']);
+
+function camelKeys(obj: unknown, isUserData = false): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map((item) => camelKeys(item, isUserData));
+  }
+  if (obj && typeof obj === 'object' && !(obj instanceof Date)) {
+    const entries = Object.entries(obj as Record<string, unknown>);
+    const mapped = entries.map(([k, v]) => {
+      const c = k.charCodeAt(0);
+      const newKey = !isUserData && c >= 65 && c <= 90 ? k[0].toLowerCase() + k.slice(1) : k;
+      const childIsUserData = USER_DATA_KEYS.has(newKey);
+      const newV = childIsUserData ? v : camelKeys(v, isUserData);
+      return [newKey, newV] as [string, unknown];
+    });
+    return Object.fromEntries(mapped);
+  }
+  return obj;
 }
 
 /** Process a command and return the result */
@@ -64,7 +93,8 @@ export async function handleCommand(
   }
 
   try {
-    const data = await handler(queueManager, cmd);
+    const raw = await handler(queueManager, cmd);
+    const data = camelKeys(raw);
     cloudLog.info('Remote command executed', { action: cmd.action, id: cmd.id });
     return { type: 'command_result', id: cmd.id, success: true, data };
   } catch (err) {

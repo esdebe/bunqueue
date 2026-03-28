@@ -222,7 +222,8 @@ export function finalizeBatchAck<T>(
     }
 
     if (!job.removeOnComplete) {
-      // Timeline: completed
+      // Mark completion timestamp + timeline
+      job.completedAt = now;
       if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
         job.timeline.push({ state: 'completed', timestamp: now });
       }

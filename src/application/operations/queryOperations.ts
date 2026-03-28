@@ -219,11 +219,44 @@ function collectTemporalJobs(
 }
 
 /** Collect jobs from in-memory structures by state filter */
+function tagState(jobs: Job[], state: string): Job[] {
+  for (const j of jobs) (j as unknown as Record<string, unknown>)._state = state;
+  return jobs;
+}
+
+/** Tag temporal jobs with their actual state based on runAt/priority */
+function tagTemporalState(jobs: Job[]): void {
+  const now = Date.now();
+  for (const j of jobs) {
+    const isDelayed = j.runAt > now;
+    (j as unknown as Record<string, unknown>)._state = isDelayed
+      ? 'delayed'
+      : j.priority > 0
+        ? 'prioritized'
+        : 'waiting';
+  }
+}
+
+/** Collect waiting-children jobs from deps and children maps */
+function collectWaitingChildrenFromShard(shard: Shard, queue: string, max: number): Job[] {
+  const wcJobs: Job[] = [];
+  for (const job of shard.waitingDeps.values()) {
+    if (job.queue === queue) wcJobs.push(job);
+    if (wcJobs.length >= max) return wcJobs;
+  }
+  for (const job of shard.waitingChildren.values()) {
+    if (job.queue === queue) wcJobs.push(job);
+    if (wcJobs.length >= max) return wcJobs;
+  }
+  return wcJobs;
+}
+
 function collectJobsByState(
   queue: string,
   shardIdx: number,
   states: string[] | null,
-  ctx: GetJobsContext
+  ctx: GetJobsContext,
+  maxPerSource = Infinity
 ): Job[] {
   const shard = ctx.shards[shardIdx];
   const jobs: Job[] = [];
@@ -232,32 +265,29 @@ function collectJobsByState(
   const needDelayed = !states || states.includes('delayed');
 
   if (needWaiting || needPrioritized || needDelayed) {
-    jobs.push(
-      ...collectTemporalJobs(
-        shard,
-        queue,
-        { waiting: needWaiting, prioritized: needPrioritized, delayed: needDelayed },
-        Infinity
-      )
+    const temporal = collectTemporalJobs(
+      shard,
+      queue,
+      { waiting: needWaiting, prioritized: needPrioritized, delayed: needDelayed },
+      maxPerSource
     );
+    tagTemporalState(temporal);
+    jobs.push(...temporal);
   }
   if (!states || states.includes('active')) {
-    jobs.push(...collectActiveJobs(queue, shardIdx, ctx, Infinity));
+    jobs.push(...tagState(collectActiveJobs(queue, shardIdx, ctx, maxPerSource), 'active'));
   }
   if (!states || states.includes('failed')) {
-    jobs.push(...shard.getDlq(queue));
+    const dlq = shard.getDlq(queue);
+    jobs.push(...tagState(maxPerSource < dlq.length ? dlq.slice(0, maxPerSource) : dlq, 'failed'));
   }
   if (!states || states.includes('completed')) {
-    jobs.push(...collectCompletedJobs(queue, ctx, Infinity));
+    jobs.push(...tagState(collectCompletedJobs(queue, ctx, maxPerSource), 'completed'));
   }
   if (!states || states.includes('waiting-children')) {
-    // Collect jobs waiting for deps or children to complete
-    for (const job of shard.waitingDeps.values()) {
-      if (job.queue === queue) jobs.push(job);
-    }
-    for (const job of shard.waitingChildren.values()) {
-      if (job.queue === queue) jobs.push(job);
-    }
+    jobs.push(
+      ...tagState(collectWaitingChildrenFromShard(shard, queue, maxPerSource), 'waiting-children')
+    );
   }
   return jobs;
 }
@@ -366,7 +396,8 @@ export function getJobs(
   }
 
   // In-memory path (embedded mode only)
-  const jobs = collectJobsByState(queue, shardIdx, states, ctx);
+  const maxPerSource = end + 1;
+  const jobs = collectJobsByState(queue, shardIdx, states, ctx, maxPerSource);
   jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
   return jobs.slice(start, end);
 }

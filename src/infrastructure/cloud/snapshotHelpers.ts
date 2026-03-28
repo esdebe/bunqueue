@@ -150,10 +150,10 @@ export function collectLiveJobs(
 
   const jobs: CloudSnapshot['recentJobs'] = [];
 
-  for (const state of ALL_STATES) {
-    for (const name of queueNames) {
+  for (const name of queueNames) {
+    for (const state of ALL_STATES) {
       try {
-        const queueJobs = queueManager.getJobs(name, { state: [state], start: 0, end: -1 });
+        const queueJobs = queueManager.getJobs(name, { state: [state], start: 0, end: 999 });
         for (const j of queueJobs) {
           jobs.push(mapJobToSnapshot(j, state));
         }
