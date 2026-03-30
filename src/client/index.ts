@@ -21,6 +21,8 @@
 
 export { Queue } from './queue';
 export { Worker } from './worker';
+export { Bunqueue } from './bunqueue';
+export type { BunqueueOptions, BunqueueMiddleware } from './bunqueue';
 export { SandboxedWorker } from './sandboxedWorker';
 export { QueueEvents } from './events';
 export { QueueGroup } from './queueGroup';

@@ -227,6 +227,46 @@ bunqueue cron list|add|delete
 bunqueue stats|metrics|health
 ```
 
+## Simple Mode (Bunqueue)
+
+All-in-one Queue + Worker with routes, middleware, and cron:
+
+```typescript
+import { Bunqueue } from 'bunqueue/client';
+
+const app = new Bunqueue('tasks', {
+  embedded: true,
+  // Single processor OR named routes
+  routes: {
+    'send-email': async (job) => { return { sent: true }; },
+    'send-sms': async (job) => { return { sent: true }; },
+  },
+  concurrency: 10,
+});
+
+// Middleware (onion model: mw1 → mw2 → processor → mw2 → mw1)
+app.use(async (job, next) => {
+  const start = Date.now();
+  const result = await next();
+  console.log(`${job.name} took ${Date.now() - start}ms`);
+  return result;
+});
+
+// Cron
+await app.cron('daily', '0 9 * * *', { type: 'report' });
+await app.every('ping', 30000, { type: 'health' });
+
+// Events, add, control
+app.on('completed', (job, result) => {});
+await app.add('send-email', { to: 'user@test.com' });
+app.pause(); app.resume();
+await app.close();
+```
+
+Key: `Bunqueue` = wrapper around `Queue` + `Worker`. Use `processor` OR `routes`, not both. Middleware wraps the processor. Cron delegates to `queue.upsertJobScheduler()`. For distributed (separate producer/consumer), use `Queue` + `Worker` directly.
+
+Source: `src/client/bunqueue.ts`
+
 ## Client SDK
 
 ```typescript

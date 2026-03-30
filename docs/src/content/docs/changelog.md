@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.90] - 2026-03-31
+
+### Added
+- **Simple Mode (`Bunqueue` class)** — new unified API that combines Queue + Worker into a single object. Includes route-based job dispatching, onion-model middleware chain, and simplified cron scheduling via `cron()` and `every()`. Works in both embedded and TCP modes. Import as `import { Bunqueue } from 'bunqueue/client'`.
+- **Documentation** — comprehensive Simple Mode guide at `/guide/simple-mode/`, README section, and CLAUDE.md reference.
+
 ## [2.6.89] - 2026-03-30
 
 ### Fixed

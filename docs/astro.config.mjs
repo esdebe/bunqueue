@@ -100,6 +100,7 @@ export default defineConfig({
         {
           label: 'Client SDK',
           items: [
+            { label: 'Simple Mode', link: '/guide/simple-mode/' },
             { label: 'Queue', link: '/guide/queue/' },
             { label: 'Worker', link: '/guide/worker/' },
             { label: 'CPU-Intensive Workers', link: '/guide/cpu-intensive-workers/' },

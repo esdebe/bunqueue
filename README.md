@@ -147,6 +147,56 @@ const worker = new Worker(
 await queue.add('process', { data: 'hello' });
 ```
 
+### Simple Mode
+
+One object. Queue + Worker + Routes + Middleware + Cron. Zero boilerplate.
+
+```typescript
+import { Bunqueue } from 'bunqueue/client';
+
+const app = new Bunqueue('notifications', {
+  embedded: true,
+
+  // Route jobs by name
+  routes: {
+    'send-email': async (job) => {
+      console.log(`Email to ${job.data.to}`);
+      return { sent: true };
+    },
+    'send-sms': async (job) => {
+      console.log(`SMS to ${job.data.to}`);
+      return { sent: true };
+    },
+  },
+  concurrency: 10,
+});
+
+// Middleware — wraps every job (logging, timing, error recovery)
+app.use(async (job, next) => {
+  const start = Date.now();
+  const result = await next();
+  console.log(`${job.name} took ${Date.now() - start}ms`);
+  return result;
+});
+
+// Cron — scheduled jobs
+await app.cron('daily-report', '0 9 * * *', { type: 'summary' });
+await app.every('healthcheck', 30000, { type: 'ping' });
+
+// Events
+app.on('completed', (job, result) => console.log(result));
+app.on('failed', (job, err) => console.error(err));
+
+// Add jobs
+await app.add('send-email', { to: 'alice@example.com' });
+await app.add('send-sms', { to: '+1234567890' });
+
+// Graceful shutdown
+await app.close();
+```
+
+Works with both embedded and TCP mode. [Simple Mode docs →](https://bunqueue.dev/guide/simple-mode/)
+
 ## Performance
 
 SQLite handles surprisingly high throughput for single-node deployments:
@@ -220,6 +270,7 @@ docker compose --profile monitoring up -d
 **[Read the full documentation →](https://bunqueue.dev/)**
 
 - [Quick Start](https://bunqueue.dev/guide/quickstart/)
+- [Simple Mode](https://bunqueue.dev/guide/simple-mode/)
 - [Queue API](https://bunqueue.dev/guide/queue/)
 - [Worker API](https://bunqueue.dev/guide/worker/)
 - [Server Mode](https://bunqueue.dev/guide/server/)
