@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.87] - 2026-03-30
+
+### Fixed
+- **`skipIfNoWorker` not working on restart** ([#67](https://github.com/egeominotti/bunqueue/issues/67)) — when a cron job had `skipIfNoWorker: true` and the server restarted with past-due `nextRun`, the missed cron fired immediately because workers reconnected before the scheduler tick. The `load()` method now recalculates `nextRun` to the next future occurrence when `skipIfNoWorker` is enabled, preventing missed cron executions on restart.
+
 ## [2.6.85] - 2026-03-26
 
 ### Added

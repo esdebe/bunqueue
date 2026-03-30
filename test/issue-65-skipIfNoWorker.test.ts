@@ -70,9 +70,13 @@ describe('skipIfNoWorker', () => {
     scheduler.load([makeCronJob({
       name: 'has-worker-cron',
       queue: 'sync-queue',
-      nextRun: Date.now() - 1000, // due
+      nextRun: Date.now() + 60000,
       skipIfNoWorker: true,
     })]);
+
+    // Manually set nextRun to past to simulate cron becoming due at runtime (not a restart)
+    const cron = scheduler.get('has-worker-cron');
+    cron!.nextRun = Date.now() - 1000;
 
     await tickScheduler(scheduler);
 
@@ -121,16 +125,22 @@ describe('skipIfNoWorker', () => {
       makeCronJob({
         name: 'cron-with-workers',
         queue: 'has-workers',
-        nextRun: Date.now() - 1000,
+        nextRun: Date.now() + 60000,
         skipIfNoWorker: true,
       }),
       makeCronJob({
         name: 'cron-without-workers',
         queue: 'no-workers',
-        nextRun: Date.now() - 1000,
+        nextRun: Date.now() + 60000,
         skipIfNoWorker: true,
       }),
     ]);
+
+    // Manually set nextRun to past to simulate crons becoming due at runtime
+    const cronWith = scheduler.get('cron-with-workers');
+    cronWith!.nextRun = Date.now() - 1000;
+    const cronWithout = scheduler.get('cron-without-workers');
+    cronWithout!.nextRun = Date.now() - 1000;
 
     await tickScheduler(scheduler);
 
@@ -151,16 +161,19 @@ describe('skipIfNoWorker', () => {
     scheduler.load([makeCronJob({
       name: 'advance-cron',
       queue: 'q',
-      nextRun: Date.now() - 1000,
+      nextRun: Date.now() + 60000,
       schedule: '* * * * *',
       skipIfNoWorker: true,
       executions: 5,
     })]);
 
+    // Manually set nextRun to past to simulate cron becoming due at runtime
+    const cron = scheduler.get('advance-cron');
+    cron!.nextRun = Date.now() - 1000;
+
     await tickScheduler(scheduler);
 
     // nextRun should have advanced (cron state updated even though job was skipped)
-    const cron = scheduler.get('advance-cron');
     expect(cron!.nextRun).toBeGreaterThan(Date.now());
     // executions should have incremented
     expect(cron!.executions).toBe(6);
