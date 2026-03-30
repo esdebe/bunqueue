@@ -359,7 +359,7 @@ export class FlowProducer extends EventEmitter {
     const data = job.data as Record<string, unknown>;
     const name = typeof data.name === 'string' ? data.name : 'default';
     const userData = extractUserDataFromInternal(data) as T;
-    const jobObj = createFlowJobObject<T>(
+    const jobObj = createFlowJobObject(
       String(job.id),
       name,
       userData,
@@ -392,7 +392,7 @@ export class FlowProducer extends EventEmitter {
     const userData = extractUserDataFromInternal(data ?? {}) as T;
     const rawChildrenIds = data?.__childrenIds;
     const childrenIds = Array.isArray(rawChildrenIds) ? (rawChildrenIds as string[]) : [];
-    const jobObj = createFlowJobObject<T>(
+    const jobObj = createFlowJobObject(
       id,
       name,
       userData,
@@ -467,7 +467,7 @@ export class FlowProducer extends EventEmitter {
     });
     createdJobIds.push(jobIdStr);
 
-    const job = createFlowJobObject<T>(
+    const job = createFlowJobObject(
       jobIdStr,
       node.name,
       node.data as T,

@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.88] - 2026-03-30
+
+### Fixed
+- **ESLint crash on `flow.ts`** — removed unnecessary explicit `<T>` type arguments from `createFlowJobObject` calls that caused `@typescript-eslint/no-unnecessary-type-arguments` rule to crash during `bun run lint`.
+
 ## [2.6.87] - 2026-03-30
 
 ### Fixed
