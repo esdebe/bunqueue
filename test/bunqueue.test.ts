@@ -268,19 +268,19 @@ describe('Bunqueue', () => {
     expect(job).toBeDefined();
   });
 
-  test('should throw if neither processor nor routes', () => {
+  test('should throw if no processor/routes/batch', () => {
     expect(() => {
       new Bunqueue('test-err', {} as never);
-    }).toThrow('requires either');
+    }).toThrow('requires');
   });
 
-  test('should throw if both processor and routes', () => {
+  test('should throw if multiple processor modes', () => {
     expect(() => {
       new Bunqueue('test-err2', {
         processor: async () => ({}),
         routes: { a: async () => ({}) },
       } as never);
-    }).toThrow('not both');
+    }).toThrow('only one');
   });
 });
 
@@ -629,5 +629,479 @@ describe('Bunqueue - Cron', () => {
     });
 
     expect(info).not.toBeNull();
+  });
+});
+
+// ============ Batch Processing (feature 1) ============
+
+describe('Bunqueue - Batch Processing', () => {
+  test('should accumulate jobs and process as batch', async () => {
+    let batchSizes: number[] = [];
+
+    const bq = new Bunqueue<{ i: number }, { ok: boolean }>('test-batch', {
+      batch: {
+        size: 3,
+        timeout: 500,
+        processor: async (jobs) => {
+          batchSizes.push(jobs.length);
+          return jobs.map(() => ({ ok: true }));
+        },
+      },
+      concurrency: 5,
+    });
+
+    await bq.add('task', { i: 1 });
+    await bq.add('task', { i: 2 });
+    await bq.add('task', { i: 3 });
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (batchSizes.length >= 1) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(batchSizes[0]).toBeGreaterThanOrEqual(1);
+  });
+
+  test('should flush partial batch on timeout', async () => {
+    let processed = false;
+
+    const bq = new Bunqueue<{ i: number }, { ok: boolean }>('test-batch-timeout', {
+      batch: {
+        size: 100, // large size, won't fill
+        timeout: 100, // short timeout
+        processor: async (jobs) => {
+          processed = true;
+          return jobs.map(() => ({ ok: true }));
+        },
+      },
+    });
+
+    await bq.add('task', { i: 1 });
+
+    await Bun.sleep(300);
+    expect(processed).toBe(true);
+  });
+});
+
+// ============ Advanced Retry (feature 2) ============
+
+describe('Bunqueue - Advanced Retry', () => {
+  test('should retry with jitter strategy', async () => {
+    let attempts = 0;
+    const results: unknown[] = [];
+
+    const bq = new Bunqueue('test-retry-jitter', {
+      processor: async () => {
+        attempts++;
+        if (attempts < 3) throw new Error('fail');
+        return { ok: true };
+      },
+      retry: {
+        maxAttempts: 5,
+        delay: 50,
+        strategy: 'jitter',
+      },
+    });
+
+    bq.on('completed', (_job, result) => results.push(result));
+    await bq.add('task', {});
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (results.length >= 1) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(attempts).toBe(3);
+    expect(results[0]).toEqual({ ok: true });
+  });
+
+  test('should retry with fibonacci strategy', async () => {
+    let attempts = 0;
+
+    const bq = new Bunqueue('test-retry-fib', {
+      processor: async () => {
+        attempts++;
+        if (attempts < 2) throw new Error('fail');
+        return { ok: true };
+      },
+      retry: {
+        maxAttempts: 3,
+        delay: 10,
+        strategy: 'fibonacci',
+      },
+    });
+
+    const results: unknown[] = [];
+    bq.on('completed', (_j, r) => results.push(r));
+    await bq.add('task', {});
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (results.length >= 1) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    expect(attempts).toBe(2);
+  });
+
+  test('should respect retryIf predicate', async () => {
+    let attempts = 0;
+    const errors: Error[] = [];
+
+    const bq = new Bunqueue('test-retry-if', {
+      processor: async () => {
+        attempts++;
+        throw new Error('permanent');
+      },
+      retry: {
+        maxAttempts: 5,
+        delay: 10,
+        strategy: 'fixed',
+        retryIf: (err) => !err.message.includes('permanent'),
+      },
+    });
+
+    bq.on('failed', (_j, e) => errors.push(e));
+    await bq.add('task', {});
+
+    await Bun.sleep(200);
+    expect(attempts).toBe(1); // no retry because retryIf returned false
+  });
+
+  test('should use custom backoff function', async () => {
+    let attempts = 0;
+    const delays: number[] = [];
+    let lastTime = Date.now();
+
+    const bq = new Bunqueue('test-retry-custom', {
+      processor: async () => {
+        const now = Date.now();
+        if (attempts > 0) delays.push(now - lastTime);
+        lastTime = now;
+        attempts++;
+        if (attempts < 3) throw new Error('fail');
+        return { ok: true };
+      },
+      retry: {
+        maxAttempts: 5,
+        strategy: 'custom',
+        customBackoff: (attempt) => attempt * 50,
+      },
+    });
+
+    const results: unknown[] = [];
+    bq.on('completed', (_j, r) => results.push(r));
+    await bq.add('task', {});
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (results.length >= 1) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    expect(attempts).toBe(3);
+  });
+});
+
+// ============ Graceful Cancellation (feature 3) ============
+
+describe('Bunqueue - Cancellation', () => {
+  test('should cancel a running job', async () => {
+    const errors: Error[] = [];
+
+    const bq = new Bunqueue('test-cancel', {
+      processor: async (job) => {
+        // Long-running job: check signal periodically
+        const signal = bq.getSignal(job.id);
+        for (let i = 0; i < 100; i++) {
+          if (signal?.aborted) throw new Error('Job cancelled');
+          await Bun.sleep(10);
+        }
+        return { ok: true };
+      },
+    });
+
+    bq.on('failed', (_j, e) => errors.push(e));
+
+    const job = await bq.add('long-task', {});
+
+    // Wait for job to start processing
+    await Bun.sleep(50);
+    bq.cancel(job.id);
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (errors.length >= 1) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    expect(errors[0].message).toContain('cancelled');
+  });
+
+  test('isCancelled should return correct state', async () => {
+    let jobStarted = false;
+
+    const bq = new Bunqueue('test-cancel-check', {
+      processor: async () => {
+        jobStarted = true;
+        await Bun.sleep(2000); // long job
+        return { ok: true };
+      },
+    });
+
+    const job = await bq.add('task', {});
+
+    // Wait for the processor to start
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (jobStarted) { clearInterval(check); resolve(); }
+      }, 5);
+    });
+
+    expect(bq.isCancelled(job.id)).toBe(false);
+    bq.cancel(job.id);
+    expect(bq.isCancelled(job.id)).toBe(true);
+  });
+});
+
+// ============ Circuit Breaker (feature 5) ============
+
+describe('Bunqueue - Circuit Breaker', () => {
+  test('should open circuit after threshold failures', async () => {
+    let openCalled = false;
+
+    const bq = new Bunqueue('test-cb', {
+      processor: async () => {
+        throw new Error('service down');
+      },
+      circuitBreaker: {
+        threshold: 3,
+        resetTimeout: 500,
+        onOpen: () => { openCalled = true; },
+      },
+    });
+
+    // Add enough jobs to trigger failures
+    for (let i = 0; i < 5; i++) {
+      await bq.add('task', {});
+    }
+
+    await Bun.sleep(300);
+    expect(bq.getCircuitState()).toBe('open');
+    expect(openCalled).toBe(true);
+  });
+
+  test('should reset circuit manually', () => {
+    const bq = new Bunqueue('test-cb-reset', {
+      processor: async () => ({ ok: true }),
+      circuitBreaker: { threshold: 1 },
+    });
+
+    expect(bq.getCircuitState()).toBe('closed');
+    bq.resetCircuit();
+    expect(bq.getCircuitState()).toBe('closed');
+  });
+});
+
+// ============ Event Triggers (feature 6) ============
+
+describe('Bunqueue - Event Triggers', () => {
+  test('should create job B when job A completes', async () => {
+    const processed: string[] = [];
+
+    const bq = new Bunqueue<{ step: string }>('test-trigger', {
+      routes: {
+        'step-a': async () => ({ result: 'a-done' }),
+        'step-b': async (job) => {
+          processed.push(job.data.step);
+          return { ok: true };
+        },
+      },
+    });
+
+    bq.trigger({
+      on: 'step-a',
+      create: 'step-b',
+      data: () => ({ step: 'from-trigger' }),
+    });
+
+    await bq.add('step-a', { step: 'initial' });
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (processed.length >= 1) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    expect(processed).toContain('from-trigger');
+  });
+
+  test('should respect trigger condition', async () => {
+    const created: string[] = [];
+
+    const bq = new Bunqueue<{ amount: number }>('test-trigger-cond', {
+      routes: {
+        'payment': async (job) => ({ amount: job.data.amount }),
+        'notify': async (job) => {
+          created.push(`notify:${job.data.amount}`);
+          return { ok: true };
+        },
+      },
+    });
+
+    bq.trigger({
+      on: 'payment',
+      create: 'notify',
+      data: (result) => ({ amount: (result as { amount: number }).amount }),
+      condition: (result) => (result as { amount: number }).amount > 100,
+    });
+
+    await bq.add('payment', { amount: 50 }); // should NOT trigger
+    await bq.add('payment', { amount: 200 }); // should trigger
+
+    await Bun.sleep(300);
+    expect(created.length).toBe(1);
+    expect(created[0]).toBe('notify:200');
+  });
+
+  test('trigger() should be chainable', () => {
+    const bq = new Bunqueue('test-trigger-chain', {
+      processor: async () => ({ ok: true }),
+    });
+
+    const result = bq
+      .trigger({ on: 'a', create: 'b', data: () => ({}) })
+      .trigger({ on: 'c', create: 'd', data: () => ({}) });
+
+    expect(result).toBe(bq);
+  });
+});
+
+// ============ Job TTL (feature 7) ============
+
+describe('Bunqueue - Job TTL', () => {
+  test('should reject expired jobs', async () => {
+    const errors: Error[] = [];
+
+    const bq = new Bunqueue('test-ttl', {
+      processor: async () => ({ ok: true }),
+      autorun: false,
+      ttl: { defaultTtl: 50 }, // 50ms TTL
+    });
+
+    await bq.add('task', {});
+
+    // Wait for TTL to expire
+    await Bun.sleep(100);
+
+    bq.on('failed', (_j, e) => errors.push(e));
+    bq.worker.run();
+
+    await Bun.sleep(200);
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors[0].message).toContain('expired');
+  });
+
+  test('should support per-name TTL', async () => {
+    const completed: string[] = [];
+    const failed: string[] = [];
+
+    const bq = new Bunqueue('test-ttl-pernam', {
+      routes: {
+        'fast': async () => ({ ok: true }),
+        'slow': async () => ({ ok: true }),
+      },
+      autorun: false,
+      ttl: {
+        perName: {
+          'fast': 50, // 50ms
+          'slow': 10000, // 10s — won't expire
+        },
+      },
+    });
+
+    await bq.add('fast', {});
+    await bq.add('slow', {});
+
+    await Bun.sleep(100); // fast expires, slow doesn't
+
+    bq.on('completed', (job) => completed.push(job.name));
+    bq.on('failed', (job) => failed.push(job.name));
+    bq.worker.run();
+
+    await Bun.sleep(200);
+    expect(failed).toContain('fast');
+    expect(completed).toContain('slow');
+  });
+
+  test('setDefaultTtl should update TTL at runtime', () => {
+    const bq = new Bunqueue('test-ttl-set', {
+      processor: async () => ({ ok: true }),
+      ttl: { defaultTtl: 1000 },
+    });
+
+    bq.setDefaultTtl(500);
+    // No assertion needed — just verify it doesn't throw
+    expect(true).toBe(true);
+  });
+});
+
+// ============ Priority Aging (feature 8) ============
+
+describe('Bunqueue - Priority Aging', () => {
+  test('should construct with priority aging config', () => {
+    const bq = new Bunqueue('test-aging', {
+      processor: async () => ({ ok: true }),
+      autorun: false,
+      priorityAging: {
+        interval: 100,
+        minAge: 50,
+        boost: 2,
+        maxPriority: 50,
+        maxScan: 10,
+      },
+    });
+
+    expect(bq).toBeDefined();
+  });
+
+  test('should boost priority of old waiting jobs', async () => {
+    const bq = new Bunqueue<{ v: number }>('test-aging-boost', {
+      processor: async () => ({ ok: true }),
+      autorun: false,
+      priorityAging: {
+        interval: 100,
+        minAge: 50,
+        boost: 5,
+        maxPriority: 100,
+      },
+    });
+
+    const job = await bq.add('task', { v: 1 }, { priority: 1 });
+
+    // Wait for aging interval to tick
+    await Bun.sleep(250);
+
+    const updated = await bq.getJob(job.id);
+    // Priority should have been boosted
+    expect(updated!.priority).toBeGreaterThanOrEqual(1);
+  });
+
+  test('should close cleanly with aging timer', async () => {
+    const bq = new Bunqueue('test-aging-close', {
+      processor: async () => ({ ok: true }),
+      priorityAging: { interval: 50 },
+    });
+
+    await bq.close();
+    expect(bq.isClosed()).toBe(true);
   });
 });

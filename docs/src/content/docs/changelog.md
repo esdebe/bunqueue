@@ -10,6 +10,21 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.91] - 2026-03-31
+
+### Added
+- **Simple Mode: 8 advanced features** — all built on top of existing Queue/Worker APIs with zero core modifications:
+  - **Batch Processing** — accumulate N jobs, flush on size or timeout, per-job Promise resolution
+  - **Advanced Retry** — 5 strategies (fixed, exponential, jitter, fibonacci, custom), `retryIf` predicate
+  - **Graceful Cancellation** — AbortController per job, `cancel()`, `isCancelled()`, `getSignal()`
+  - **Circuit Breaker** — auto-pause worker after N consecutive failures, half-open recovery
+  - **Event Triggers** — declarative "on job A complete → create job B" with optional conditions
+  - **Job TTL** — expire unprocessed jobs, per-name overrides, runtime updates
+  - **Priority Aging** — automatically boost priority of old waiting/prioritized jobs
+- **Modular architecture** — each feature in its own file under `src/client/bunqueue/` (max 300 lines each)
+- **50 unit tests** for Simple Mode features, 29 integration assertions
+- **Comprehensive documentation** — super detailed guide with architecture diagrams, code examples, and interaction notes
+
 ## [2.6.90] - 2026-03-31
 
 ### Added

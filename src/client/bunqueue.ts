@@ -1,91 +1,39 @@
 /**
  * Bunqueue - Simplified all-in-one Queue + Worker
- *
- * @example
- * ```typescript
- * import { Bunqueue } from 'bunqueue/client';
- *
- * // Simple processor
- * const q = new Bunqueue<{ email: string }>('emails', {
- *   processor: async (job) => {
- *     await job.updateProgress(50);
- *     return { sent: true };
- *   },
- *   concurrency: 5,
- * });
- *
- * // Job routing
- * const q2 = new Bunqueue('notifications', {
- *   routes: {
- *     'send-email': async (job) => { ... },
- *     'send-sms': async (job) => { ... },
- *   },
- * });
- *
- * // Middleware
- * q.use(async (job, next) => {
- *   const start = Date.now();
- *   const result = await next();
- *   console.log(`Done in ${Date.now() - start}ms`);
- *   return result;
- * });
- *
- * // Cron
- * q.cron('daily-report', '0 9 * * *', { type: 'summary' });
- * ```
+ * Routes, middleware, cron, batch, retry, circuit breaker, TTL, aging, cancellation.
  */
 
 import { Queue } from './queue/queue';
 import { Worker } from './worker/worker';
-import type {
-  Job,
-  JobOptions,
-  QueueOptions,
-  WorkerOptions,
-  Processor,
-  ConnectionOptions,
-  FlowJobData,
-} from './types';
+import type { Job, JobOptions, QueueOptions, WorkerOptions, Processor, FlowJobData } from './types';
 import type { RepeatOpts, JobTemplate, SchedulerInfo } from './queue/scheduler';
+import type {
+  BunqueueOptions,
+  BunqueueMiddleware,
+  TriggerRule,
+  CircuitState,
+} from './bunqueue/types';
+import { executeWithRetry } from './bunqueue/retry';
+import { WorkerCircuitBreaker } from './bunqueue/circuitBreaker';
+import { BatchAccumulator } from './bunqueue/batch';
+import { TriggerManager } from './bunqueue/triggers';
+import { PriorityAger } from './bunqueue/aging';
+import { CancellationManager } from './bunqueue/cancellation';
+import { TtlChecker } from './bunqueue/ttl';
 
-/** Middleware function: receives job and next(), returns result */
-export type BunqueueMiddleware<T = unknown, R = unknown> = (
-  job: Job<T>,
-  next: () => Promise<R>
-) => Promise<R>;
-
-export interface BunqueueOptions<T = unknown, R = unknown> {
-  /** Job processor function (use this OR routes, not both) */
-  processor?: Processor<T, R>;
-  /** Named job processors — routes jobs by name to the right handler */
-  routes?: Record<string, Processor<T, R>>;
-  /** Worker concurrency (default: 1) */
-  concurrency?: number;
-  /** Connection options for TCP mode */
-  connection?: ConnectionOptions;
-  /** Use embedded mode (default: auto-detect) */
-  embedded?: boolean;
-  /** SQLite data path (embedded mode) */
-  dataPath?: string;
-  /** Default job options */
-  defaultJobOptions?: JobOptions;
-  /** Worker auto-start (default: true) */
-  autorun?: boolean;
-  /** Heartbeat interval in ms (default: 10000, 0=disabled) */
-  heartbeatInterval?: number;
-  /** Worker batch size (default: 10) */
-  batchSize?: number;
-  /** Long poll timeout in ms (default: 0) */
-  pollTimeout?: number;
-  /** Auto-batching options (TCP mode) */
-  autoBatch?: QueueOptions['autoBatch'];
-  /** Rate limiter options */
-  limiter?: WorkerOptions['limiter'];
-  /** Remove job on complete */
-  removeOnComplete?: WorkerOptions['removeOnComplete'];
-  /** Remove job on fail */
-  removeOnFail?: WorkerOptions['removeOnFail'];
-}
+// Re-export all types
+export type {
+  BunqueueMiddleware,
+  BunqueueOptions,
+  RetryStrategy,
+  RetryConfig,
+  CircuitBreakerConfig,
+  TriggerRule,
+  PriorityAgingConfig,
+  BatchProcessor,
+  BatchConfig,
+  JobTtlConfig,
+} from './bunqueue/types';
 
 export class Bunqueue<T = unknown, R = unknown> {
   readonly name: string;
@@ -93,49 +41,70 @@ export class Bunqueue<T = unknown, R = unknown> {
   readonly worker: Worker<T, R>;
   private readonly middlewares: BunqueueMiddleware<T, R>[] = [];
   private readonly baseProcessor: Processor<T, R>;
+  private readonly cb: WorkerCircuitBreaker | null;
+  private readonly retryConfig: BunqueueOptions<T, R>['retry'] | null;
+  private readonly triggerMgr: TriggerManager<T, R>;
+  private readonly ager: PriorityAger<T> | null;
+  private readonly cancellation = new CancellationManager();
+  private readonly ttlChecker: TtlChecker | null;
+  private readonly batchAcc: BatchAccumulator<T, R> | null;
 
   constructor(name: string, opts: BunqueueOptions<T, R>) {
-    if (!opts.processor && !opts.routes) {
-      throw new Error('Bunqueue requires either "processor" or "routes"');
-    }
-    if (opts.processor && opts.routes) {
-      throw new Error('Bunqueue: use "processor" or "routes", not both');
-    }
+    const modes = [opts.processor, opts.routes, opts.batch].filter(Boolean).length;
+    if (modes === 0) throw new Error('Bunqueue requires "processor", "routes", or "batch"');
+    if (modes > 1) throw new Error('Bunqueue: use only one of "processor", "routes", or "batch"');
 
     this.name = name;
+    this.retryConfig = opts.retry ?? null;
+    this.ttlChecker = opts.ttl ? new TtlChecker(opts.ttl) : null;
 
-    // Build base processor from routes or single processor
-    if (opts.routes) {
-      const routeMap: Partial<Record<string, Processor<T, R>>> = opts.routes;
-      this.baseProcessor = ((job: Job<T & FlowJobData>): Promise<R> | R => {
-        const handler = routeMap[job.name];
-        if (!handler) {
-          throw new Error(`No route for job "${job.name}" in queue "${name}"`);
-        }
-        return handler(job);
-      }) as Processor<T, R>;
-    } else if (opts.processor) {
-      this.baseProcessor = opts.processor;
+    // Build base processor
+    if (opts.batch) {
+      this.batchAcc = new BatchAccumulator<T, R>(opts.batch);
+      this.baseProcessor = this.batchAcc.buildProcessor();
     } else {
-      // Should never reach here due to validation above
-      throw new Error('Bunqueue requires either "processor" or "routes"');
+      this.batchAcc = null;
+      this.baseProcessor = opts.routes ? this.buildRouteProcessor(opts.routes) : opts.processor!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 
-    // Wrapped processor that applies middleware chain
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     const wrappedProcessor: Processor<T, R> = ((job: Job<T & FlowJobData>) =>
-      self.executeWithMiddleware(job)) as Processor<T, R>;
+      self.processJob(job)) as Processor<T, R>;
 
-    const queueOpts: QueueOptions = {
+    this.queue = new Queue<T>(name, this.buildQueueOpts(opts));
+    this.worker = new Worker<T, R>(name, wrappedProcessor, this.buildWorkerOpts(opts));
+
+    // Initialize subsystems
+    this.cb = opts.circuitBreaker
+      ? new WorkerCircuitBreaker(opts.circuitBreaker, this.worker as unknown as Worker)
+      : null;
+    this.triggerMgr = new TriggerManager<T, R>(this.queue, this.worker);
+    this.ager = opts.priorityAging ? new PriorityAger<T>(opts.priorityAging, this.queue) : null;
+    this.ager?.start();
+  }
+
+  private buildRouteProcessor(routes: Record<string, Processor<T, R>>): Processor<T, R> {
+    const routeMap: Partial<Record<string, Processor<T, R>>> = routes;
+    return ((job: Job<T & FlowJobData>): Promise<R> | R => {
+      const handler = routeMap[job.name];
+      if (!handler) throw new Error(`No route for job "${job.name}" in queue "${this.name}"`);
+      return handler(job);
+    }) as Processor<T, R>;
+  }
+
+  private buildQueueOpts(opts: BunqueueOptions<T, R>): QueueOptions {
+    return {
       connection: opts.connection,
       embedded: opts.embedded,
       dataPath: opts.dataPath,
       defaultJobOptions: opts.defaultJobOptions,
       autoBatch: opts.autoBatch,
     };
+  }
 
-    const workerOpts: WorkerOptions = {
+  private buildWorkerOpts(opts: BunqueueOptions<T, R>): WorkerOptions {
+    return {
       connection: opts.connection,
       embedded: opts.embedded,
       dataPath: opts.dataPath,
@@ -148,40 +117,61 @@ export class Bunqueue<T = unknown, R = unknown> {
       removeOnComplete: opts.removeOnComplete,
       removeOnFail: opts.removeOnFail,
     };
-
-    this.queue = new Queue<T>(name, queueOpts);
-    this.worker = new Worker<T, R>(name, wrappedProcessor, workerOpts);
   }
 
-  // ============ Middleware ============
+  // ============ Core Processing Pipeline ============
 
-  /** Add middleware to the processing pipeline */
-  use(middleware: BunqueueMiddleware<T, R>): this {
-    this.middlewares.push(middleware);
-    return this;
+  private processJob(job: Job<T & FlowJobData>): Promise<R> {
+    // Circuit breaker check
+    if (this.cb?.isOpen()) {
+      return Promise.reject(new Error('Circuit breaker is open'));
+    }
+    // TTL check
+    if (this.ttlChecker?.isExpired(job.name, job.timestamp)) {
+      return Promise.reject(new Error(`Job expired (age: ${Date.now() - job.timestamp}ms)`));
+    }
+    // Register cancellation
+    const ac = this.cancellation.register(job.id);
+    const runChain = () => this.runMiddlewareChain(job, ac);
+    const execute = this.retryConfig ? executeWithRetry(runChain, this.retryConfig) : runChain();
+
+    return execute.then(
+      (result) => {
+        this.cb?.onSuccess();
+        this.cancellation.unregister(job.id);
+        return result;
+      },
+      (err: unknown) => {
+        this.cb?.onFailure();
+        this.cancellation.unregister(job.id);
+        throw err;
+      }
+    );
   }
 
-  private executeWithMiddleware(job: Job<T & FlowJobData>): Promise<R> {
+  private runMiddlewareChain(job: Job<T & FlowJobData>, ac: AbortController): Promise<R> {
     const asJob = job as unknown as Job<T>;
     if (this.middlewares.length === 0) {
       const result = this.baseProcessor(job);
       return result instanceof Promise ? result : Promise.resolve(result);
     }
-
     let index = 0;
-    const middlewares = this.middlewares;
-    const baseProcessor = this.baseProcessor;
-
+    const mws = this.middlewares;
+    const base = this.baseProcessor;
     const next = (): Promise<R> => {
-      if (index < middlewares.length) {
-        const mw = middlewares[index++];
-        return mw(asJob, next);
-      }
-      const result = baseProcessor(job);
+      if (ac.signal.aborted) return Promise.reject(new Error('Job cancelled'));
+      if (index < mws.length) return mws[index++](asJob, next);
+      const result = base(job);
       return result instanceof Promise ? result : Promise.resolve(result);
     };
-
     return next();
+  }
+
+  // ============ Middleware ============
+
+  use(middleware: BunqueueMiddleware<T, R>): this {
+    this.middlewares.push(middleware);
+    return this;
   }
 
   // ============ Queue Operations ============
@@ -201,64 +191,89 @@ export class Bunqueue<T = unknown, R = unknown> {
   getJobCounts() {
     return this.queue.getJobCounts();
   }
-
   getJobCountsAsync() {
     return this.queue.getJobCountsAsync();
   }
-
   count() {
     return this.queue.count();
   }
-
   countAsync() {
     return this.queue.countAsync();
   }
 
   // ============ Cron ============
 
-  /** Add a cron job */
   cron(
-    schedulerId: string,
+    id: string,
     pattern: string,
     data?: T,
     opts?: { timezone?: string; jobOpts?: JobOptions }
   ): Promise<SchedulerInfo | null> {
-    const repeatOpts: RepeatOpts = { pattern, timezone: opts?.timezone };
-    const jobTemplate: JobTemplate<T> = {
-      name: schedulerId,
-      data,
-      opts: opts?.jobOpts,
-    };
-    return this.queue.upsertJobScheduler(schedulerId, repeatOpts, jobTemplate);
+    return this.queue.upsertJobScheduler(
+      id,
+      { pattern, timezone: opts?.timezone } as RepeatOpts,
+      { name: id, data, opts: opts?.jobOpts } as JobTemplate<T>
+    );
   }
 
-  /** Add a repeating job (every N ms) */
   every(
-    schedulerId: string,
+    id: string,
     intervalMs: number,
     data?: T,
     opts?: { jobOpts?: JobOptions }
   ): Promise<SchedulerInfo | null> {
-    const repeatOpts: RepeatOpts = { every: intervalMs };
-    const jobTemplate: JobTemplate<T> = {
-      name: schedulerId,
-      data,
-      opts: opts?.jobOpts,
-    };
-    return this.queue.upsertJobScheduler(schedulerId, repeatOpts, jobTemplate);
+    return this.queue.upsertJobScheduler(
+      id,
+      { every: intervalMs } as RepeatOpts,
+      { name: id, data, opts: opts?.jobOpts } as JobTemplate<T>
+    );
   }
 
-  /** Remove a cron/repeating job */
-  removeCron(schedulerId: string) {
-    return this.queue.removeJobScheduler(schedulerId);
+  removeCron(id: string) {
+    return this.queue.removeJobScheduler(id);
   }
-
-  /** List all cron/repeating jobs */
   listCrons() {
     return this.queue.getJobSchedulers();
   }
 
-  // ============ Worker Events ============
+  // ============ Cancellation (feature 3) ============
+
+  cancel(jobId: string, gracePeriodMs = 0): void {
+    this.cancellation.cancel(jobId, gracePeriodMs);
+  }
+  isCancelled(jobId: string): boolean {
+    return this.cancellation.isCancelled(jobId);
+  }
+  getSignal(jobId: string): AbortSignal | null {
+    return this.cancellation.getSignal(jobId);
+  }
+
+  // ============ Circuit Breaker (feature 5) ============
+
+  getCircuitState(): CircuitState {
+    return this.cb?.currentState ?? 'closed';
+  }
+  resetCircuit(): void {
+    this.cb?.reset();
+  }
+
+  // ============ Triggers (feature 6) ============
+
+  trigger(rule: TriggerRule<T>): this {
+    this.triggerMgr.add(rule);
+    return this;
+  }
+
+  // ============ TTL (feature 7) ============
+
+  setDefaultTtl(ttlMs: number): void {
+    this.ttlChecker?.setDefaultTtl(ttlMs);
+  }
+  setNameTtl(name: string, ttlMs: number): void {
+    this.ttlChecker?.setNameTtl(name, ttlMs);
+  }
+
+  // ============ Events ============
 
   on(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
   on(event: 'active', listener: (job: Job<T>) => void): this;
@@ -298,13 +313,16 @@ export class Bunqueue<T = unknown, R = unknown> {
     this.queue.pause();
     this.worker.pause();
   }
-
   resume(): void {
     this.queue.resume();
     this.worker.resume();
   }
 
   async close(force = false): Promise<void> {
+    this.ager?.destroy();
+    this.cb?.destroy();
+    this.batchAcc?.destroy();
+    this.cancellation.destroyAll();
     await this.worker.close(force);
     this.queue.close();
   }
@@ -312,11 +330,9 @@ export class Bunqueue<T = unknown, R = unknown> {
   isRunning(): boolean {
     return this.worker.isRunning();
   }
-
   isPaused(): boolean {
     return this.worker.isPaused();
   }
-
   isClosed(): boolean {
     return this.worker.isClosed();
   }
