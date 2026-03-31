@@ -5,7 +5,19 @@
 
 import { Queue } from './queue/queue';
 import { Worker } from './worker/worker';
-import type { Job, JobOptions, QueueOptions, WorkerOptions, Processor, FlowJobData } from './types';
+import type {
+  Job,
+  JobOptions,
+  QueueOptions,
+  WorkerOptions,
+  Processor,
+  FlowJobData,
+  DlqConfig,
+  DlqEntry,
+  DlqStats,
+  DlqFilter,
+} from './types';
+import { DlqRateLimitManager } from './bunqueue/dlqRateLimit';
 import type { RepeatOpts, JobTemplate, SchedulerInfo } from './queue/scheduler';
 import type {
   BunqueueOptions,
@@ -20,6 +32,7 @@ import { TriggerManager } from './bunqueue/triggers';
 import { PriorityAger } from './bunqueue/aging';
 import { CancellationManager } from './bunqueue/cancellation';
 import { TtlChecker } from './bunqueue/ttl';
+import { DedupDebounceMerger } from './bunqueue/dedupDebounce';
 
 // Re-export all types
 export type {
@@ -33,6 +46,9 @@ export type {
   BatchProcessor,
   BatchConfig,
   JobTtlConfig,
+  BunqueueDeduplicationConfig,
+  BunqueueDebounceConfig,
+  BunqueueDlqConfig,
 } from './bunqueue/types';
 
 export class Bunqueue<T = unknown, R = unknown> {
@@ -48,6 +64,8 @@ export class Bunqueue<T = unknown, R = unknown> {
   private readonly cancellation = new CancellationManager();
   private readonly ttlChecker: TtlChecker | null;
   private readonly batchAcc: BatchAccumulator<T, R> | null;
+  private readonly merger: DedupDebounceMerger;
+  private readonly dlqrl: DlqRateLimitManager<T>;
 
   constructor(name: string, opts: BunqueueOptions<T, R>) {
     const modes = [opts.processor, opts.routes, opts.batch].filter(Boolean).length;
@@ -57,6 +75,7 @@ export class Bunqueue<T = unknown, R = unknown> {
     this.name = name;
     this.retryConfig = opts.retry ?? null;
     this.ttlChecker = opts.ttl ? new TtlChecker(opts.ttl) : null;
+    this.merger = new DedupDebounceMerger(opts.deduplication ?? null, opts.debounce ?? null);
 
     // Build base processor
     if (opts.batch) {
@@ -74,6 +93,10 @@ export class Bunqueue<T = unknown, R = unknown> {
 
     this.queue = new Queue<T>(name, this.buildQueueOpts(opts));
     this.worker = new Worker<T, R>(name, wrappedProcessor, this.buildWorkerOpts(opts));
+
+    // DLQ & Rate Limit manager
+    this.dlqrl = new DlqRateLimitManager<T>(this.queue);
+    if (opts.dlq) this.dlqrl.setDlqConfig(opts.dlq);
 
     // Initialize subsystems
     this.cb = opts.circuitBreaker
@@ -113,7 +136,7 @@ export class Bunqueue<T = unknown, R = unknown> {
       heartbeatInterval: opts.heartbeatInterval,
       batchSize: opts.batchSize,
       pollTimeout: opts.pollTimeout,
-      limiter: opts.limiter,
+      limiter: opts.rateLimit ?? opts.limiter,
       removeOnComplete: opts.removeOnComplete,
       removeOnFail: opts.removeOnFail,
     };
@@ -177,17 +200,18 @@ export class Bunqueue<T = unknown, R = unknown> {
   // ============ Queue Operations ============
 
   add(name: string, data: T, opts?: JobOptions): Promise<Job<T>> {
-    return this.queue.add(name, data, opts);
+    return this.queue.add(name, data, this.merger.merge(name, opts, data));
   }
 
   addBulk(jobs: Array<{ name: string; data: T; opts?: JobOptions }>): Promise<Job<T>[]> {
-    return this.queue.addBulk(jobs);
+    return this.queue.addBulk(
+      jobs.map((j) => ({ ...j, opts: this.merger.merge(j.name, j.opts, j.data) }))
+    );
   }
 
   getJob(id: string): Promise<Job<T> | null> {
     return this.queue.getJob(id);
   }
-
   getJobCounts() {
     return this.queue.getJobCounts();
   }
@@ -273,7 +297,38 @@ export class Bunqueue<T = unknown, R = unknown> {
     this.ttlChecker?.setNameTtl(name, ttlMs);
   }
 
+  // ============ DLQ (feature 12) ============
+
+  setDlqConfig(config: Partial<DlqConfig>): void {
+    this.dlqrl.setDlqConfig(config);
+  }
+  getDlqConfig(): DlqConfig {
+    return this.dlqrl.getDlqConfig();
+  }
+  getDlq(filter?: DlqFilter): DlqEntry<T>[] {
+    return this.dlqrl.getDlq(filter);
+  }
+  getDlqStats(): DlqStats {
+    return this.dlqrl.getDlqStats();
+  }
+  retryDlq(id?: string) {
+    return this.dlqrl.retryDlq(id);
+  }
+  purgeDlq() {
+    return this.dlqrl.purgeDlq();
+  }
+
+  // ============ Rate Limiting ============
+
+  setGlobalRateLimit(max: number, duration?: number): void {
+    this.dlqrl.setGlobalRateLimit(max, duration);
+  }
+  removeGlobalRateLimit(): void {
+    this.dlqrl.removeGlobalRateLimit();
+  }
+
   // ============ Events ============
+  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
   on(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
   on(event: 'active', listener: (job: Job<T>) => void): this;
@@ -282,30 +337,24 @@ export class Bunqueue<T = unknown, R = unknown> {
   on(event: 'progress', listener: (job: Job<T> | null, progress: number) => void): this;
   on(event: 'stalled', listener: (jobId: string, reason: string) => void): this;
   on(event: 'error', listener: (error: Error) => void): this;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: any, listener: (...args: any[]) => void): this {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     this.worker.on(event, listener);
     return this;
   }
 
   once(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
-  once(event: 'active', listener: (job: Job<T>) => void): this;
   once(event: 'completed', listener: (job: Job<T>, result: R) => void): this;
   once(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: any, listener: (...args: any[]) => void): this {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     this.worker.once(event, listener);
     return this;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   off(event: any, listener: (...args: any[]) => void): this {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     this.worker.off(event, listener);
     return this;
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
   // ============ Control ============
 

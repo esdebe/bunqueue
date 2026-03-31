@@ -33,6 +33,9 @@ export type {
   BatchProcessor,
   BatchConfig,
   JobTtlConfig,
+  BunqueueDeduplicationConfig,
+  BunqueueDebounceConfig,
+  BunqueueDlqConfig,
 } from './bunqueue';
 export { SandboxedWorker } from './sandboxedWorker';
 export { QueueEvents } from './events';

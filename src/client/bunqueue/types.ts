@@ -9,6 +9,7 @@ import type {
   ConnectionOptions,
   QueueOptions,
   WorkerOptions,
+  RateLimiterOptions,
 } from '../types';
 
 /** Middleware function: receives job and next(), returns result */
@@ -102,6 +103,36 @@ export interface JobTtlConfig {
   perName?: Record<string, number>;
 }
 
+/** Deduplication configuration for Simple Mode */
+export interface BunqueueDeduplicationConfig {
+  /** Default deduplication TTL in ms (default: 3600000 = 1 hour) */
+  ttl?: number;
+  /** Extend TTL when duplicate arrives (default: false) */
+  extend?: boolean;
+  /** Replace data when duplicate arrives in delayed state (default: false) */
+  replace?: boolean;
+}
+
+/** Debounce configuration for Simple Mode */
+export interface BunqueueDebounceConfig {
+  /** Default debounce TTL in ms */
+  ttl: number;
+}
+
+/** DLQ configuration for Simple Mode */
+export interface BunqueueDlqConfig {
+  /** Enable auto-retry from DLQ (default: false) */
+  autoRetry?: boolean;
+  /** Auto-retry interval in ms (default: 3600000 = 1 hour) */
+  autoRetryInterval?: number;
+  /** Max auto-retries (default: 3) */
+  maxAutoRetries?: number;
+  /** Max age before auto-purge in ms (default: 604800000 = 7 days) */
+  maxAge?: number | null;
+  /** Max entries per queue (default: 10000) */
+  maxEntries?: number;
+}
+
 /** Bunqueue options */
 export interface BunqueueOptions<T = unknown, R = unknown> {
   processor?: Processor<T, R>;
@@ -124,4 +155,12 @@ export interface BunqueueOptions<T = unknown, R = unknown> {
   circuitBreaker?: CircuitBreakerConfig;
   ttl?: JobTtlConfig;
   priorityAging?: PriorityAgingConfig;
+  /** Job deduplication defaults — applied via defaultJobOptions */
+  deduplication?: BunqueueDeduplicationConfig;
+  /** Job debouncing defaults — applied via defaultJobOptions */
+  debounce?: BunqueueDebounceConfig;
+  /** Rate limiting for the worker */
+  rateLimit?: RateLimiterOptions;
+  /** Dead letter queue auto-management */
+  dlq?: BunqueueDlqConfig;
 }

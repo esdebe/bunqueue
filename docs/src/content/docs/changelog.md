@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.92] - 2026-03-31
+
+### Added
+- **Simple Mode: 4 new production features** (zero core modifications):
+  - **Job Deduplication** — auto-dedup by name+data with configurable TTL, extend, replace modes
+  - **Job Debouncing** — coalesce rapid same-name jobs within a TTL window
+  - **Rate Limiting** — `rateLimit` option (max/duration/groupKey) + runtime `setGlobalRateLimit()`
+  - **DLQ Auto-Management** — `dlq` option for auto-retry, max age, max entries; full DLQ API (getDlq, getDlqStats, retryDlq, purgeDlq)
+- 9 new unit tests for the 4 features
+
 ## [2.6.91] - 2026-03-31
 
 ### Added

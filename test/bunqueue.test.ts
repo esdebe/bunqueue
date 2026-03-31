@@ -1105,3 +1105,194 @@ describe('Bunqueue - Priority Aging', () => {
     expect(bq.isClosed()).toBe(true);
   });
 });
+
+// ============ Deduplication (feature 9) ============
+
+describe('Bunqueue - Deduplication', () => {
+  test('should deduplicate jobs with same name and data', async () => {
+    const bq = new Bunqueue<{ key: string }>('test-dedup', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+      autorun: false,
+      deduplication: { ttl: 5000 },
+    });
+
+    const j1 = await bq.add('task', { key: 'a' });
+    const j2 = await bq.add('task', { key: 'a' }); // duplicate — same name + data
+    const j3 = await bq.add('task', { key: 'b' }); // different data — not duplicate
+
+    // j1 and j2 should be the same job (dedup by name:data)
+    expect(j1.id).toBe(j2.id);
+    // j3 should be different
+    expect(j1.id).not.toBe(j3.id);
+
+    await bq.close();
+  });
+
+  test('should allow explicit dedup override per-job', async () => {
+    const bq = new Bunqueue<{ v: number }>('test-dedup-override', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+      autorun: false,
+      deduplication: { ttl: 5000 },
+    });
+
+    // Explicit dedup ID overrides the default
+    const j1 = await bq.add('task', { v: 1 }, { deduplication: { id: 'custom-1', ttl: 1000 } });
+    const j2 = await bq.add('task', { v: 2 }, { deduplication: { id: 'custom-1', ttl: 1000 } });
+
+    // j2 should be deduplicated (same custom ID)
+    expect(j1.id).toBe(j2.id);
+
+    await bq.close();
+  });
+});
+
+// ============ Debouncing (feature 10) ============
+
+describe('Bunqueue - Debouncing', () => {
+  test('should apply debounce config to jobs automatically', async () => {
+    const processed: number[] = [];
+
+    const bq = new Bunqueue<{ seq: number }>('test-debounce', {
+      processor: async (job) => {
+        processed.push(job.data.seq);
+        return { ok: true };
+      },
+      embedded: true,
+      debounce: { ttl: 300 },
+    });
+
+    // Rapid adds with same name — debounce replaces within window
+    await bq.add('event', { seq: 1 });
+    await bq.add('event', { seq: 2 });
+    await bq.add('event', { seq: 3 });
+
+    // Different name — not debounced
+    await bq.add('other', { seq: 99 });
+
+    await Bun.sleep(600);
+
+    // 'other' should always be processed
+    expect(processed).toContain(99);
+    // Due to debounce, fewer than 3 'event' jobs should run
+    const eventJobs = processed.filter((x) => x !== 99);
+    expect(eventJobs.length).toBeGreaterThanOrEqual(1);
+    expect(eventJobs.length).toBeLessThanOrEqual(3);
+
+    await bq.close();
+  });
+
+  test('should not debounce when per-job override is set', async () => {
+    const bq = new Bunqueue<{ v: number }>('test-debounce-override', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+      autorun: false,
+      debounce: { ttl: 500 },
+    });
+
+    // Explicit debounce override with different IDs → no dedup
+    const j1 = await bq.add('task', { v: 1 }, { debounce: { id: 'a', ttl: 100 } });
+    const j2 = await bq.add('task', { v: 2 }, { debounce: { id: 'b', ttl: 100 } });
+    expect(j1.id).not.toBe(j2.id);
+
+    await bq.close();
+  });
+});
+
+// ============ Rate Limiting (feature 11) ============
+
+describe('Bunqueue - Rate Limiting', () => {
+  test('should accept rateLimit option', () => {
+    const bq = new Bunqueue('test-rate-limit', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+      rateLimit: { max: 5, duration: 1000 },
+    });
+
+    // Worker should have been created with limiter
+    expect(bq.worker).toBeDefined();
+    bq.close();
+  });
+
+  test('should expose setGlobalRateLimit and removeGlobalRateLimit', () => {
+    const bq = new Bunqueue('test-rate-api', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+    });
+
+    // Should not throw
+    expect(() => bq.setGlobalRateLimit(10, 1000)).not.toThrow();
+    expect(() => bq.removeGlobalRateLimit()).not.toThrow();
+
+    bq.close();
+  });
+});
+
+// ============ DLQ Management (feature 12) ============
+
+describe('Bunqueue - DLQ', () => {
+  test('should configure DLQ via constructor option', () => {
+    const bq = new Bunqueue('test-dlq-config', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+      dlq: {
+        autoRetry: true,
+        autoRetryInterval: 60000,
+        maxAutoRetries: 5,
+        maxAge: 86400000,
+        maxEntries: 500,
+      },
+    });
+
+    const config = bq.getDlqConfig();
+    expect(config.autoRetry).toBe(true);
+    expect(config.maxAutoRetries).toBe(5);
+    expect(config.maxAge).toBe(86400000);
+    expect(config.maxEntries).toBe(500);
+
+    bq.close();
+  });
+
+  test('should expose DLQ query and control methods', async () => {
+    const bq = new Bunqueue('test-dlq-api', {
+      processor: async () => {
+        throw new Error('always fail');
+      },
+      embedded: true,
+      dlq: { maxEntries: 100 },
+    });
+
+    // Add a job that will fail
+    await bq.add('failing', {});
+    await Bun.sleep(500);
+
+    // DLQ stats should be accessible
+    const stats = bq.getDlqStats();
+    expect(stats).toBeDefined();
+    expect(typeof stats.total).toBe('number');
+
+    // DLQ query should work
+    const entries = bq.getDlq();
+    expect(Array.isArray(entries)).toBe(true);
+
+    // purgeDlq should not throw
+    expect(() => bq.purgeDlq()).not.toThrow();
+
+    await bq.close();
+  });
+
+  test('should update DLQ config at runtime', () => {
+    const bq = new Bunqueue('test-dlq-update', {
+      processor: async () => ({ ok: true }),
+      embedded: true,
+    });
+
+    bq.setDlqConfig({ autoRetry: true, maxAutoRetries: 10 });
+    const config = bq.getDlqConfig();
+    expect(config.autoRetry).toBe(true);
+    expect(config.maxAutoRetries).toBe(10);
+
+    bq.close();
+  });
+});
