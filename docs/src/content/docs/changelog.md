@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.95] - 2026-03-31
+
+### Added
+- **AI-native completeness** — three additions for perfect Claude Code integration:
+  - `.mcp.json` at root — auto-discovery of bunqueue MCP server, no manual config needed
+  - `agents/bunqueue-assistant.md` — specialized agent that Claude auto-delegates to for bunqueue tasks (setup, debugging, migration, optimization)
+  - Updated `plugin.json` v1.1.0 — declares all components (skills, agents, MCP), adds keywords for discoverability
+
 ## [2.6.94] - 2026-03-31
 
 ### Added

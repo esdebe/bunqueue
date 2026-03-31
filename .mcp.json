@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "npx",
+      "args": ["bunqueue-mcp"],
+      "env": {
+        "BUNQUEUE_MODE": "embedded",
+        "DATA_PATH": "./data/bunq.db"
+      }
+    }
+  }
+}
