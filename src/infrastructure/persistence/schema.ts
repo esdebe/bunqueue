@@ -109,7 +109,8 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     unique_key TEXT,
     dedup BLOB,
     skip_missed_on_restart INTEGER NOT NULL DEFAULT 0,
-    skip_if_no_worker INTEGER NOT NULL DEFAULT 0
+    skip_if_no_worker INTEGER NOT NULL DEFAULT 0,
+    prevent_overlap INTEGER NOT NULL DEFAULT 1
 );
 
 -- Queue state persistence (optional)
@@ -130,7 +131,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
@@ -168,5 +169,9 @@ ALTER TABLE cron_jobs ADD COLUMN skip_missed_on_restart INTEGER NOT NULL DEFAULT
   // Migration 9: Add skipIfNoWorker to cron_jobs
   9: `
 ALTER TABLE cron_jobs ADD COLUMN skip_if_no_worker INTEGER NOT NULL DEFAULT 0;
+`,
+  // Migration 10: Add preventOverlap to cron_jobs (default 1 = enabled)
+  10: `
+ALTER TABLE cron_jobs ADD COLUMN prevent_overlap INTEGER NOT NULL DEFAULT 1;
 `,
 };

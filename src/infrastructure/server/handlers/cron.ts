@@ -30,6 +30,7 @@ export function handleCron(
       skipMissedOnRestart: cmd.skipMissedOnRestart,
       immediately: cmd.immediately,
       skipIfNoWorker: cmd.skipIfNoWorker,
+      preventOverlap: cmd.preventOverlap,
     });
     ctx.queueManager.emitDashboardEvent(existing ? 'cron:updated' : 'cron:created', {
       name: cron.name,

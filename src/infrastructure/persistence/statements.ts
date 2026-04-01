@@ -61,8 +61,8 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
 
   insertCron: `
     INSERT OR REPLACE INTO cron_jobs
-    (name, queue, data, schedule, repeat_every, priority, next_run, executions, max_limit, timezone, unique_key, dedup, skip_missed_on_restart, skip_if_no_worker)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (name, queue, data, schedule, repeat_every, priority, next_run, executions, max_limit, timezone, unique_key, dedup, skip_missed_on_restart, skip_if_no_worker, prevent_overlap)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   updateCron: 'UPDATE cron_jobs SET executions = ?, next_run = ? WHERE name = ?',
@@ -130,4 +130,5 @@ export interface DbCron {
   dedup: Uint8Array | null; // MessagePack BLOB
   skip_missed_on_restart: number;
   skip_if_no_worker: number;
+  prevent_overlap: number;
 }

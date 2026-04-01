@@ -30,6 +30,8 @@ export interface CronJob {
   readonly skipMissedOnRestart: boolean;
   /** Skip job push if no worker is registered for the queue (default: false) */
   readonly skipIfNoWorker: boolean;
+  /** Prevent overlapping cron jobs via automatic dedup (default: true) */
+  readonly preventOverlap: boolean;
 }
 
 /** Input for creating a cron job */
@@ -53,6 +55,8 @@ export interface CronJobInput {
   immediately?: boolean;
   /** Skip job push if no worker is registered for the queue (default: false) */
   skipIfNoWorker?: boolean;
+  /** Prevent overlapping cron jobs via automatic dedup (default: true) */
+  preventOverlap?: boolean;
 }
 
 /** Create a new cron job */
@@ -76,6 +80,7 @@ export function createCronJob(input: CronJobInput, nextRun: number): CronJob {
     dedup: input.dedup ?? null,
     skipMissedOnRestart: input.skipMissedOnRestart ?? true,
     skipIfNoWorker: input.skipIfNoWorker ?? false,
+    preventOverlap: input.preventOverlap ?? true,
   };
 }
 

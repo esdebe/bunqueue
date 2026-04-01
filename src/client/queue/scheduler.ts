@@ -27,6 +27,8 @@ export interface RepeatOpts {
   skipMissedOnRestart?: boolean;
   /** Skip job push if no worker is registered for the queue (default: false) */
   skipIfNoWorker?: boolean;
+  /** Prevent overlapping cron jobs via automatic dedup (default: true) */
+  preventOverlap?: boolean;
 }
 
 export interface JobTemplate<T = unknown> {
@@ -85,6 +87,7 @@ export async function upsertJobScheduler(
       skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
       immediately: repeatOpts.immediately,
       skipIfNoWorker: repeatOpts.skipIfNoWorker,
+      preventOverlap: repeatOpts.preventOverlap,
       ...dedupFields,
     });
     return {
@@ -105,6 +108,7 @@ export async function upsertJobScheduler(
     skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
     immediately: repeatOpts.immediately,
     skipIfNoWorker: repeatOpts.skipIfNoWorker,
+    preventOverlap: repeatOpts.preventOverlap,
     ...dedupFields,
   });
 

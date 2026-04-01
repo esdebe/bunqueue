@@ -166,6 +166,7 @@ describe('Cron Timezone & DST Edge Cases', () => {
   test('cron with maxLimit=3 stops after 3 executions', async () => {
     manager.addCron({
       name: 'three-shot', queue: 'lim-q3', data: {}, repeatEvery: 10, maxLimit: 3,
+      preventOverlap: false,
     });
     for (let i = 0; i < 5; i++) {
       await new Promise((r) => setTimeout(r, 20));

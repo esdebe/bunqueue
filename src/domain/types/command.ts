@@ -322,6 +322,8 @@ export interface CronCommand extends BaseCommand {
   readonly immediately?: boolean;
   /** Skip job push if no worker is registered for the queue */
   readonly skipIfNoWorker?: boolean;
+  /** Prevent overlapping cron jobs via automatic dedup */
+  readonly preventOverlap?: boolean;
 }
 
 export interface CronDeleteCommand extends BaseCommand {

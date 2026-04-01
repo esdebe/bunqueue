@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.98] - 2026-04-01
+
+### Fixed
+- **Cron overlap prevention** — added `preventOverlap` option (default: `true`) that automatically deduplicates cron-fired jobs. When a cron interval is shorter than the job processing time, the scheduler no longer pushes duplicate jobs to the queue. This prevents the "starts right away on restart" issue where accumulated jobs would fire immediately when a worker reconnects (fixes #73).
+
 ## [2.6.97] - 2026-04-01
 
 ### Fixed
