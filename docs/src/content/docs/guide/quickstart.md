@@ -187,16 +187,34 @@ const worker = new Worker('tasks', processor, { embedded: true });
 Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
 :::
 
+## Connect AI Agents (MCP)
+
+bunqueue includes a native MCP server with 73 tools. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language — no code needed.
+
+```bash
+# Claude Code
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
+```json
+// Claude Desktop / Cursor / Windsurf
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "bunx",
+      "args": ["bunqueue-mcp"]
+    }
+  }
+}
+```
+
+Once connected, agents can add jobs, manage crons, retry failures, set rate limits, and monitor everything. See [MCP Server guide](/guide/mcp/) for the full reference.
+
 ## Next Steps
 
 - [Queue API](/guide/queue/) - Full queue operations
 - [Worker API](/guide/worker/) - Worker configuration
-- [Stall Detection](/guide/stall-detection/) - Handle unresponsive jobs
-- [DLQ](/guide/dlq/) - Dead letter queue management
-
-:::tip[Next Steps]
+- [MCP Server](/guide/mcp/) - Connect AI agents (Claude, Cursor, Windsurf)
+- [Server Mode](/guide/server/) - Run bunqueue as a standalone server
 - [Code Examples & Recipes](/examples/) - More complete examples
 - [Production Use Cases](/guide/use-cases/) - Real-world patterns
-- [Server Mode](/guide/server/) - Run bunqueue as a standalone server
-- [MCP Server](/guide/mcp/) - Connect AI agents (Claude, Cursor, Windsurf) to manage queues via natural language
-:::

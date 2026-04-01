@@ -113,7 +113,42 @@ The server handles `SIGINT` and `SIGTERM`:
 3. Flushes data to disk
 4. Exits cleanly
 
+## Connecting AI Agents (MCP)
+
+AI agents connect to a running bunqueue server via the MCP server. The MCP server runs as a separate process and communicates with your server over TCP.
+
+```bash
+# Start bunqueue server
+bunqueue start --data-path ./data/queue.db
+
+# In another terminal, connect Claude Code
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
+```json
+// Claude Desktop / Cursor / Windsurf — add to MCP config
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "bunx",
+      "args": ["bunqueue-mcp"]
+    }
+  }
+}
+```
+
+With authentication:
+
+```bash
+AUTH_TOKENS=my-secret bunqueue start
+```
+
+The MCP server picks up the connection settings from environment variables (`TCP_PORT`, `HOST`, `AUTH_TOKENS`). Agents get 73 tools to add jobs, manage queues, schedule crons, retry failures, set rate limits, and monitor everything.
+
+For HTTP handlers (agent-only feature), agents register a URL endpoint and bunqueue auto-processes jobs via HTTP calls — no Worker deployment needed. See [MCP Server guide](/guide/mcp/) for the full reference.
+
 :::tip[Related Guides]
+- [MCP Server](/guide/mcp/) - Full AI agent integration guide
 - [Environment Variables](/guide/env-vars/) - All server configuration options
 - [CLI Commands](/guide/cli/) - Manage the server via CLI
 - [Security Best Practices](/security/) - Secure your deployment

@@ -10,6 +10,10 @@ head:
 
 The Dead Letter Queue stores failed jobs with full metadata for debugging and recovery.
 
+:::tip[Using AI agents?]
+AI agents connected via MCP can inspect DLQ entries, retry failed jobs, and purge the queue via natural language using `bunqueue_get_dlq`, `bunqueue_retry_dlq`, and `bunqueue_purge_dlq` tools. See [MCP Server](/guide/mcp/).
+:::
+
 ## Why Jobs End Up in DLQ
 
 | Reason | Description |

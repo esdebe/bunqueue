@@ -11,6 +11,10 @@ head:
 
 Control the rate at which jobs are processed.
 
+:::tip[Using AI agents?]
+AI agents connected via MCP can set and clear rate limits and concurrency caps via natural language using `bunqueue_set_rate_limit`, `bunqueue_clear_rate_limit`, `bunqueue_set_concurrency`, and `bunqueue_clear_concurrency` tools. See [MCP Server](/guide/mcp/).
+:::
+
 ## Rate Limit
 
 Limit jobs per time window:

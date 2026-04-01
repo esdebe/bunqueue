@@ -10,6 +10,10 @@ head:
 
 bunqueue exposes Prometheus-compatible metrics for production monitoring. This guide covers the built-in metrics endpoint and a ready-to-use Grafana dashboard.
 
+:::tip[Using AI agents?]
+AI agents connected via MCP can query stats, job counts, per-queue metrics, and Prometheus data via natural language using `bunqueue_get_stats`, `bunqueue_get_queue_stats`, `bunqueue_get_prometheus_metrics`, and `bunqueue_get_memory_stats` tools. See [MCP Server](/guide/mcp/).
+:::
+
 ## Quick Start with Docker Compose
 
 bunqueue includes a pre-configured monitoring stack:

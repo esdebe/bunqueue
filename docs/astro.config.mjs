@@ -84,6 +84,13 @@ export default defineConfig({
           ],
         },
         {
+          label: 'AI Agents (MCP)',
+          items: [
+            { label: 'MCP Server', link: '/guide/mcp/' },
+            { label: 'Production Patterns', link: '/guide/use-cases/' },
+          ],
+        },
+        {
           label: 'Architecture',
           collapsed: true,
           items: [
@@ -150,13 +157,6 @@ export default defineConfig({
             { label: 'Overview', link: '/guide/integrations/' },
             { label: 'Hono', link: '/guide/hono/' },
             { label: 'Elysia', link: '/guide/elysia/' },
-            { label: 'MCP Server (AI)', link: '/guide/mcp/' },
-          ],
-        },
-        {
-          label: 'Use Cases',
-          items: [
-            { label: 'Production Patterns', link: '/guide/use-cases/' },
           ],
         },
         {

@@ -25,7 +25,7 @@ await app.add('send', { to: 'alice@example.com' });
 ```
 
 :::tip[When to use]
-Use `Bunqueue` when producer and consumer are in the **same process**. For distributed systems, use [`Queue`](/guide/queue/) + [`Worker`](/guide/worker/) separately.
+Use `Bunqueue` when producer and consumer are in the **same process**. For distributed systems, use [`Queue`](/guide/queue/) + [`Worker`](/guide/worker/) separately. For AI agent workflows, use the [MCP Server](/guide/mcp/) instead — agents control queues via natural language without writing code.
 :::
 
 ## Architecture

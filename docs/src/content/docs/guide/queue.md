@@ -10,6 +10,10 @@ head:
 
 The `Queue` class is used to add and manage jobs.
 
+:::tip[Using AI agents?]
+AI agents connected via MCP can perform all queue operations (add jobs, query state, pause/resume, manage DLQ) via natural language — no code needed. See [MCP Server](/guide/mcp/) for setup.
+:::
+
 :::caution[Important]
 In embedded mode, the Queue **must** have `embedded: true`.
 Without it, the Queue defaults to TCP mode and tries to connect to a bunqueue server.

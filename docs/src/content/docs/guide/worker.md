@@ -10,6 +10,10 @@ head:
 
 The `Worker` class processes jobs from a queue.
 
+:::tip[Using AI agents?]
+If you're using MCP-connected AI agents, you may not need a Worker at all. Agents can register **HTTP handlers** that let bunqueue auto-process jobs by calling your HTTP endpoint. See [MCP Server → HTTP Handlers](/guide/mcp/#http-handlers) for the agent-only alternative.
+:::
+
 :::caution[Important]
 In embedded mode, the Worker **must** have `embedded: true`.
 Without it, the Worker defaults to TCP mode and tries to connect to a bunqueue server.

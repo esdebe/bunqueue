@@ -8,13 +8,27 @@ head:
       content: https://bunqueue.dev/og/integrations.png
 ---
 
-Integrate bunqueue seamlessly with modern Bun-native frameworks.
+Integrate bunqueue with AI agents and modern Bun-native frameworks.
+
+## AI Agent Integrations (MCP)
+
+bunqueue ships with a native MCP server — AI agents get full queue control out of the box.
+
+| Client | Setup | Guide |
+|--------|-------|-------|
+| Claude Code | `claude mcp add bunqueue -- bunx bunqueue-mcp` | [MCP Server](/guide/mcp/) |
+| Claude Desktop | Add to `claude_desktop_config.json` | [MCP Server](/guide/mcp/) |
+| Cursor | Add to MCP settings | [MCP Server](/guide/mcp/) |
+| Windsurf | Add to MCP settings | [MCP Server](/guide/mcp/) |
+| Any MCP client | `bunx bunqueue-mcp` (stdio transport) | [MCP Server](/guide/mcp/) |
+
+73 tools, 5 resources, 3 prompts. Agents can add jobs, manage crons, retry failures, set rate limits, register HTTP handlers, and monitor everything.
+
+## Web Frameworks
 
 :::caution[Embedded Mode Required]
 All framework integrations use `embedded: true` for in-process queues. Without it, bunqueue tries to connect to a TCP server.
 :::
-
-## Supported Frameworks
 
 | Framework | Description | Guide |
 |-----------|-------------|-------|
@@ -123,5 +137,6 @@ process.on('SIGTERM', shutdown);
 
 ## Next Steps
 
+- [MCP Server](/guide/mcp/) - Full AI agent integration guide
 - [Hono Integration](/guide/hono/) - Complete guide with examples
 - [Elysia Integration](/guide/elysia/) - Production-ready REST API example with tests
