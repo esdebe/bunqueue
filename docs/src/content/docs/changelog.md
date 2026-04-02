@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.102] - 2026-04-02
+
+### Fixed
+- **Event subscription leak on HTTP server shutdown** — `queueManager.subscribe()` returned an unsubscribe function that was discarded. On `stop()`, the subscription remained active, preventing garbage collection. Now properly unsubscribed during shutdown.
+
 ## [2.6.101] - 2026-04-02
 
 ### Fixed

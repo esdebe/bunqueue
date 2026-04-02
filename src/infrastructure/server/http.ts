@@ -75,7 +75,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
   const sseHandler = new SseHandler();
 
   // Subscribe to queue events for broadcast
-  queueManager.subscribe((event: JobEvent) => {
+  const unsubscribe = queueManager.subscribe((event: JobEvent) => {
     wsHandler.broadcast(event);
     sseHandler.broadcast(event);
   });
@@ -249,6 +249,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     getWsClientCount: () => wsHandler.size,
     getSseClientCount: () => sseHandler.size,
     stop(): void {
+      unsubscribe();
       wsHandler.stopBroadcasts();
       sseHandler.closeAll();
       void server.stop();
