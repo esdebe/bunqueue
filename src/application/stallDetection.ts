@@ -139,6 +139,13 @@ function moveStalliedJobToDlq(
   ctx.processingShards[procIdx].delete(job.id);
   shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
+  // Discard cron jobs with preventOverlap instead of sending to DLQ (#73).
+  if (job.uniqueKey?.startsWith('cron:')) {
+    ctx.jobIndex.delete(job.id);
+    ctx.storage?.deleteJob(job.id);
+    return;
+  }
+
   const entry = shard.addToDlq(
     job,
     FailureReason.Stalled,
@@ -156,6 +163,16 @@ function retryStalliedJob(
   procIdx: number,
   idx: number
 ): void {
+  // Discard cron jobs with preventOverlap instead of retrying (#73).
+  // The cron scheduler will re-create them at the next scheduled tick.
+  if (job.uniqueKey?.startsWith('cron:')) {
+    ctx.processingShards[procIdx].delete(job.id);
+    shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
+    ctx.jobIndex.delete(job.id);
+    ctx.storage?.deleteJob(job.id);
+    return;
+  }
+
   incrementStallCount(job);
   job.attempts++;
   job.startedAt = null;

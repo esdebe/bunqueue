@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.104] - 2026-04-02
+
+### Fixed
+- **Stall detector no longer re-queues cron jobs** — the stall detection system (both retry and DLQ paths) now discards cron jobs with `preventOverlap` instead of re-queuing or moving them to DLQ. This was the third code path that could cause cron jobs to fire immediately after client disconnect (fixes #73).
+
 ## [2.6.103] - 2026-04-02
 
 ### Fixed
