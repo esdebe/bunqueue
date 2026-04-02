@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.105] - 2026-04-02
+
+### Fixed
+- **`skipIfNoWorker` now ignores stale workers** — `getForQueue()` was returning ALL registered workers regardless of heartbeat status. When a client disconnected without clean TCP close (e.g., network issues between WSL and remote VPS), the worker remained registered as "stale" for up to 90 seconds. During this window, `skipIfNoWorker` would find the stale worker and push cron jobs. Now only workers with a recent heartbeat (within `WORKER_TIMEOUT_MS`, default 30s) are counted (fixes #73).
+
 ## [2.6.104] - 2026-04-02
 
 ### Fixed

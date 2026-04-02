@@ -197,9 +197,12 @@ export class WorkerManager {
     return Array.from(this.workers.values()).filter((w) => now - w.lastSeen < WORKER_TIMEOUT_MS);
   }
 
-  /** Get workers for a specific queue */
+  /** Get workers for a specific queue (only active workers with recent heartbeat) */
   getForQueue(queue: string): Worker[] {
-    return Array.from(this.workers.values()).filter((w) => w.queues?.includes(queue));
+    const now = Date.now();
+    return Array.from(this.workers.values()).filter(
+      (w) => w.queues?.includes(queue) && now - w.lastSeen < WORKER_TIMEOUT_MS
+    );
   }
 
   /** Start cleanup interval */
