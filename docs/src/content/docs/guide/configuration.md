@@ -132,7 +132,11 @@ defineConfig({
 
 ### `cloud`
 
-[bunqueue Cloud](https://cloud.bunqueue.io) dashboard integration.
+Telemetry integration with [bunqueue Cloud](https://cloud.bunqueue.io) — the hosted monitoring dashboard for bunqueue instances. When enabled, your server sends real-time telemetry (queue stats, throughput, latency, worker status) to the cloud dashboard via HTTP snapshots and WebSocket.
+
+:::caution[Beta Coming Soon]
+bunqueue Cloud is launching in beta soon. You can already configure the `cloud` section — once the dashboard is live, your instances will automatically connect and start sending telemetry. No code changes needed.
+:::
 
 ```typescript
 defineConfig({
@@ -140,13 +144,13 @@ defineConfig({
     url: 'https://cloud.bunqueue.io',
     apiKey: process.env.BUNQUEUE_CLOUD_API_KEY,
     instanceName: 'production-1',     // Identifies this instance in the dashboard
-    intervalMs: 15000,                // Snapshot interval (default: 15000)
-    includeJobData: false,            // Send job data to cloud (default: false)
+    intervalMs: 15000,                // Telemetry snapshot interval (default: 15000)
+    includeJobData: false,            // Include job payloads in telemetry (default: false)
     redactFields: ['password', 'ssn'], // Redact sensitive fields from job data
     eventFilter: [],                  // Event types to forward (empty = all)
-    useWebSocket: true,               // WebSocket channel (default: true)
-    useHttp: true,                    // HTTP snapshots (default: true)
-    remoteCommands: false,            // Allow dashboard to send commands (default: false)
+    useWebSocket: true,               // Real-time WebSocket channel (default: true)
+    useHttp: true,                    // HTTP telemetry snapshots (default: true)
+    remoteCommands: false,            // Allow dashboard to send commands back (default: false)
     bufferSize: 720,                  // Offline snapshot buffer (default: 720)
     circuitBreakerThreshold: 5,       // Failures before circuit opens (default: 5)
     circuitBreakerResetMs: 60000,     // Circuit breaker reset time (default: 60000)
