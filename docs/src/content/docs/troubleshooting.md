@@ -111,22 +111,26 @@ const worker = new Worker('tasks', processor, { embedded: true });
 
 ### SQLite database not created
 
-The database is only created when `DATA_PATH` is set.
+The database is only created when a data path is configured.
 
-**Solution:**
+**Solution (embedded mode):**
 
 ```typescript
-// Set DATA_PATH BEFORE importing bunqueue
-import { mkdirSync } from 'fs';
-mkdirSync('./data', { recursive: true });
-process.env.DATA_PATH = './data/bunqueue.db';
-
-// Then import
 import { Queue, Worker } from 'bunqueue/client';
+
+// Pass dataPath directly
+const queue = new Queue('tasks', { embedded: true, dataPath: './data/bunqueue.db' });
+const worker = new Worker('tasks', processor, { embedded: true, dataPath: './data/bunqueue.db' });
+```
+
+**Solution (server mode):** Use a [configuration file](/guide/configuration/) or set `DATA_PATH`:
+
+```bash
+DATA_PATH=./data/bunqueue.db bunqueue start
 ```
 
 :::note
-Without `DATA_PATH`, bunqueue runs in-memory (no persistence across restarts).
+Without `dataPath` or `DATA_PATH`, bunqueue runs in-memory (no persistence across restarts).
 :::
 
 ### Jobs not persisted across restarts

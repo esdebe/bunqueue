@@ -33,7 +33,14 @@ bunqueue start --data-path ./data/production.db
 
 # With authentication
 AUTH_TOKENS=secret-token bunqueue start
+
+# With a config file
+bunqueue start --config ./bunqueue.config.ts
 ```
+
+:::tip[Configuration File]
+Instead of CLI flags and env vars, you can centralize all settings in a typed `bunqueue.config.ts`. See [Configuration File](/guide/configuration/).
+:::
 
 **Output:**
 ```

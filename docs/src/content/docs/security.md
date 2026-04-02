@@ -29,12 +29,23 @@ We will respond within 48 hours and work with you to understand and resolve the 
 ### Authentication
 
 ```bash
-# Enable authentication
+# Enable authentication via environment variable
 AUTH_TOKENS=token1,token2,token3 bunqueue start
 ```
 
+Or via [configuration file](/guide/configuration/):
+
+```typescript
+// bunqueue.config.ts
+import { defineConfig } from 'bunqueue';
+
+export default defineConfig({
+  auth: { tokens: [process.env.AUTH_TOKEN!] },
+});
+```
+
 - Token-based authentication for TCP and HTTP
-- Tokens stored in environment variables (not in config files)
+- Use environment variables for secrets, config file for structure
 - Failed auth attempts are logged
 
 ### Rate Limiting
@@ -59,6 +70,9 @@ bunqueue rate-limit set my-queue 100
 ```bash
 # Bind to localhost only
 HOST=127.0.0.1 bunqueue start
+
+# Or in bunqueue.config.ts:
+# server: { host: '127.0.0.1' }
 
 # Use behind a reverse proxy
 # nginx, Caddy, or cloud load balancer

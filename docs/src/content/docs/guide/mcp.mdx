@@ -176,6 +176,24 @@ Connect to a running bunqueue server instead of local SQLite:
 }
 ```
 
+<Aside type="tip" title="Server Configuration">
+  Configure your bunqueue server with a typed `bunqueue.config.ts` file instead of environment variables. Full IntelliSense, all options in one place. See [Configuration File](/guide/configuration/).
+
+  ```typescript
+  import { defineConfig } from 'bunqueue';
+
+  export default defineConfig({
+    server: { tcpPort: 6789 },
+    auth: { tokens: ['your-auth-token'] },
+    storage: { dataPath: './data/queue.db' },
+    cloud: {
+      url: 'https://cloud.bunqueue.io',
+      apiKey: process.env.BUNQUEUE_CLOUD_API_KEY,
+    },
+  });
+  ```
+</Aside>
+
 |                  | Embedded (default)           | TCP (remote)                     |
 | ---------------- | ---------------------------- | -------------------------------- |
 | **How it works** | Direct SQLite access         | Connects to bunqueue server      |
@@ -546,6 +564,10 @@ Not-found responses for `get_job`, `get_job_by_custom_id`, `get_progress`, and `
 | `BUNQUEUE_PORT` | `6789` | TCP server port |
 | `BUNQUEUE_TOKEN` | — | Auth token for TCP |
 | `DATA_PATH` | `./data/bunq.db` | SQLite path (embedded) |
+
+<Aside type="tip">
+  For the server side, you can replace environment variables with a typed `bunqueue.config.ts` file. See [Configuration File](/guide/configuration/) for the full reference.
+</Aside>
 
 ---
 

@@ -13,8 +13,31 @@ Automated backups to any S3-compatible storage with gzip compression and SHA256 
 
 ## Configuration
 
+### Config File (Recommended)
+
+```typescript
+// bunqueue.config.ts
+import { defineConfig } from 'bunqueue';
+
+export default defineConfig({
+  backup: {
+    enabled: true,
+    bucket: 'my-backups',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    region: 'us-east-1',
+    interval: 21600000,  // 6 hours
+    retention: 7,
+    prefix: 'backups/',
+  },
+});
+```
+
+See [Configuration File](/guide/configuration/) for the full reference.
+
+### Environment Variables
+
 ```bash
-# Environment variables
 S3_BACKUP_ENABLED=1
 S3_ACCESS_KEY_ID=your-access-key
 S3_SECRET_ACCESS_KEY=your-secret-key

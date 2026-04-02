@@ -12,11 +12,11 @@ head:
 Practical examples for common use cases.
 
 :::note[Persistence Setup]
-All examples below use embedded mode. For data persistence, set `DATA_PATH` before running:
-```bash
-export DATA_PATH=./data/bunq.db
+All examples below use embedded mode. For data persistence, pass `dataPath` in the constructor or set `DATA_PATH`:
+```typescript
+const queue = new Queue('tasks', { embedded: true, dataPath: './data/bunq.db' });
 ```
-Without this, data is stored in-memory only and will be lost on restart.
+For server mode, use a [configuration file](/guide/configuration/). Without persistence config, data is in-memory only.
 :::
 
 ## Email Queue

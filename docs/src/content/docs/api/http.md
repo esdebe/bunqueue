@@ -27,8 +27,11 @@ The bunqueue HTTP API runs on port `6790` by default (configurable via `HTTP_POR
 When `AUTH_TOKENS` is configured, all endpoints (except health probes and CORS preflight) require a Bearer token in the `Authorization` header. Multiple tokens are supported, separated by commas.
 
 ```bash
-# Server configuration
+# Server configuration (env var)
 AUTH_TOKENS=secret-token-1,secret-token-2
+
+# Or in bunqueue.config.ts:
+# auth: { tokens: ['secret-token-1', 'secret-token-2'] }
 
 # Client usage
 curl -H "Authorization: Bearer secret-token-1" http://localhost:6790/stats

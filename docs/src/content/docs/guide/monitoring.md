@@ -272,11 +272,19 @@ Import the dashboard JSON directly:
 
 ## Logging
 
-Configure log level at startup via environment variable:
+Configure log level at startup via environment variable or [config file](/guide/configuration/):
 
 ```bash
 LOG_LEVEL=debug bun run src/main.ts    # debug, info, warn, error
 LOG_FORMAT=json bun run src/main.ts    # structured JSON output
+```
+
+Or in `bunqueue.config.ts`:
+
+```typescript
+defineConfig({
+  logging: { level: 'debug', format: 'json' },
+});
 ```
 
 Log levels are filtered at runtime. Only messages at or above the configured level are emitted (debug < info < warn < error). Default is `info`.

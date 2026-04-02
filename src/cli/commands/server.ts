@@ -6,14 +6,17 @@
 import { parseArgs } from 'node:util';
 import { printServerHelp } from '../help';
 import { VERSION } from '../../shared/version';
+import { loadConfigFile, resolveServerConfig, resolveCloudConfig } from '../../config';
+import type { BunqueueConfig } from '../../config';
 
-/** Server start options */
-interface ServerOptions {
-  tcpPort: number;
-  httpPort: number;
-  host: string;
+/** Server start options (CLI flags only — merged with config file later) */
+interface CliFlags {
+  tcpPort?: number;
+  httpPort?: number;
+  host?: string;
   dataPath?: string;
-  authTokens: string[];
+  authTokens?: string[];
+  configPath?: string;
 }
 
 /** Validate port number */
@@ -26,8 +29,8 @@ function validatePort(value: string, name: string, defaultPort: number): number 
   return port;
 }
 
-/** Parse server arguments */
-function parseServerArgs(args: string[]): ServerOptions {
+/** Parse CLI flags (without env var fallback — that happens in resolveServerConfig) */
+function parseCliFlags(args: string[]): CliFlags {
   const { values } = parseArgs({
     args,
     options: {
@@ -36,33 +39,62 @@ function parseServerArgs(args: string[]): ServerOptions {
       host: { type: 'string' },
       'data-path': { type: 'string' },
       'auth-tokens': { type: 'string' },
+      config: { type: 'string', short: 'c' },
     },
     allowPositionals: false,
     strict: false,
   });
 
+  const flags: CliFlags = {};
+  if (values['tcp-port']) {
+    flags.tcpPort = validatePort(values['tcp-port'] as string, 'TCP port', 6789);
+  }
+  if (values['http-port']) {
+    flags.httpPort = validatePort(values['http-port'] as string, 'HTTP port', 6790);
+  }
+  if (values.host) {
+    flags.host = values.host as string;
+  }
+  if (values['data-path']) {
+    flags.dataPath = values['data-path'] as string;
+  }
+  if (values['auth-tokens']) {
+    flags.authTokens = (values['auth-tokens'] as string).split(',').filter(Boolean);
+  }
+  if (values.config) {
+    flags.configPath = values.config as string;
+  }
+  return flags;
+}
+
+/** Merge CLI flags on top of config file (CLI wins) */
+function applyCliFlags(fileConfig: BunqueueConfig | null, flags: CliFlags): BunqueueConfig | null {
+  // No flags and no file config — nothing to merge
+  const hasFlags =
+    flags.tcpPort !== undefined ||
+    flags.httpPort !== undefined ||
+    flags.host !== undefined ||
+    flags.dataPath !== undefined ||
+    flags.authTokens !== undefined;
+  if (!hasFlags && !fileConfig) return null;
+
+  const base: BunqueueConfig = fileConfig ?? {};
   return {
-    tcpPort: validatePort(
-      (values['tcp-port'] as string) ?? Bun.env.TCP_PORT ?? '6789',
-      'TCP port',
-      6789
-    ),
-    httpPort: validatePort(
-      (values['http-port'] as string) ?? Bun.env.HTTP_PORT ?? '6790',
-      'HTTP port',
-      6790
-    ),
-    host: (values.host as string) ?? Bun.env.HOST ?? '0.0.0.0',
-    dataPath:
-      (values['data-path'] as string) ??
-      Bun.env.BUNQUEUE_DATA_PATH ??
-      Bun.env.BQ_DATA_PATH ??
-      Bun.env.DATA_PATH ??
-      Bun.env.SQLITE_PATH,
-    authTokens:
-      (values['auth-tokens'] as string)?.split(',').filter(Boolean) ??
-      Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ??
-      [],
+    ...base,
+    server: {
+      ...base.server,
+      ...(flags.tcpPort !== undefined && { tcpPort: flags.tcpPort }),
+      ...(flags.httpPort !== undefined && { httpPort: flags.httpPort }),
+      ...(flags.host !== undefined && { host: flags.host }),
+    },
+    storage: {
+      ...base.storage,
+      ...(flags.dataPath !== undefined && { dataPath: flags.dataPath }),
+    },
+    auth: {
+      ...base.auth,
+      ...(flags.authTokens !== undefined && { tokens: flags.authTokens }),
+    },
   };
 }
 
@@ -73,18 +105,13 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
     process.exit(0);
   }
 
-  const options = parseServerArgs(args);
+  const flags = parseCliFlags(args);
 
-  // Set environment variables for the server
-  Bun.env.TCP_PORT = String(options.tcpPort);
-  Bun.env.HTTP_PORT = String(options.httpPort);
-  Bun.env.HOST = options.host;
-  if (options.dataPath) {
-    Bun.env.DATA_PATH = options.dataPath;
-  }
-  if (options.authTokens.length > 0) {
-    Bun.env.AUTH_TOKENS = options.authTokens.join(',');
-  }
+  // Load config file (bunqueue.config.ts), then overlay CLI flags
+  const fileConfig = await loadConfigFile(flags.configPath);
+  const mergedConfig = applyCliFlags(fileConfig, flags);
+  const config = resolveServerConfig(mergedConfig);
+  const cloudConfig = resolveCloudConfig(mergedConfig, config.dataPath);
 
   // Import and start the server components
   const { QueueManager } = await import('../../application/queueManager');
@@ -94,10 +121,10 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
 
   // Initialize
   const qm = new QueueManager({
-    dataPath: options.dataPath,
+    dataPath: config.dataPath,
   });
 
-  const authTokens = options.authTokens.length > 0 ? options.authTokens : undefined;
+  const authTokens = config.authTokens.length > 0 ? config.authTokens : undefined;
 
   // Start TCP and HTTP servers
   let tcpServer: ReturnType<typeof createTcpServer>;
@@ -105,14 +132,14 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
 
   try {
     tcpServer = createTcpServer(qm, {
-      port: options.tcpPort,
-      hostname: options.host,
+      port: config.tcpPort,
+      hostname: config.hostname,
       authTokens,
     });
 
     httpServer = createHttpServer(qm, {
-      port: options.httpPort,
-      hostname: options.host,
+      port: config.httpPort,
+      hostname: config.hostname,
       authTokens,
     });
   } catch (err) {
@@ -123,16 +150,16 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   }
 
   serverLog.info('bunqueue server started', {
-    tcpPort: options.tcpPort,
-    httpPort: options.httpPort,
-    host: options.host,
-    dataPath: options.dataPath ?? 'in-memory',
+    tcpPort: config.tcpPort,
+    httpPort: config.httpPort,
+    host: config.hostname,
+    dataPath: config.dataPath ?? 'in-memory',
     auth: authTokens ? 'enabled' : 'disabled',
   });
 
   // Initialize bunqueue Cloud agent (remote dashboard telemetry)
   const { CloudAgent } = await import('../../infrastructure/cloud/cloudAgent');
-  const cloudAgent = CloudAgent.create(qm, options.dataPath ?? undefined);
+  const cloudAgent = cloudConfig ? CloudAgent.createFromConfig(qm, cloudConfig) : null;
   if (cloudAgent) {
     cloudAgent.setServerHandles({
       getConnectionCount: () => tcpServer.getConnectionCount(),
@@ -149,8 +176,8 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   const yellow = '\x1b[33m';
 
   // Format endpoint display
-  const tcpDisplay = `${bold}${options.host}:${options.tcpPort}${reset}`;
-  const httpDisplay = `${bold}${options.host}:${options.httpPort}${reset}`;
+  const tcpDisplay = `${bold}${config.hostname}:${config.tcpPort}${reset}`;
+  const httpDisplay = `${bold}${config.hostname}:${config.httpPort}${reset}`;
 
   console.log(`
 ${magenta}        (\\(\\        ${reset}
@@ -161,8 +188,9 @@ ${dim}────────────────────────�
 
   ${green}●${reset} TCP    ${tcpDisplay}
   ${green}●${reset} HTTP   ${httpDisplay}
-  ${yellow}●${reset} Data   ${options.dataPath ?? 'in-memory'}
+  ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${authTokens ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
+  ${yellow}●${reset} Cloud  ${cloudConfig ? `${green}enabled${reset} ${dim}→ ${cloudConfig.url}${reset}` : `${dim}disabled${reset}`}
 
 ${dim}─────────────────────────────────────────────────${reset}
 

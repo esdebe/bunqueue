@@ -19,6 +19,8 @@
  * ```
  */
 
+export { defineConfig } from '../config';
+export type { BunqueueConfig } from '../config';
 export { Queue } from './queue';
 export { Worker } from './worker';
 export { Bunqueue } from './bunqueue';

@@ -63,6 +63,13 @@ export class CloudAgent {
     return agent;
   }
 
+  /** Create from pre-resolved config (used by config file flow) */
+  static createFromConfig(queueManager: QueueManager, config: CloudConfig): CloudAgent {
+    const agent = new CloudAgent(queueManager, config);
+    agent.start();
+    return agent;
+  }
+
   /** Start both channels */
   start(): void {
     cloudLog.info('Connecting to dashboard', {

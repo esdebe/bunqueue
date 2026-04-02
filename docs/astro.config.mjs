@@ -121,6 +121,7 @@ export default defineConfig({
           label: 'Server Mode',
           items: [
             { label: 'Running the Server', link: '/guide/server/' },
+            { label: 'Configuration File', link: '/guide/configuration/' },
             { label: 'CLI Commands', link: '/guide/cli/' },
             { label: 'Environment Variables', link: '/guide/env-vars/' },
             { label: 'HTTP API', link: '/api/http/' },

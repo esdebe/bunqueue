@@ -43,12 +43,7 @@ This example demonstrates a production-ready REST API with multiple queues, work
 
 ```typescript
 import { Elysia } from 'elysia';
-import { mkdirSync } from 'fs';
 import { Queue, Worker, shutdownManager } from 'bunqueue/client';
-
-// Setup persistence
-mkdirSync('./data', { recursive: true });
-process.env.DATA_PATH = './data/app.db';
 
 // ============================================
 // Job Types
@@ -76,6 +71,7 @@ interface WebhookJob {
 
 const emailQueue = new Queue<EmailJob>('emails', {
   embedded: true,
+  dataPath: './data/app.db',
   defaultJobOptions: {
     attempts: 3,
     backoff: 1000,
@@ -84,6 +80,7 @@ const emailQueue = new Queue<EmailJob>('emails', {
 
 const reportQueue = new Queue<ReportJob>('reports', {
   embedded: true,
+  dataPath: './data/app.db',
   defaultJobOptions: {
     attempts: 2,
     timeout: 60000,
@@ -92,6 +89,7 @@ const reportQueue = new Queue<ReportJob>('reports', {
 
 const webhookQueue = new Queue<WebhookJob>('webhooks', {
   embedded: true,
+  dataPath: './data/app.db',
   defaultJobOptions: {
     attempts: 5,
     backoff: 2000,

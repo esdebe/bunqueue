@@ -168,23 +168,21 @@ process.on('SIGINT', async () => {
 
 ## With Persistence (SQLite)
 
-To persist jobs across restarts, set `DATA_PATH` before importing bunqueue:
+To persist jobs across restarts, pass `dataPath` in the constructor or set `DATA_PATH` before importing:
 
 ```typescript
-// Set DATA_PATH FIRST
-import { mkdirSync } from 'fs';
-mkdirSync('./data', { recursive: true });
-process.env.DATA_PATH = './data/bunqueue.db';
-
-// Then import
 import { Queue, Worker } from 'bunqueue/client';
 
-const queue = new Queue('tasks', { embedded: true });
-const worker = new Worker('tasks', processor, { embedded: true });
+// Option 1: Pass dataPath directly (recommended)
+const queue = new Queue('tasks', { embedded: true, dataPath: './data/bunqueue.db' });
+const worker = new Worker('tasks', processor, { embedded: true, dataPath: './data/bunqueue.db' });
+
+// Option 2: Environment variable
+// DATA_PATH=./data/bunqueue.db bun run app.ts
 ```
 
 :::note
-Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
+Without `dataPath` or `DATA_PATH`, bunqueue runs in-memory (no persistence). For server mode, you can also use a [configuration file](/guide/configuration/).
 :::
 
 ## Simple Mode (All-in-One)

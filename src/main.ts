@@ -4,10 +4,6 @@
  * Main entry point - routes to CLI for client commands or starts server
  */
 
-/** Configurable timeouts from environment (must be before startServer call) */
-const SHUTDOWN_TIMEOUT_MS = parseInt(Bun.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
-const STATS_INTERVAL_MS = parseInt(Bun.env.STATS_INTERVAL_MS ?? '300000', 10);
-
 // Check for CLI client commands (not server mode)
 const clientCommands = [
   'push',
@@ -41,7 +37,7 @@ if (isClientCommand || hasHelpOrVersion || isStartCommand || hasFlags) {
   void import('./cli/index').then(({ main }) => main());
 } else {
   // Direct server mode (no args at all)
-  startServer();
+  void startServer();
 }
 
 import { QueueManager } from './application/queueManager';
@@ -53,45 +49,18 @@ import { VERSION } from './shared/version';
 import { S3BackupManager } from './infrastructure/backup';
 import { CloudAgent } from './infrastructure/cloud';
 import { SHARD_COUNT } from './shared/hash';
-
-/** Server configuration from environment */
-interface ServerConfig {
-  tcpPort: number;
-  httpPort: number;
-  hostname: string;
-  /** Unix socket path for TCP (takes priority over port) */
-  tcpSocketPath: string | undefined;
-  /** Unix socket path for HTTP (takes priority over port) */
-  httpSocketPath: string | undefined;
-  authTokens: string[];
-  dataPath: string | undefined;
-  corsOrigins: string[];
-  requireAuthForMetrics: boolean;
-  s3BackupEnabled: boolean;
-}
-
-/** Load configuration from environment variables */
-function loadConfig(): ServerConfig {
-  return {
-    tcpPort: parseInt(Bun.env.TCP_PORT ?? '6789', 10),
-    httpPort: parseInt(Bun.env.HTTP_PORT ?? '6790', 10),
-    hostname: Bun.env.HOST ?? '0.0.0.0',
-    tcpSocketPath: Bun.env.TCP_SOCKET_PATH,
-    httpSocketPath: Bun.env.HTTP_SOCKET_PATH,
-    authTokens: Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ?? [],
-    dataPath:
-      Bun.env.BUNQUEUE_DATA_PATH ??
-      Bun.env.BQ_DATA_PATH ??
-      Bun.env.DATA_PATH ??
-      Bun.env.SQLITE_PATH,
-    corsOrigins: Bun.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? [],
-    requireAuthForMetrics: Bun.env.METRICS_AUTH === 'true',
-    s3BackupEnabled: Bun.env.S3_BACKUP_ENABLED === '1' || Bun.env.S3_BACKUP_ENABLED === 'true',
-  };
-}
+import {
+  loadConfigFile,
+  resolveServerConfig,
+  resolveCloudConfig,
+  resolveBackupConfig,
+} from './config';
+import type { ResolvedConfig } from './config';
+export { defineConfig } from './config';
+export type { BunqueueConfig } from './config';
 
 /** Print startup banner */
-function printBanner(config: ServerConfig): void {
+function printBanner(config: ResolvedConfig, cloudUrl?: string): void {
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';
   const bold = '\x1b[1m';
@@ -128,7 +97,7 @@ ${dim}────────────────────────�
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} S3 Backup ${config.s3BackupEnabled ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
-  ${yellow}●${reset} Cloud  ${Bun.env.BUNQUEUE_CLOUD_URL ? `${green}enabled${reset} ${dim}→ ${Bun.env.BUNQUEUE_CLOUD_URL}${reset}` : `${dim}disabled${reset}`}
+  ${yellow}●${reset} Cloud  ${cloudUrl ? `${green}enabled${reset} ${dim}→ ${cloudUrl}${reset}` : `${dim}disabled${reset}`}
   ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${navigator.hardwareConcurrency} CPU cores)${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
@@ -137,9 +106,24 @@ ${dim}────────────────────────�
 }
 
 /** Start the server (direct mode) */
-function startServer(): void {
-  const config = loadConfig();
-  printBanner(config);
+async function startServer(): Promise<void> {
+  // Load config file (bunqueue.config.ts) if present, then merge with env vars
+  const fileConfig = await loadConfigFile();
+  const config = resolveServerConfig(fileConfig);
+
+  // Apply logging config before anything else
+  const logFormat = fileConfig?.logging?.format ?? Bun.env.LOG_FORMAT;
+  const logLevel = fileConfig?.logging?.level ?? Bun.env.LOG_LEVEL?.toLowerCase();
+  if (logFormat === 'json') Logger.enableJsonMode();
+  if (logLevel) {
+    const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+    if (validLevels.includes(logLevel as LogLevel)) Logger.setLevel(logLevel as LogLevel);
+  }
+
+  // Resolve cloud config
+  const cloudConfig = resolveCloudConfig(fileConfig, config.dataPath);
+
+  printBanner(config, cloudConfig?.url);
 
   // Create queue manager
   const queueManager = new QueueManager({
@@ -165,14 +149,14 @@ function startServer(): void {
   // Initialize S3 backup manager
   let backupManager: S3BackupManager | null = null;
   if (config.dataPath) {
-    const backupConfig = S3BackupManager.fromEnv(config.dataPath);
+    const backupConfig = resolveBackupConfig(fileConfig, config.dataPath);
     backupManager = new S3BackupManager(backupConfig);
     backupManager.setDashboardEmit(queueManager.emitDashboardEvent.bind(queueManager));
     backupManager.start();
   }
 
   // Initialize bunqueue Cloud agent (remote dashboard telemetry)
-  const cloudAgent = CloudAgent.create(queueManager, config.dataPath);
+  const cloudAgent = cloudConfig ? CloudAgent.createFromConfig(queueManager, cloudConfig) : null;
   if (cloudAgent) {
     cloudAgent.setServerHandles({
       getConnectionCount: () => tcpServer.getConnectionCount(),
@@ -201,7 +185,7 @@ function startServer(): void {
     tcpServer.stop();
     httpServer.stop();
 
-    const shutdownTimeout = SHUTDOWN_TIMEOUT_MS;
+    const shutdownTimeout = config.shutdownTimeoutMs;
     const start = Date.now();
     while (Date.now() - start < shutdownTimeout) {
       const stats = queueManager.getStats();
@@ -276,15 +260,15 @@ function startServer(): void {
       locks: memStats.jobLocks,
       clients: memStats.clientJobsTotal,
     });
-  }, STATS_INTERVAL_MS);
+  }, config.statsIntervalMs);
 }
 
-// Enable JSON logging if requested
+// Enable JSON logging if requested (fallback for CLI mode which doesn't go through startServer)
 if (Bun.env.LOG_FORMAT === 'json') {
   Logger.enableJsonMode();
 }
 
-// Set log level from environment
+// Set log level from environment (fallback for CLI mode)
 if (Bun.env.LOG_LEVEL) {
   const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
   const level = Bun.env.LOG_LEVEL.toLowerCase();

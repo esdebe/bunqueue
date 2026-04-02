@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.108] - 2026-04-02
+
+### Added
+- **`bunqueue.config.ts` — Global configuration file** — Centralize all server configuration in a single typed file, similar to `vite.config.ts` or `drizzle.config.ts`. Auto-discovered from project root, supports `bunqueue.config.{ts,js,mjs}`. Priority: CLI flags > config file > env vars > defaults. Zero breaking changes — env vars continue to work as fallback.
+- **`defineConfig()` helper** — Exported from both `bunqueue` and `bunqueue/client` for full TypeScript IntelliSense.
+- **`--config` / `-c` CLI flag** — `bunqueue start --config ./custom.config.ts` to specify an explicit config file path.
+- **`CloudAgent.createFromConfig()`** — Static factory method that accepts a pre-resolved `CloudConfig`, used by the config file flow.
+- **New docs page** — `/guide/configuration/` with full reference, examples for development, production, and Docker/Kubernetes.
+- **Updated 17 docs pages** — All documentation now references `bunqueue.config.ts` as the recommended configuration approach.
+
 ## [2.6.107] - 2026-04-02
 
 ### Fixed

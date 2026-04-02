@@ -52,11 +52,11 @@ const queue = new Queue('my-queue', { embedded: true });
 ```
 
 :::caution[Persistence Setup]
-For data persistence in embedded mode, set the `DATA_PATH` environment variable:
-```bash
-export DATA_PATH=./data/bunq.db
+For data persistence in embedded mode, pass `dataPath` in the constructor or set the `DATA_PATH` environment variable:
+```typescript
+const queue = new Queue('my-queue', { embedded: true, dataPath: './data/bunq.db' });
 ```
-Without this, data is stored in-memory only and will be lost on restart.
+Without this, data is stored in-memory only and will be lost on restart. For server mode, use a [configuration file](/guide/configuration/).
 :::
 
 ## Step 3: Remove Redis Configuration

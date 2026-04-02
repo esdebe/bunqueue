@@ -54,13 +54,29 @@ bunqueue runs as a **single process**. There's no built-in clustering or multi-n
 Run bunqueue directly in your application process. No separate server needed.
 
 <Aside type="caution">
-Set `DATA_PATH` environment variable for SQLite persistence. Without it, data is stored **in-memory only** and will be lost on restart.
+Set `DATA_PATH` environment variable or use a [configuration file](/guide/configuration/) for SQLite persistence. Without it, data is stored **in-memory only** and will be lost on restart.
 </Aside>
 
 ```bash
 # Enable SQLite persistence
 export DATA_PATH=./data/bunq.db
 ```
+
+<Aside type="tip" title="Config File">
+Instead of environment variables, you can centralize all settings in a typed `bunqueue.config.ts`:
+
+```typescript
+import { defineConfig } from 'bunqueue';
+
+export default defineConfig({
+  storage: { dataPath: './data/bunq.db' },
+  auth: { tokens: [process.env.AUTH_TOKEN!] },
+  backup: { enabled: true, bucket: 'my-backups' },
+});
+```
+
+See [Configuration File](/guide/configuration/) for the full reference.
+</Aside>
 
 ```typescript
 // app.ts

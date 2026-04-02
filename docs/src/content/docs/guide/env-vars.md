@@ -11,6 +11,10 @@ head:
 
 bunqueue can be configured through environment variables.
 
+:::tip[Prefer a config file?]
+You can use a typed `bunqueue.config.ts` file instead of environment variables. Full IntelliSense, all options in one place. See [Configuration File](/guide/configuration/). Environment variables still work as fallback.
+:::
+
 ## Server Configuration
 
 ### `TCP_PORT`

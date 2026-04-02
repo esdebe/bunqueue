@@ -27,7 +27,33 @@ bunqueue start \
 AUTH_TOKENS=secret1,secret2 bunqueue
 ```
 
+## Configuration File
+
+The recommended way to configure bunqueue is with a `bunqueue.config.ts` file in your project root:
+
+```typescript
+import { defineConfig } from 'bunqueue';
+
+export default defineConfig({
+  server: { tcpPort: 6789, httpPort: 6790 },
+  auth: { tokens: ['my-secret-token'] },
+  storage: { dataPath: './data/queue.db' },
+  cloud: {
+    url: 'https://cloud.bunqueue.io',
+    apiKey: process.env.BUNQUEUE_CLOUD_API_KEY,
+  },
+});
+```
+
+Then just run `bunqueue start` — the config file is auto-discovered. See [Configuration File](/guide/configuration/) for the full reference.
+
+:::tip[Priority Order]
+CLI flags > config file > environment variables > defaults
+:::
+
 ## Environment Variables
+
+Environment variables still work as fallback when no config file is present.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -38,6 +64,8 @@ AUTH_TOKENS=secret1,secret2 bunqueue
 | `AUTH_TOKENS` | (none) | Comma-separated auth tokens |
 | `CORS_ALLOW_ORIGIN` | `(none)` | CORS allowed origins |
 | `LOG_FORMAT` | `text` | Log format (text/json) |
+
+See [Environment Variables](/guide/env-vars/) for the complete reference.
 
 ## Docker
 
