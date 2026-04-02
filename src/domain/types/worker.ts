@@ -21,6 +21,8 @@ export interface Worker {
   processedJobs: number;
   failedJobs: number;
   currentJob: string | null;
+  /** TCP client ID that registered this worker (for cleanup on disconnect) */
+  clientId: string | null;
 }
 
 /** Options for creating a worker */
@@ -29,6 +31,7 @@ export interface CreateWorkerOptions {
   hostname?: string;
   pid?: number;
   startedAt?: number;
+  clientId?: string;
 }
 
 /** Create a new worker */
@@ -52,6 +55,7 @@ export function createWorker(
     processedJobs: 0,
     failedJobs: 0,
     currentJob: null,
+    clientId: opts?.clientId ?? null,
   };
 }
 

@@ -1077,6 +1077,11 @@ export class QueueManager {
     return result;
   }
 
+  /** Unregister all workers associated with a TCP client ID */
+  unregisterWorkersByClientId(clientId: string): number {
+    return this.workerManager.unregisterByClientId(clientId);
+  }
+
   // ============ Internal State Access ============
 
   getJobIndex(): Map<JobId, JobLocation> {

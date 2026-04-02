@@ -134,6 +134,7 @@ export function handleRegisterWorker(
     hostname: cmd.hostname,
     pid: cmd.pid,
     startedAt: cmd.startedAt,
+    clientId: ctx.clientId,
   });
   return resp.data(
     {

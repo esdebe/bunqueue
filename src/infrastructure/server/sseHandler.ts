@@ -336,6 +336,8 @@ export class SseHandler {
       },
       cancel: () => {
         this.clients.delete(clientId);
+        this.queueManager?.unregisterWorkersByClientId(clientId);
+        this.queueManager?.releaseClientJobs(clientId).catch(() => {});
       },
     });
 

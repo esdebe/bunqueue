@@ -72,6 +72,20 @@ export class WorkerManager {
     return this.workers.delete(id);
   }
 
+  /** Unregister all workers associated with a TCP client ID */
+  unregisterByClientId(clientId: string): number {
+    let removed = 0;
+    for (const [id, worker] of this.workers) {
+      if (worker.clientId === clientId) {
+        this.totalActiveJobsCounter -= worker.activeJobs;
+        this.workers.delete(id);
+        this.dashboardEmit?.('worker:disconnected', { workerId: id, name: worker.name, clientId });
+        removed++;
+      }
+    }
+    return removed;
+  }
+
   /** Get worker by ID */
   get(id: WorkerId): Worker | undefined {
     return this.workers.get(id);

@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.100] - 2026-04-02
+
+### Fixed
+- **Worker deregistration on disconnect** — TCP, WebSocket, and SSE disconnect handlers now properly deregister workers when a client disconnects. Previously, workers remained registered as "active" after disconnect, causing `skipIfNoWorker` to malfunction (cron jobs would fire even with no workers connected). On reconnect, the worker would immediately pick up the queued job instead of waiting for the next scheduled time (fixes #73).
+- **SSE connection cleanup** — SSE `cancel` handler now releases owned jobs back to the queue on disconnect, matching the behavior of TCP and WebSocket handlers.
+
 ## [2.6.99] - 2026-04-02
 
 ### Fixed

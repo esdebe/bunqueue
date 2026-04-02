@@ -175,6 +175,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       const clientId = socket.data.state.clientId;
       connections.delete(clientId);
       getRateLimiter().removeClient(clientId);
+      queueManager.unregisterWorkersByClientId(clientId);
       queueManager.emitDashboardEvent('client:disconnected', { clientId, transport: 'tcp' });
 
       // Release all jobs owned by this client back to queue with retry logic
