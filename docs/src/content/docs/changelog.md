@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.107] - 2026-04-02
+
+### Fixed
+- **Fix contextFactory test** — updated `getLockContext` test to reflect the `storage` field added in v2.6.103 for cron job cleanup on disconnect (#73).
+
 ## [2.6.106] - 2026-04-02
 
 ### Fixed

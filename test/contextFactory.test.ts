@@ -176,7 +176,7 @@ describe('ContextFactory', () => {
 
     test('should not include unrelated fields', () => {
       const ctx = factory.getLockContext();
-      expect((ctx as any).storage).toBeUndefined();
+      // storage is included in LockContext (added for #73 cron cleanup)
       expect((ctx as any).completedJobs).toBeUndefined();
       expect((ctx as any).jobResults).toBeUndefined();
     });
