@@ -296,6 +296,17 @@ async function handleJobFailure<T, R>(
   }
 
   (job as { failedReason?: string }).failedReason = err.message;
+
+  // Bug #74: populate stacktrace from the error's stack
+  if (err.stack) {
+    const limit = internalJob.stackTraceLimit;
+    const lines = err.stack
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    (job as { stacktrace: string[] | null }).stacktrace = lines.slice(0, limit);
+  }
+
   config.onOutcome?.(false);
   emitter.emit('failed', job, err);
 }

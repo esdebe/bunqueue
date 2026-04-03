@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.110] - 2026-04-03
+
+### Fixed
+- **Stacktrace now included in `failed` worker event** — `job.stacktrace` was always `null` when a job threw an error. Now correctly populated with the error's stack trace lines, respecting `stackTraceLimit` (default: 10). Fixes [#74](https://github.com/egeominotti/bunqueue/issues/74).
+
 ## [2.6.109] - 2026-04-03
 
 ### Changed
