@@ -87,7 +87,7 @@ describe('loadCloudConfig', () => {
     expect(config.instanceId).toBe('inst-001');
     expect(config.signingSecret).toBeNull();
     expect(config.intervalMs).toBe(15000);
-    expect(config.includeJobData).toBe(false);
+    expect(config.includeJobData).toBe(true);
     expect(config.redactFields).toEqual([]);
     expect(config.eventFilter).toEqual([]);
     expect(config.bufferSize).toBe(720);
