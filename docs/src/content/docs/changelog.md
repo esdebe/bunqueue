@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.112] - 2026-04-03
+
+### Added
+- **`bunqueue version` command** — Shows client version and server version (if reachable), with mismatch detection warning.
+- **`bunqueue doctor` command** — Run diagnostics: checks connectivity, version match, server health, queue state, and memory usage. Useful for debugging deployment issues.
+
 ## [2.6.111] - 2026-04-03
 
 ### Fixed

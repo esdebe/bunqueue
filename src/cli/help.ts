@@ -88,6 +88,8 @@ MONITORING:
   stats                           Show server statistics
   metrics                         Show Prometheus metrics
   health                          Health check
+  version                         Show client and server version
+  doctor                          Run diagnostics (version, health, queues)
 
 BACKUP (S3):
   backup now                      Create backup immediately

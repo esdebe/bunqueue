@@ -759,6 +759,70 @@ bunqueue health
 }
 ```
 
+### Version
+
+Show client and server version, with mismatch detection:
+
+```bash
+bunqueue version
+```
+
+**Output:**
+```
+Client: bunqueue v2.6.111
+Server: bunqueue v2.6.111
+```
+
+If versions differ:
+```
+Client: bunqueue v2.6.111
+Server: bunqueue v2.6.108
+
+⚠ Version mismatch! Update server or client to match.
+```
+
+### Doctor
+
+Run diagnostics to check connectivity, version, health, and queue state:
+
+```bash
+bunqueue doctor
+```
+
+**Output:**
+```
+bunqueue doctor
+
+Client
+  ✓ Version: 2.6.111
+
+Server
+  ✓ Reachable at localhost:6790
+  ✓ Version: 2.6.111
+  ✓ Status: healthy
+  ✓ Uptime: 2h 15m 30s
+  ✓ Connections: TCP=3, WS=0, SSE=0
+
+Queues
+  ✓ Waiting: 12
+  ✓ Active: 3
+  ✓ Delayed: 1
+  ✓ Completed: 1542
+  ✓ DLQ: 0
+
+Memory
+  ✓ Heap: 45MB
+  ✓ RSS: 128MB
+
+All checks passed.
+```
+
+Use `--port` to check a remote server:
+
+```bash
+bunqueue doctor --port 6789 --host 192.168.1.100
+```
+
 ---
 
 ## Backup Operations

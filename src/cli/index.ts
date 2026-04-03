@@ -8,6 +8,7 @@ import { runServer } from './commands/server';
 import { executeCommand } from './client';
 import { printHelp, printVersion } from './help';
 import { isBackupCommand, executeBackupCommand } from './commands/backup';
+import { runDoctor } from './commands/doctor';
 import { VERSION } from '../shared/version';
 import { resolveToken } from '../client/resolveToken';
 
@@ -120,6 +121,25 @@ export function parseGlobalOptions(): { options: GlobalOptions; commandArgs: str
   };
 }
 
+/** Show client + server version */
+async function printVersionInfo(host: string, httpPort: number): Promise<void> {
+  console.log(`Client: bunqueue v${VERSION}`);
+  try {
+    const resp = await fetch(`http://${host}:${httpPort}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) return;
+    const data = (await resp.json()) as { version?: string };
+    if (!data.version) return;
+    console.log(`Server: bunqueue v${data.version}`);
+    if (data.version !== VERSION) {
+      console.log(`\n⚠ Version mismatch! Update server or client to match.`);
+    }
+  } catch {
+    console.log(`Server: not reachable (${host}:${httpPort})`);
+  }
+}
+
 /** Main CLI entry */
 export async function main(): Promise<void> {
   const { options, commandArgs } = parseGlobalOptions();
@@ -151,6 +171,18 @@ export async function main(): Promise<void> {
     // Could add command-specific help here
     printHelp();
     process.exit(0);
+  }
+
+  // Version command - shows client version + server version if reachable
+  if (command === 'version') {
+    await printVersionInfo(options.host, options.port + 1);
+    process.exit(0);
+  }
+
+  // Doctor command - diagnostics, not via TCP
+  if (command === 'doctor') {
+    await runDoctor(options.host, options.port + 1);
+    return;
   }
 
   // Backup command - executed locally, not via TCP
