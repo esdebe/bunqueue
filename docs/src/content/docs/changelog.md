@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.116] - 2026-04-09
+
+### Fixed
+- **Deduplication broken for long-running scheduled jobs** — `cleanEmptyQueues()` was deleting unique-key entries for queues whose priority queue was empty, even when jobs holding those keys were still actively processing. This caused the dedup guard to be wiped every ~10 s (the cleanup interval), allowing `every()` / `cron()` to create duplicate jobs. The fix checks `processingShards` and `waitingDeps` before considering a queue "empty". Fixes [#80](https://github.com/egeominotti/bunqueue/issues/80).
+
 ## [2.6.115] - 2026-04-08
 
 ### Added

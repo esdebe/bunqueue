@@ -201,6 +201,26 @@ function cleanOrphanedJobLocks(ctx: BackgroundContext): void {
   }
 }
 
+/** Check if any processing shard has a job belonging to the given queue */
+function hasProcessingJobsForQueue(ctx: BackgroundContext, queueName: string): boolean {
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    for (const job of ctx.processingShards[i].values()) {
+      if (job.queue === queueName) return true;
+    }
+  }
+  return false;
+}
+
+/** Check if any shard has waitingDeps jobs belonging to the given queue */
+function hasWaitingDepsForQueue(ctx: BackgroundContext, queueName: string): boolean {
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    for (const job of ctx.shards[i].waitingDeps.values()) {
+      if (job.queue === queueName) return true;
+    }
+  }
+  return false;
+}
+
 function cleanEmptyQueues(ctx: BackgroundContext): void {
   for (let i = 0; i < SHARD_COUNT; i++) {
     const shard = ctx.shards[i];
@@ -208,7 +228,12 @@ function cleanEmptyQueues(ctx: BackgroundContext): void {
 
     for (const [queueName, queue] of shard.queues) {
       const dlqEntries = shard.dlq.get(queueName);
-      if (queue.size === 0 && (!dlqEntries || dlqEntries.length === 0)) {
+      if (
+        queue.size === 0 &&
+        (!dlqEntries || dlqEntries.length === 0) &&
+        !hasProcessingJobsForQueue(ctx, queueName) &&
+        !hasWaitingDepsForQueue(ctx, queueName)
+      ) {
         emptyQueues.push(queueName);
       }
     }

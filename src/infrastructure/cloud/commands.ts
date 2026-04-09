@@ -22,23 +22,66 @@ function deriveState(j: {
   return 'waiting';
 }
 
-/** Helper: map job to API response format */
+/** Helper: map job to frontend format (field names aligned with dashboard) */
+// eslint-disable-next-line complexity
 function mapJob(j: Job) {
   const data = j.data as Record<string, unknown> | undefined;
+  const state = deriveState(j);
+  const processTime = j.completedAt && j.startedAt ? j.completedAt - j.startedAt : undefined;
   return {
     id: String(j.id),
     name: (data?.name as string | undefined) ?? 'default',
-    queue: j.queue,
-    state: deriveState(j),
-    data,
+    queueName: j.queue,
+    _queue: j.queue,
+    state,
+    _status: state,
+    data: data !== undefined ? JSON.stringify(data) : undefined,
     priority: j.priority,
-    createdAt: j.createdAt,
-    startedAt: j.startedAt ?? null,
-    completedAt: j.completedAt ?? null,
-    attempts: j.attempts,
+    timestamp: j.createdAt,
+    processedOn: j.startedAt ?? undefined,
+    finishedOn: j.completedAt ?? undefined,
+    runAt: j.runAt,
+    failedReason:
+      state === 'active' && j.attempts > 0 ? `Retry ${j.attempts}/${j.maxAttempts}` : undefined,
+    attemptsMade: j.attempts,
     maxAttempts: j.maxAttempts,
-    progress: j.progress,
-    duration: j.completedAt && j.startedAt ? j.completedAt - j.startedAt : null,
+    backoff: j.backoff,
+    timeout: j.timeout ?? undefined,
+    ttl: j.ttl ?? undefined,
+    duration: processTime,
+    waitTime: j.startedAt ? j.startedAt - j.createdAt : undefined,
+    totalDuration: j.completedAt ? j.completedAt - j.createdAt : undefined,
+    progress: j.progress || undefined,
+    progressMessage: j.progressMessage ?? undefined,
+    customId: j.customId ?? undefined,
+    uniqueKey: j.uniqueKey ?? undefined,
+    tags: j.tags.length > 0 ? j.tags : undefined,
+    groupId: j.groupId ?? undefined,
+    parentId: j.parentId ? String(j.parentId) : undefined,
+    childrenIds: j.childrenIds.length > 0 ? j.childrenIds.map(String) : undefined,
+    dependsOn: j.dependsOn.length > 0 ? j.dependsOn.map(String) : undefined,
+    childrenCompleted: j.childrenCompleted > 0 ? j.childrenCompleted : undefined,
+    lastHeartbeat: j.lastHeartbeat > 0 ? j.lastHeartbeat : undefined,
+    stallCount: j.stallCount > 0 ? j.stallCount : undefined,
+    stallTimeout: j.stallTimeout ?? undefined,
+    removeOnComplete: j.removeOnComplete || undefined,
+    removeOnFail: j.removeOnFail || undefined,
+    lifo: j.lifo || undefined,
+    backoffConfig: j.backoffConfig ?? undefined,
+    repeat: j.repeat ?? undefined,
+    stackTraceLimit: j.stackTraceLimit,
+    keepLogs: j.keepLogs ?? undefined,
+    sizeLimit: j.sizeLimit ?? undefined,
+    failParentOnFailure: j.failParentOnFailure || undefined,
+    removeDependencyOnFailure: j.removeDependencyOnFailure || undefined,
+    continueParentOnFailure: j.continueParentOnFailure || undefined,
+    ignoreDependencyOnFailure: j.ignoreDependencyOnFailure || undefined,
+    deduplicationTtl: j.deduplicationTtl ?? undefined,
+    deduplicationExtend: j.deduplicationExtend || undefined,
+    deduplicationReplace: j.deduplicationReplace || undefined,
+    debounceId: j.debounceId ?? undefined,
+    debounceTtl: j.debounceTtl ?? undefined,
+    timeline: j.timeline.length > 0 ? j.timeline : undefined,
   };
 }
 
@@ -267,6 +310,46 @@ export const COMMANDS: Partial<Record<string, Handler>> = {
   'webhook:set-enabled': (qm, cmd) => {
     const ok = qm.webhookManager.setEnabled(cmd.webhookId ?? '', cmd.enabled ?? true);
     return { updated: ok };
+  },
+
+  // --- List all jobs across all queues ---
+  'job:listAll': (qm, cmd) => {
+    const limit = cmd.limit ?? 50;
+    const offset = cmd.offset ?? 0;
+    const states = cmd.state
+      ? cmd.state.split(',')
+      : ['waiting', 'active', 'delayed', 'completed', 'failed'];
+    const queueNames = qm.listQueues();
+    const allJobs: ReturnType<typeof mapJob>[] = [];
+    for (const name of queueNames) {
+      const jobs = qm.getJobs(name, { state: states, start: 0, end: 999 });
+      for (const j of jobs) allJobs.push(mapJob(j));
+    }
+    // Sort by createdAt descending
+    allJobs.sort((a, b) => b.timestamp - a.timestamp);
+    return { jobs: allJobs.slice(offset, offset + limit), total: allJobs.length, offset, limit };
+  },
+
+  // --- Queue list ---
+  'queue:list': (qm) => {
+    const queueNames = qm.listQueues();
+    const queues = queueNames.map((name) => {
+      const counts = qm.getQueueJobCounts(name);
+      return {
+        name,
+        waiting: counts.waiting,
+        prioritized: counts.prioritized,
+        delayed: counts.delayed,
+        active: counts.active,
+        completed: counts.completed,
+        failed: counts.failed,
+        'waiting-children': counts['waiting-children'],
+        paused: qm.isPaused(name),
+        totalCompleted: counts.totalCompleted,
+        totalFailed: counts.totalFailed,
+      };
+    });
+    return { queues };
   },
 
   // --- Stats & backup ---

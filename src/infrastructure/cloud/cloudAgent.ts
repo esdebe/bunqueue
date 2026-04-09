@@ -11,12 +11,12 @@
 
 import type { QueueManager } from '../../application/queueManager';
 import type { JobEvent } from '../../domain/types/queue';
-import type { CloudConfig, CloudEvent } from './types';
+import type { CloudConfig, CloudEvent, CloudSnapshot } from './types';
 import { loadCloudConfig } from './config';
 import { collectSnapshot, type ServerHandles } from './snapshotCollector';
 import { HttpSender } from './httpSender';
 import { WsSender } from './wsSender';
-import { handleCommand } from './commandHandler';
+import { handleCommand, type CommandContext } from './commandHandler';
 import { cloudLog } from './logger';
 
 const EVENT_BUFFER_MAX = 1000;
@@ -90,8 +90,11 @@ export class CloudAgent {
     if (this.wsSender) {
       if (this.config.remoteCommands) {
         cloudLog.info('Remote commands enabled');
+        const commandContext: CommandContext = {
+          getSnapshot: () => this.getSnapshot(),
+        };
         this.wsSender.setCommandHandler((cmd) => {
-          handleCommand(this.queueManager, cmd)
+          handleCommand(this.queueManager, cmd, commandContext)
             .then((result) => {
               this.wsSender?.sendRaw(result);
               // HTTP ingest disabled — dashboard uses WS commands
@@ -252,5 +255,19 @@ export class CloudAgent {
 
   getInstanceId(): string {
     return this.instanceId;
+  }
+
+  /** Collect a fresh snapshot on demand (used by snapshot:get command) */
+  async getSnapshot(): Promise<CloudSnapshot> {
+    const snapshot = await collectSnapshot({
+      queueManager: this.queueManager,
+      instanceId: this.instanceId,
+      instanceName: this.config.instanceName,
+      startedAt: this.startedAt,
+      sequenceId: ++this.sequenceId,
+      serverHandles: this.serverHandles,
+      includeHeavy: true,
+    });
+    return snapshot;
   }
 }

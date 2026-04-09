@@ -7,6 +7,7 @@
  */
 
 import type { QueueManager } from '../../application/queueManager';
+import type { CloudSnapshot } from './types';
 import { cloudLog } from './logger';
 import { COMMANDS } from './commands';
 
@@ -75,11 +76,38 @@ function camelKeys(obj: unknown, isUserData = false): unknown {
   return obj;
 }
 
+/** Optional context for commands that need more than QueueManager */
+export interface CommandContext {
+  getSnapshot?: () => Promise<CloudSnapshot>;
+}
+
 /** Process a command and return the result */
 export async function handleCommand(
   queueManager: QueueManager,
-  cmd: CloudCommand
+  cmd: CloudCommand,
+  context?: CommandContext
 ): Promise<CloudCommandResult> {
+  // Handle snapshot:get directly — needs CloudAgent context
+  if (cmd.action === 'snapshot:get' && context?.getSnapshot) {
+    try {
+      const snapshot = await context.getSnapshot();
+      cloudLog.info('Remote command executed', { action: cmd.action, id: cmd.id });
+      return { type: 'command_result', id: cmd.id, success: true, data: snapshot };
+    } catch (err) {
+      cloudLog.error('Remote command failed', {
+        action: cmd.action,
+        id: cmd.id,
+        error: String(err),
+      });
+      return {
+        type: 'command_result',
+        id: cmd.id,
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const handler = COMMANDS[cmd.action];
 
   if (!handler) {
