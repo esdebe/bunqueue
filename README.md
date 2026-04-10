@@ -537,13 +537,13 @@ await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
 
 **vs Competitors:**
 
-| | **bunqueue** | **Temporal** | **Inngest** | **AWS Step Functions** |
+| | **bunqueue** | **Temporal** | **Inngest** | **Trigger.dev** |
 |---|---|---|---|---|
-| **Infrastructure** | None (embedded) | PostgreSQL + 7 services | Cloud-only | AWS-native |
+| **Infrastructure** | None (embedded) | PostgreSQL + 7 services | Cloud-only | Redis + PostgreSQL |
 | **Saga compensation** | Built-in | Manual | Manual | Manual |
-| **Human-in-the-loop** | `.waitFor()` | Signals API | `step.waitForEvent()` | Callback tasks |
-| **Self-hosted** | Zero-config | Complex | No | No |
-| **Pricing** | Free (MIT) | Free / Cloud $$ | Per-execution | Per-transition |
+| **Human-in-the-loop** | `.waitFor()` | Signals API | `step.waitForEvent()` | Waitpoint tokens |
+| **Self-hosted** | Zero-config | Complex | No | Complex |
+| **Pricing** | Free (MIT) | Free / Cloud $$ | Per-execution | Free tier, then $50/mo+ |
 
 ```typescript
 // Branching

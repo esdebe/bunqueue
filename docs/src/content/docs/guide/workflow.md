@@ -23,38 +23,38 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 
 ## bunqueue vs Competitors
 
-| | **bunqueue** | **Temporal** | **Inngest** | **AWS Step Functions** | **Trigger.dev** |
-|---|---|---|---|---|---|
-| **Definition** | TypeScript DSL | TypeScript + decorators | `step.run()` wrappers | JSON (ASL) or visual UI | TypeScript functions |
-| **Infrastructure** | None (embedded SQLite) | PostgreSQL + 7 services | Cloud-only (no self-host) | AWS-native | Redis + PostgreSQL |
-| **Saga compensation** | Built-in | Manual | Manual | Manual | Manual |
-| **Human-in-the-loop** | `.waitFor()` + `signal()` | Signals API | `step.waitForEvent()` | Callback tasks | Waitpoint tokens |
-| **Branching** | `.branch().path()` | Code-level if/else | Code-level if/else | Choice state (JSON) | Code-level if/else |
-| **Parallel steps** | `.parallel()` | `Promise.all` | `step.run()` in parallel | Parallel state | Manual |
-| **Step retry** | Built-in (exponential backoff) | Built-in | Built-in | Built-in | Built-in |
-| **Signal timeout** | `.waitFor(event, { timeout })` | `Workflow.await` | `step.waitForEvent` timeout | Heartbeat timeout | Manual |
-| **Nested workflows** | `.subWorkflow()` | Child workflows | `step.invoke()` | Nested state machines | Manual |
-| **Observability** | Typed event emitter | Temporal UI | Inngest dashboard | CloudWatch | Dashboard |
-| **Loops (doUntil/doWhile)** | `.doUntil()` / `.doWhile()` | Code-level loops | Manual | Choice + Loop | Manual |
-| **forEach** | `.forEach()` with indexed results | Code-level loops | Manual | Map state | Manual |
-| **Map transform** | `.map()` | Code-level | Manual | Pass state | Manual |
-| **Schema validation** | Duck-typed `.parse()` (Zod, ArkType) | Manual | Built-in | JSONSchema | Manual |
-| **Per-execution subscribe** | `engine.subscribe(id, cb)` | Manual | Webhook | CloudWatch | Manual |
-| **Cleanup/archival** | Built-in SQLite archive | Manual | Auto (cloud) | Auto (cloud) | Manual |
-| **Self-hosted** | Yes (zero-config) | Yes (complex) | No | No | Yes (complex) |
-| **Pricing** | Free (MIT) | Free self-hosted / Cloud $$ | Free tier, then per-execution | Per state transition | Free tier, then $50/mo+ |
-| **Setup time** | `bun add bunqueue` | Hours to days | Minutes (cloud) | Minutes (if on AWS) | 30min+ self-hosted |
+| | **bunqueue** | **Temporal** | **Inngest** | **Trigger.dev** |
+|---|---|---|---|---|
+| **Definition** | TypeScript DSL | TypeScript + decorators | `step.run()` wrappers | TypeScript functions |
+| **Infrastructure** | None (embedded SQLite) | PostgreSQL + 7 services | Cloud-only (no self-host) | Redis + PostgreSQL |
+| **Saga compensation** | Built-in | Manual | Manual | Manual |
+| **Human-in-the-loop** | `.waitFor()` + `signal()` | Signals API | `step.waitForEvent()` | Waitpoint tokens |
+| **Branching** | `.branch().path()` | Code-level if/else | Code-level if/else | Code-level if/else |
+| **Parallel steps** | `.parallel()` | `Promise.all` | `step.run()` in parallel | Manual |
+| **Step retry** | Built-in (exponential backoff) | Built-in | Built-in | Built-in |
+| **Signal timeout** | `.waitFor(event, { timeout })` | `Workflow.await` | `step.waitForEvent` timeout | Manual |
+| **Nested workflows** | `.subWorkflow()` | Child workflows | `step.invoke()` | Manual |
+| **Observability** | Typed event emitter | Temporal UI | Inngest dashboard | Dashboard |
+| **Loops (doUntil/doWhile)** | `.doUntil()` / `.doWhile()` | Code-level loops | Manual | Manual |
+| **forEach** | `.forEach()` with indexed results | Code-level loops | Manual | Manual |
+| **Map transform** | `.map()` | Code-level | Manual | Manual |
+| **Schema validation** | Duck-typed `.parse()` (Zod, ArkType) | Manual | Built-in | Manual |
+| **Per-execution subscribe** | `engine.subscribe(id, cb)` | Manual | Webhook | Manual |
+| **Cleanup/archival** | Built-in SQLite archive | Manual | Auto (cloud) | Manual |
+| **Self-hosted** | Yes (zero-config) | Yes (complex) | No | Yes (complex) |
+| **Pricing** | Free (MIT) | Free self-hosted / Cloud $$ | Free tier, then per-execution | Free tier, then $50/mo+ |
+| **Setup time** | `bun add bunqueue` | Hours to days | Minutes (cloud) | 30min+ self-hosted |
 
 ### Why bunqueue?
 
 - **Zero infrastructure.** Temporal needs PostgreSQL + 7 services. Trigger.dev needs Redis + PostgreSQL. bunqueue needs nothing — SQLite is embedded.
 - **Saga pattern is first-class.** Every competitor requires you to implement compensation manually. bunqueue runs compensate handlers in reverse order automatically.
-- **TypeScript-native DSL.** No JSON state machines (Step Functions), no decorators (Temporal), no wrapper functions (Inngest). Just `.step().step().branch().step()`.
+- **TypeScript-native DSL.** No decorators (Temporal), no wrapper functions (Inngest). Just `.step().step().branch().step()`.
 - **Same process, same codebase.** No separate worker infrastructure, no deployment pipeline for workflow definitions. It's a library, not a platform.
 
 ### When to use something else
 
-- **Multi-region HA with automatic failover** — Use Temporal or AWS Step Functions
+- **Multi-region HA with automatic failover** — Use Temporal
 - **Serverless-first with zero ops** — Use Inngest
 - **Already running Redis with BullMQ** — Use BullMQ FlowProducer for simple parent-child chains
 

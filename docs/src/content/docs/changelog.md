@@ -92,7 +92,7 @@ All notable changes to bunqueue are documented here.
   ```
 
 ### Documentation
-- **New page**: [Workflow Engine guide](/guide/workflow/) with competitor comparison (vs Temporal, Inngest, AWS Step Functions, Trigger.dev), full API reference, and 4 production examples (e-commerce, CI/CD pipeline, KYC onboarding, ETL data pipeline)
+- **New page**: [Workflow Engine guide](/guide/workflow/) with competitor comparison (vs Temporal, Inngest, Trigger.dev), full API reference, and 4 production examples (e-commerce, CI/CD pipeline, KYC onboarding, ETL data pipeline)
 - **Quickstart**: Added Workflow Engine section with example
 - **README**: Added Workflow Engine section with code examples and competitor comparison table
 - **Sidebar**: Added Workflow Engine entry under Client SDK

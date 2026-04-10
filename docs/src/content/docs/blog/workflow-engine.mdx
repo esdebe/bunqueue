@@ -22,7 +22,7 @@ head:
 
 import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-Job queues handle individual tasks well, but real-world processes span multiple steps: charge payment, reserve inventory, send confirmation, notify shipping. When step three fails, you need to undo steps one and two. That is orchestration — and until now, it required a dedicated service like Temporal, Inngest, or AWS Step Functions.
+Job queues handle individual tasks well, but real-world processes span multiple steps: charge payment, reserve inventory, send confirmation, notify shipping. When step three fails, you need to undo steps one and two. That is orchestration — and until now, it required a dedicated service like Temporal, Inngest, or Trigger.dev.
 
 **bunqueue 2.7 changes that.** The new Workflow Engine lets you define multi-step processes with a fluent TypeScript DSL, run saga compensation on failure, branch conditionally, and pause for human approval — all inside the same queue infrastructure you already use. Zero new services. Zero cloud dependencies.
 
@@ -34,7 +34,6 @@ The existing options all introduce significant complexity:
 
 - **Temporal** needs PostgreSQL, Elasticsearch, and 7+ services running
 - **Inngest** is cloud-only with vendor lock-in
-- **AWS Step Functions** uses JSON-based Amazon States Language, not real code
 - **Trigger.dev** requires Redis and PostgreSQL alongside your app
 
 bunqueue's approach: if you already have a job queue with SQLite persistence, the execution engine is a natural extension. No new databases, no new protocols, no new deployment targets.
