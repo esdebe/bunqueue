@@ -616,7 +616,109 @@ worker.on('error', (error) => {
 });
 ```
 
+## Workflow: Order Pipeline with Compensation
+
+Multi-step order processing with automatic rollback on failure.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const orderFlow = new Workflow('order-pipeline')
+  .step('validate', async (ctx) => {
+    const { orderId, amount } = ctx.input as { orderId: string; amount: number };
+    if (amount <= 0) throw new Error('Invalid amount');
+    return { orderId, validated: true };
+  })
+  .step('reserve-stock', async (ctx) => {
+    const { orderId } = ctx.steps['validate'] as { orderId: string };
+    await inventory.reserve(orderId);
+    return { reserved: true };
+  }, {
+    compensate: async () => {
+      await inventory.release(); // Auto-runs if charge or ship fails
+    },
+  })
+  .step('charge-payment', async (ctx) => {
+    const txId = await stripe.charge(ctx.input.amount);
+    return { txId };
+  }, {
+    compensate: async () => {
+      await stripe.refund(); // Auto-runs if ship fails
+    },
+  })
+  .step('send-confirmation', async (ctx) => {
+    const { txId } = ctx.steps['charge-payment'] as { txId: string };
+    await mailer.send('order-confirm', { txId });
+    return { emailSent: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(orderFlow);
+await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
+```
+
+## Workflow: Approval Gate with Human-in-the-Loop
+
+Pause execution until a human approves.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const expenseFlow = new Workflow('expense-approval')
+  .step('submit', async (ctx) => {
+    const { amount, description } = ctx.input as { amount: number; description: string };
+    await slack.notify('#approvals', `New expense: $${amount} - ${description}`);
+    return { submitted: true };
+  })
+  .waitFor('manager-decision')
+  .step('process', async (ctx) => {
+    const decision = ctx.signals['manager-decision'] as { approved: boolean };
+    if (!decision.approved) return { status: 'rejected' };
+    await accounting.reimburse(ctx.input.amount);
+    return { status: 'paid' };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(expenseFlow);
+const run = await engine.start('expense-approval', { amount: 500, description: 'Conference' });
+
+// Later, when manager decides (could be hours later):
+await engine.signal(run.id, 'manager-decision', { approved: true });
+```
+
+## Workflow: Branching by Risk Level
+
+Route to different paths based on runtime conditions.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const kycFlow = new Workflow('kyc')
+  .step('score', async (ctx) => {
+    const risk = await riskEngine.assess(ctx.input);
+    return { level: risk > 80 ? 'low' : risk > 50 ? 'medium' : 'high' };
+  })
+  .branch((ctx) => (ctx.steps['score'] as { level: string }).level)
+  .path('low', (w) => w.step('auto-approve', async () => ({ method: 'auto' })))
+  .path('medium', (w) =>
+    w.step('request-docs', async () => ({ docsRequested: true }))
+      .waitFor('docs-uploaded')
+      .step('review', async () => ({ method: 'document-review' }))
+  )
+  .path('high', (w) =>
+    w.step('flag', async () => ({ flagged: true }))
+      .waitFor('compliance-decision')
+      .step('decide', async (ctx) => {
+        const d = ctx.signals['compliance-decision'] as { approved: boolean };
+        if (!d.approved) throw new Error('Rejected by compliance');
+        return { method: 'compliance' };
+      })
+  )
+  .step('activate', async () => ({ active: true }));
+```
+
 :::tip[Related]
+- [Workflow Engine Guide](/guide/workflow/) - Full API reference and competitor comparison
 - [Quick Start Tutorial](/guide/quickstart/) - Getting started basics
 - [Production Use Cases](/guide/use-cases/) - Real-world patterns
 - [Migration Guide from BullMQ](/guide/migration/) - Moving from BullMQ

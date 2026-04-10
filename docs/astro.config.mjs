@@ -185,6 +185,7 @@ export default defineConfig({
             { label: 'S3 Backup & Disaster Recovery', link: '/blog/s3-backup-recovery/' },
             { label: 'Job Pipelines with FlowProducer', link: '/blog/job-pipelines-flows/' },
             { label: 'Rate Limiting & Concurrency', link: '/blog/rate-limiting-concurrency/' },
+            { label: 'Workflow Engine: Orchestration Without Temporal', link: '/blog/workflow-engine/' },
           ],
         },
         {

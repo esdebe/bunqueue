@@ -8,15 +8,6 @@ head:
       content: https://bunqueue.dev/og/getting-started.png
 ---
 
-
-:::tip[bunqueue Dashboard]
-A visual interface for managing queues, jobs, workers, and monitoring in real time. Currently in beta.
-
-<video src="https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116" width="100%" controls autoplay loop muted playsinline style="border-radius: 8px; margin: 1rem 0;"></video>
-
-Want early access? Reach out at **egeominotti@gmail.com**
-:::
-
 **bunqueue** is a high-performance job queue written in TypeScript, designed specifically for the [Bun](https://bun.sh) runtime. Built for AI agents and agentic workflows with a native MCP server.
 
 ## Why bunqueue?
@@ -117,9 +108,33 @@ Best for:
 | Sandboxed workers | ✅ | ✅ |
 | Durable writes | ✅ | ✅ (Redis AOF) |
 | MCP server (AI agents) | ✅ (73 tools) | ❌ |
+| Workflow engine | ✅ (saga, branching, signals) | ❌ |
+
+## Workflow Engine
+
+bunqueue includes a built-in workflow engine for multi-step orchestration. Define workflows with a fluent TypeScript DSL — saga compensation, conditional branching, and human-in-the-loop signals. No Temporal, no Inngest, no cloud service required.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const flow = new Workflow('order')
+  .step('validate', async (ctx) => { /* ... */ })
+  .step('charge', async (ctx) => { /* ... */ }, {
+    compensate: async () => { /* auto-rollback on failure */ },
+  })
+  .waitFor('approval')
+  .step('ship', async (ctx) => { /* ... */ });
+
+const engine = new Engine({ embedded: true });
+engine.register(flow);
+await engine.start('order', { orderId: 'ORD-1' });
+```
+
+See [Workflow Engine guide](/guide/workflow/) for full documentation.
 
 ## Next Steps
 
 - [Installation](/guide/installation/) - Get bunqueue installed
 - [Quick Start](/guide/quickstart/) - Create your first queue
+- [Workflow Engine](/guide/workflow/) - Multi-step orchestration
 - [MCP Server](/guide/mcp/) - Connect AI agents to your queues

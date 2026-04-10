@@ -77,6 +77,22 @@ head:
               "@type": "Answer",
               "text": "bunqueue uses Bun-specific APIs: bun:sqlite for database access, Bun.serve for HTTP server, and Bun.listen for TCP server. These APIs are not available in Node.js."
             }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the Workflow Engine?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The Workflow Engine is a built-in multi-step orchestration system. It supports saga compensation (automatic rollback), conditional branching, human-in-the-loop signals, and step timeouts — all without external services like Temporal or Inngest."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What's the difference between Flow and Workflow?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "FlowProducer creates parent-child job dependencies (fan-out/fan-in). The Workflow Engine orchestrates sequential multi-step processes with saga compensation, branching, and human approval gates. Use Flow for job DAGs, Workflow for business processes."
+            }
           }
         ]
       }
@@ -392,6 +408,46 @@ await queue.addBulk(jobs.map(j => ({
 })));
 ```
 
+## Workflow Engine
+
+### What is the Workflow Engine?
+
+The Workflow Engine is a built-in multi-step orchestration system for defining sequential processes with:
+- **Saga compensation** — automatic rollback on failure
+- **Conditional branching** — route execution based on runtime data
+- **Human-in-the-loop** — pause and wait for external signals
+- **Step timeouts** — per-step timeout configuration
+
+No Temporal, no Inngest, no cloud service required.
+
+### What's the difference between Flow and Workflow?
+
+They solve different problems:
+
+| | FlowProducer | Workflow Engine |
+|---|---|---|
+| **Pattern** | Parent-child job DAG | Sequential step pipeline |
+| **Use case** | Fan-out/fan-in, dependencies | Business processes, approvals |
+| **Rollback** | No | Saga compensation |
+| **Branching** | No | Conditional paths |
+| **Human input** | No | waitFor signals |
+
+Use `FlowProducer` when you need parallel job trees with dependencies. Use `Workflow` when you need ordered steps with rollback, branching, or human decisions.
+
+### Can I use the Workflow Engine with TCP server mode?
+
+Yes. The Engine constructor accepts the same connection options as Queue:
+
+```typescript
+const engine = new Engine({
+  connection: { host: 'localhost', port: 6789 }
+});
+```
+
+### How is workflow state persisted?
+
+Execution state (current step, step results, received signals) is stored in SQLite via the `workflow_executions` table. This means workflows survive process restarts and can be inspected or resumed at any time.
+
 ## Contributing
 
 ### How can I contribute?
@@ -415,4 +471,5 @@ bun run dev
 - [Troubleshooting](/troubleshooting/) - Debug common issues
 - [Installation & Setup](/guide/installation/) - Getting started
 - [bunqueue vs BullMQ](/guide/comparison/) - Feature comparison
+- [Workflow Engine](/guide/workflow/) - Multi-step orchestration guide
 :::

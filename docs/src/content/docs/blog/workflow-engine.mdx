@@ -1,0 +1,170 @@
+---
+title: "Introducing the Workflow Engine: Multi-Step Orchestration Without Temporal or Inngest"
+description: "bunqueue 2.7 ships a built-in workflow engine with saga compensation, conditional branching, and human-in-the-loop signals. No cloud service, no extra infrastructure — just TypeScript."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/getting-started.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-04-10"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "workflow engine, orchestration, saga pattern, temporal alternative, inngest alternative, step functions, typescript workflow, bunqueue workflow, multi-step jobs, compensation, human-in-the-loop"
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+Job queues handle individual tasks well, but real-world processes span multiple steps: charge payment, reserve inventory, send confirmation, notify shipping. When step three fails, you need to undo steps one and two. That is orchestration — and until now, it required a dedicated service like Temporal, Inngest, or AWS Step Functions.
+
+**bunqueue 2.7 changes that.** The new Workflow Engine lets you define multi-step processes with a fluent TypeScript DSL, run saga compensation on failure, branch conditionally, and pause for human approval — all inside the same queue infrastructure you already use. Zero new services. Zero cloud dependencies.
+
+## Why Build It In?
+
+Most teams reach a point where individual jobs are not enough. An order pipeline, a CI/CD deployment, an onboarding flow — these are sequences of jobs with dependencies, rollback logic, and sometimes human decisions in the middle.
+
+The existing options all introduce significant complexity:
+
+- **Temporal** needs PostgreSQL, Elasticsearch, and 7+ services running
+- **Inngest** is cloud-only with vendor lock-in
+- **AWS Step Functions** uses JSON-based Amazon States Language, not real code
+- **Trigger.dev** requires Redis and PostgreSQL alongside your app
+
+bunqueue's approach: if you already have a job queue with SQLite persistence, the execution engine is a natural extension. No new databases, no new protocols, no new deployment targets.
+
+## The API
+
+Define a workflow with chained steps:
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const order = new Workflow('order-pipeline')
+  .step('validate', async (ctx) => {
+    const { orderId } = ctx.input as { orderId: string };
+    // Validate order exists and is payable
+    return { orderId, validated: true };
+  })
+  .step('charge', async (ctx) => {
+    // Charge the customer
+    return { transactionId: 'txn_abc123' };
+  }, {
+    compensate: async (ctx) => {
+      // Refund if a later step fails
+      const { transactionId } = ctx.steps.charge as { transactionId: string };
+      await refundPayment(transactionId);
+    },
+  })
+  .waitFor('manager-approval')
+  .step('ship', async (ctx) => {
+    return { tracking: 'TRACK-789' };
+  });
+```
+
+Start the engine and run it:
+
+```typescript
+const engine = new Engine({ embedded: true });
+engine.register(order);
+await engine.start();
+
+const run = await engine.run('order-pipeline', { orderId: 'ORD-1' });
+```
+
+That is the entire setup. No YAML, no JSON state machines, no separate orchestrator process.
+
+## Saga Compensation
+
+The saga pattern is first-class. Each step can declare a `compensate` handler. When any step fails, bunqueue runs compensation handlers in reverse order — exactly like a distributed transaction rollback:
+
+```
+step1 ✅ → step2 ✅ → step3 ❌
+                       ↓
+              compensate(step2) → compensate(step1)
+```
+
+Compensation handlers receive the same context with all previous step results, so they have everything needed to undo their work.
+
+## Conditional Branching
+
+Not every workflow is linear. Use `.branch()` and `.path()` to route execution based on runtime data:
+
+```typescript
+const kyc = new Workflow('kyc-onboarding')
+  .step('score', async (ctx) => {
+    return { riskLevel: evaluateRisk(ctx.input) };
+  })
+  .branch((ctx) => {
+    const score = ctx.steps.score as { riskLevel: string };
+    return score.riskLevel; // 'low', 'medium', or 'high'
+  })
+  .path('low', (w) => w.step('auto-approve', async () => ({ approved: true })))
+  .path('medium', (w) => w.step('manual-review', async () => ({ reviewRequired: true })))
+  .path('high', (w) => w.step('escalate', async () => ({ escalated: true })))
+  .step('finalize', async (ctx) => {
+    return { completed: true };
+  });
+```
+
+## Human-in-the-Loop
+
+Some workflows need a human decision before continuing. `.waitFor()` pauses execution until an external signal arrives:
+
+```typescript
+const deploy = new Workflow('deploy')
+  .step('build', async (ctx) => { /* ... */ })
+  .step('test', async (ctx) => { /* ... */ })
+  .waitFor('qa-approval')
+  .step('deploy-prod', async (ctx) => { /* ... */ });
+
+// Later, when QA approves:
+await engine.signal(runId, 'qa-approval', { approvedBy: 'qa-lead' });
+```
+
+The workflow resumes exactly where it left off. Execution state is persisted in SQLite, so it survives process restarts.
+
+## How It Works Internally
+
+The workflow engine is built on top of bunqueue's existing Queue and Worker:
+
+1. **Workflow** is a pure data structure — a DAG of step definitions, branch conditions, and wait points
+2. **Engine** wraps a Queue and Worker pair, using them to schedule and process step jobs
+3. **Execution state** is stored in SQLite via `WorkflowStore`, tracking which steps completed, their results, and received signals
+4. Each step runs as a regular bunqueue job with retry, timeout, and stall detection
+
+This means workflows get all of bunqueue's existing reliability features for free: persistence, heartbeats, DLQ, and S3 backups.
+
+## When to Use It
+
+The workflow engine is ideal for:
+
+- **E-commerce pipelines** — validate, charge, fulfill, notify with rollback on failure
+- **CI/CD deployments** — build, test, await approval, deploy
+- **Onboarding flows** — verify identity, score risk, branch by result
+- **Data pipelines** — extract, transform, load with per-step error handling
+- **Approval workflows** — any process that needs human sign-off mid-execution
+
+For simple fire-and-forget jobs, retries, or cron schedules, the standard Queue + Worker API is still the right choice. The workflow engine adds value when you need **step dependencies, rollback, or human decisions**.
+
+## Get Started
+
+```bash
+bun add bunqueue
+```
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+```
+
+Read the full guide: [Workflow Engine Documentation](/guide/workflow/)
+
+<Aside type="tip" title="40+ workflow tests">
+The workflow engine ships with 40+ tests covering linear flows, branching, compensation, signals, timeouts, and concurrent execution — in both embedded and TCP modes.
+</Aside>
