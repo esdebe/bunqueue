@@ -26,11 +26,20 @@ export type CompensateHandler<TInput = unknown> = (
   ctx: StepContext<TInput>
 ) => Promise<void> | void;
 
+/** Schema-like object — any object with a .parse() method (Zod, ArkType, Valibot, etc.) */
+export interface SchemaLike {
+  parse(data: unknown): unknown;
+}
+
 /** Options for a single step */
 export interface StepOptions<TInput = unknown> {
   retry?: number;
   timeout?: number;
   compensate?: CompensateHandler<TInput>;
+  /** Validate step input before execution */
+  inputSchema?: SchemaLike;
+  /** Validate step output after execution */
+  outputSchema?: SchemaLike;
 }
 
 /** Internal step definition */
@@ -40,6 +49,8 @@ export interface StepDefinition {
   compensate?: CompensateHandler;
   retry: number;
   timeout: number;
+  inputSchema?: SchemaLike;
+  outputSchema?: SchemaLike;
 }
 
 /** Branch condition function */
@@ -59,13 +70,46 @@ export interface ParallelDefinition {
 /** Input mapper for sub-workflows */
 export type SubWorkflowInputMapper = (ctx: StepContext) => unknown;
 
+/** Loop condition: receives context + iteration count, returns boolean */
+export type LoopCondition = (ctx: StepContext, iteration: number) => boolean | Promise<boolean>;
+
+/** Definition of a doUntil/doWhile loop */
+export interface LoopDefinition {
+  condition: LoopCondition;
+  steps: StepDefinition[];
+  maxIterations: number;
+}
+
+/** Item extractor for forEach */
+export type ForEachItemsExtractor = (ctx: StepContext) => unknown[];
+
+/** Definition of a forEach loop */
+export interface ForEachDefinition {
+  items: ForEachItemsExtractor;
+  step: StepDefinition;
+  maxIterations: number;
+}
+
+/** Transform function for map */
+export type MapTransformFn = (ctx: StepContext) => unknown;
+
+/** Definition of a map node */
+export interface MapDefinition {
+  name: string;
+  transform: MapTransformFn;
+}
+
 /** Workflow node (discriminated union) */
 export type WorkflowNode =
   | { type: 'step'; def: StepDefinition }
   | { type: 'branch'; def: BranchDefinition }
   | { type: 'waitFor'; event: string; timeout?: number }
   | { type: 'parallel'; def: ParallelDefinition }
-  | { type: 'subWorkflow'; name: string; inputMapper: SubWorkflowInputMapper };
+  | { type: 'subWorkflow'; name: string; inputMapper: SubWorkflowInputMapper }
+  | { type: 'doUntil'; def: LoopDefinition }
+  | { type: 'doWhile'; def: LoopDefinition }
+  | { type: 'forEach'; def: ForEachDefinition }
+  | { type: 'map'; def: MapDefinition };
 
 /** Execution state */
 export type ExecutionState = 'running' | 'waiting' | 'completed' | 'failed' | 'compensating';

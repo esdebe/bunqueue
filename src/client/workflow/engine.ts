@@ -113,6 +113,15 @@ export class Engine {
     return this;
   }
 
+  /** Subscribe to all events for a specific execution */
+  subscribe(executionId: string, callback: WorkflowEventListener): () => void {
+    const filter: WorkflowEventListener = (event) => {
+      if (event.executionId === executionId) callback(event);
+    };
+    this.emitter.onAny(filter);
+    return () => this.emitter.offAny(filter);
+  }
+
   // ============ Cleanup ============
 
   /** Remove old completed/failed executions */

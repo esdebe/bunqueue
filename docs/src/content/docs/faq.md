@@ -83,7 +83,7 @@ head:
             "name": "What is the Workflow Engine?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "The Workflow Engine is a built-in multi-step orchestration system. It supports saga compensation, conditional branching, parallel steps, step retry with exponential backoff, nested sub-workflows, signal timeouts, typed observability events, and cleanup/archival — all without external services like Temporal or Inngest."
+              "text": "The Workflow Engine is a built-in multi-step orchestration system. It supports saga compensation, conditional branching, parallel steps, step retry with exponential backoff, nested sub-workflows, signal timeouts, loops (doUntil/doWhile), forEach iteration, map transforms, schema validation (Zod-compatible), per-execution subscribe, typed observability events, and cleanup/archival — all without external services like Temporal or Inngest."
             }
           },
           {
@@ -91,7 +91,7 @@ head:
             "name": "What's the difference between Flow and Workflow?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "FlowProducer creates parent-child job dependencies (fan-out/fan-in). The Workflow Engine orchestrates multi-step processes with saga compensation, branching, parallel steps, retry, nested workflows, and human approval gates. Use Flow for job DAGs, Workflow for business processes."
+              "text": "FlowProducer creates parent-child job dependencies (fan-out/fan-in). The Workflow Engine orchestrates multi-step processes with saga compensation, branching, parallel steps, retry, loops (doUntil/doWhile/forEach), map transforms, schema validation, nested workflows, and human approval gates. Use Flow for job DAGs, Workflow for business processes."
             }
           }
         ]
@@ -419,6 +419,11 @@ The Workflow Engine is a built-in multi-step orchestration system for defining s
 - **Step retry** — automatic retry with exponential backoff and jitter
 - **Human-in-the-loop** — pause and wait for external signals, with optional timeout
 - **Nested workflows** — compose workflows with `.subWorkflow()`
+- **Loops** — `doUntil()` and `doWhile()` for conditional iteration with safety limits
+- **forEach** — iterate over dynamic item lists with indexed step results
+- **Map** — synchronous data transforms between steps
+- **Schema validation** — validate step input/output with Zod, ArkType, or any `.parse()` schema
+- **Subscribe** — monitor a specific execution's events in real-time
 - **Observability** — typed event emitter with 11 event types
 - **Cleanup & archival** — manage execution history with cleanup/archive
 - **Step timeouts** — per-step timeout configuration
@@ -438,8 +443,11 @@ They solve different problems:
 | **Parallel** | Via job tree | `.parallel()` with `Promise.allSettled` |
 | **Retry** | Job-level | Step-level with exponential backoff |
 | **Human input** | No | `waitFor` signals with timeout |
+| **Loops** | No | `doUntil()` / `doWhile()` / `forEach()` |
+| **Data transform** | No | `.map()` (synchronous) |
+| **Schema validation** | No | `inputSchema` / `outputSchema` (Zod, ArkType, etc.) |
 | **Composition** | Nested trees | `.subWorkflow()` |
-| **Observability** | Queue events | 11 typed workflow events |
+| **Observability** | Queue events | 11 typed workflow events + `subscribe(id)` |
 
 Use `FlowProducer` when you need parallel job trees with dependencies. Use `Workflow` when you need ordered steps with rollback, branching, or human decisions.
 

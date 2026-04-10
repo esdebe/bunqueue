@@ -1,6 +1,6 @@
 ---
 title: "Workflow Engine — Multi-Step Orchestration for Bun"
-description: "Orchestrate multi-step workflows with saga compensation, step retry, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, observability events, and cleanup/archival. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
+description: "Orchestrate multi-step workflows with saga compensation, step retry, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loops (doUntil/doWhile), forEach iteration, map transforms, schema validation, per-execution subscribe, observability events, and cleanup/archival. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
 head:
   - tag: meta
     attrs:
@@ -9,10 +9,10 @@ head:
   - tag: meta
     attrs:
       name: keywords
-      content: "workflow engine, orchestration, saga pattern, compensation, branching, parallel steps, step retry, exponential backoff, nested workflow, sub-workflow, signal timeout, observability, cleanup, archival, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration"
+      content: "workflow engine, orchestration, saga pattern, compensation, branching, parallel steps, step retry, exponential backoff, nested workflow, sub-workflow, signal timeout, observability, cleanup, archival, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration, loops, doUntil, doWhile, forEach, map, schema validation, subscribe, zod"
 ---
 
-Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, step retry with exponential backoff, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, typed observability events, and cleanup/archival — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
+Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, step retry with exponential backoff, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loop control flow (doUntil/doWhile), forEach iteration, map transforms, schema validation (Zod-compatible), per-execution subscribe, typed observability events, and cleanup/archival — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
 
 ```
 validate ──→ reserve stock ──→ charge payment ──→ send confirmation
@@ -35,6 +35,11 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 | **Signal timeout** | `.waitFor(event, { timeout })` | `Workflow.await` | `step.waitForEvent` timeout | Heartbeat timeout | Manual |
 | **Nested workflows** | `.subWorkflow()` | Child workflows | `step.invoke()` | Nested state machines | Manual |
 | **Observability** | Typed event emitter | Temporal UI | Inngest dashboard | CloudWatch | Dashboard |
+| **Loops (doUntil/doWhile)** | `.doUntil()` / `.doWhile()` | Code-level loops | Manual | Choice + Loop | Manual |
+| **forEach** | `.forEach()` with indexed results | Code-level loops | Manual | Map state | Manual |
+| **Map transform** | `.map()` | Code-level | Manual | Pass state | Manual |
+| **Schema validation** | Duck-typed `.parse()` (Zod, ArkType) | Manual | Built-in | JSONSchema | Manual |
+| **Per-execution subscribe** | `engine.subscribe(id, cb)` | Manual | Webhook | CloudWatch | Manual |
 | **Cleanup/archival** | Built-in SQLite archive | Manual | Auto (cloud) | Auto (cloud) | Manual |
 | **Self-hosted** | Yes (zero-config) | Yes (complex) | No | No | Yes (complex) |
 | **Pricing** | Free (MIT) | Free self-hosted / Cloud $$ | Free tier, then per-execution | Per state transition | Free tier, then $50/mo+ |
@@ -527,6 +532,165 @@ console.log(`Total archived: ${engine.getArchivedCount()}`);
 - `archive(maxAgeMs, states?)` — **Moves** executions to a separate `workflow_executions_archive` table (transactional, up to 1000 per call)
 - Both accept an optional `states` filter: `['completed']`, `['failed']`, `['completed', 'failed']`, etc.
 
+### Loops (doUntil / doWhile)
+
+Repeat a set of steps based on a condition. Two flavors:
+
+- **`doUntil(condition, builder, options?)`** — Runs steps first, then checks condition. Repeats until condition returns `true` (do...until semantics).
+- **`doWhile(condition, builder, options?)`** — Checks condition first, then runs steps. Repeats while condition returns `true` (while...do semantics).
+
+```typescript
+// doUntil: retry sending until delivery confirmed
+const flow = new Workflow('delivery')
+  .doUntil(
+    (ctx) => (ctx.steps['send'] as { delivered: boolean })?.delivered === true,
+    (w) => w.step('send', async (ctx) => {
+      const result = await deliveryService.attempt(ctx.input);
+      return { delivered: result.success };
+    }),
+    { maxIterations: 10 } // safety limit (default: 100)
+  );
+
+// doWhile: process items while queue has items
+const batchFlow = new Workflow('batch')
+  .doWhile(
+    (ctx) => {
+      const remaining = (ctx.steps['process'] as { remaining: number })?.remaining ?? 10;
+      return remaining > 0;
+    },
+    (w) => w.step('process', async (ctx) => {
+      const batch = await fetchNextBatch();
+      await processBatch(batch);
+      return { remaining: await getQueueSize() };
+    }),
+  );
+```
+
+**Key behaviors:**
+- `doWhile` can skip entirely if the condition is `false` on the first check
+- `doUntil` always runs at least once
+- `maxIterations` prevents infinite loops (default: 100)
+- Loop step results are overwritten each iteration — only the last iteration's result is available downstream
+- Conditions can be async (return a `Promise<boolean>`)
+
+### forEach
+
+Iterate over a dynamic list of items, executing a step for each:
+
+```typescript
+const flow = new Workflow<{ userIds: string[] }>('notify-all')
+  .forEach(
+    (ctx) => (ctx.input as { userIds: string[] }).userIds, // items extractor
+    'notify',                                               // step name
+    async (ctx) => {
+      const userId = ctx.steps.__item as string;   // current item
+      const index = ctx.steps.__index as number;    // current index (0-based)
+      await sendNotification(userId);
+      return { notified: userId };
+    },
+    { retry: 3, timeout: 10_000 }  // standard step options
+  );
+```
+
+**Key behaviors:**
+- Results are stored with indexed names: `notify:0`, `notify:1`, `notify:2`, etc.
+- Each iteration receives `__item` (current item) and `__index` (current index) via `ctx.steps`
+- Items are processed sequentially (not in parallel)
+- `maxIterations` option limits array size (default: 1000)
+- Standard step options (`retry`, `timeout`, `compensate`, `inputSchema`, `outputSchema`) apply to each iteration
+
+### Map
+
+Transform step results into a new value without executing an async handler. A synchronous, pure data-transform node:
+
+```typescript
+const flow = new Workflow('etl')
+  .step('fetch', async () => {
+    const records = await db.query('SELECT * FROM events');
+    return { records };
+  })
+  .map('aggregate', (ctx) => {
+    const { records } = ctx.steps['fetch'] as { records: Event[] };
+    return {
+      total: records.length,
+      byType: Object.groupBy(records, r => r.type),
+    };
+  })
+  .step('store', async (ctx) => {
+    const agg = ctx.steps['aggregate'] as AggregatedData;
+    await analytics.insert(agg);
+    return { stored: true };
+  });
+```
+
+**Key behaviors:**
+- Runs synchronously (no retry, no timeout) — it's a pure transform
+- Result is stored under the map name (e.g., `ctx.steps['aggregate']`)
+- The transform function receives the full `StepContext` (input, steps, signals)
+
+### Schema Validation
+
+Validate step inputs and outputs with any schema library that has a `.parse()` method (Zod, ArkType, Valibot, etc.):
+
+```typescript
+import { z } from 'zod';
+
+const OrderInput = z.object({
+  orderId: z.string(),
+  amount: z.number().positive(),
+});
+
+const ChargeResult = z.object({
+  transactionId: z.string(),
+  charged: z.number(),
+});
+
+const flow = new Workflow('validated-order')
+  .step('validate', async (ctx) => {
+    return { orderId: ctx.input.orderId, validated: true };
+  }, {
+    inputSchema: OrderInput,   // validates ctx.input before handler runs
+  })
+  .step('charge', async (ctx) => {
+    return { transactionId: 'tx_123', charged: 99.99 };
+  }, {
+    outputSchema: ChargeResult, // validates return value after handler runs
+  });
+```
+
+**Key behaviors:**
+- `inputSchema` validates `ctx.input` **before** the step handler executes
+- `outputSchema` validates the handler's return value **after** execution
+- Uses duck typing: any object with a `.parse(data)` method works — no runtime dependency on Zod
+- Validation failure throws an error (triggers retry or compensation like any other step failure)
+- Works with Zod, ArkType, Valibot, or any custom schema object
+
+### Subscribe
+
+Monitor a specific execution's events in real-time:
+
+```typescript
+const run = await engine.start('order-pipeline', { orderId: 'ORD-1' });
+
+// Subscribe to all events for this execution
+const unsubscribe = engine.subscribe(run.id, (event) => {
+  console.log(`[${event.type}]`, event);
+
+  if (event.type === 'workflow:completed') {
+    console.log('Order pipeline finished!');
+  }
+});
+
+// Later: stop listening
+unsubscribe();
+```
+
+**Key behaviors:**
+- Returns an `unsubscribe` function — call it to stop receiving events
+- Only receives events for the specified execution ID (filters automatically)
+- Receives all event types: `step:started`, `step:completed`, `step:failed`, `step:retry`, `workflow:*`, `signal:*`
+- Complements `engine.on()` / `engine.onAny()` which are global (all executions)
+
 ## Engine API
 
 ### Constructor
@@ -570,6 +734,7 @@ const engine = new Engine({
 | `engine.onAny(listener)` | `void` | Subscribe to all events. |
 | `engine.off(type, listener)` | `void` | Unsubscribe from a specific event type. |
 | `engine.offAny(listener)` | `void` | Unsubscribe from all events. |
+| `engine.subscribe(id, callback)` | `() => void` | Subscribe to events for a specific execution. Returns unsubscribe function. |
 | `engine.cleanup(maxAgeMs, states?)` | `number` | Delete executions older than `maxAgeMs`. Returns count. |
 | `engine.archive(maxAgeMs, states?)` | `number` | Move old executions to archive table. Returns count. |
 | `engine.getArchivedCount()` | `number` | Count of archived executions. |
@@ -940,6 +1105,89 @@ engine.archive(30 * 24 * 60 * 60 * 1000, ['completed']);
 engine.cleanup(90 * 24 * 60 * 60 * 1000);
 ```
 
+### Batch Processing with forEach and Map
+
+Process a list of invoices, aggregate results, and send a summary:
+
+```typescript
+import { z } from 'zod';
+
+const InvoiceInput = z.object({
+  invoiceIds: z.array(z.string()),
+  batchId: z.string(),
+});
+
+const invoiceFlow = new Workflow<{ invoiceIds: string[]; batchId: string }>('process-invoices')
+  // Validate input with Zod schema
+  .step('init', async (ctx) => {
+    return { count: (ctx.input as { invoiceIds: string[] }).invoiceIds.length };
+  }, { inputSchema: InvoiceInput })
+
+  // Process each invoice
+  .forEach(
+    (ctx) => (ctx.input as { invoiceIds: string[] }).invoiceIds,
+    'process-invoice',
+    async (ctx) => {
+      const invoiceId = ctx.steps.__item as string;
+      const result = await billingService.process(invoiceId);
+      return { invoiceId, amount: result.amount, status: result.status };
+    },
+    { retry: 3, timeout: 15_000 }
+  )
+
+  // Aggregate all invoice results
+  .map('summary', (ctx) => {
+    const results: { amount: number; status: string }[] = [];
+    let i = 0;
+    while (ctx.steps[`process-invoice:${i}`]) {
+      results.push(ctx.steps[`process-invoice:${i}`] as { amount: number; status: string });
+      i++;
+    }
+    const total = results.reduce((sum, r) => sum + r.amount, 0);
+    const failed = results.filter(r => r.status === 'failed').length;
+    return { total, processed: results.length, failed };
+  })
+
+  // Send summary report
+  .step('report', async (ctx) => {
+    const summary = ctx.steps['summary'] as { total: number; processed: number; failed: number };
+    await notificationService.send({
+      channel: '#billing',
+      text: `Batch complete: ${summary.processed} invoices, $${summary.total} total, ${summary.failed} failures`,
+    });
+    return { reported: true };
+  });
+```
+
+### Retry Loop with doUntil
+
+Poll an external API until a resource is ready:
+
+```typescript
+const deployFlow = new Workflow<{ deployId: string }>('wait-deploy')
+  .step('trigger', async (ctx) => {
+    const id = (ctx.input as { deployId: string }).deployId;
+    await cloudProvider.triggerDeploy(id);
+    return { deployId: id };
+  })
+  .doUntil(
+    (ctx) => (ctx.steps['check-status'] as { ready: boolean })?.ready === true,
+    (w) => w.step('check-status', async (ctx) => {
+      const id = (ctx.steps['trigger'] as { deployId: string }).deployId;
+      const status = await cloudProvider.getDeployStatus(id);
+      // Simulate wait between polls
+      await new Promise((r) => setTimeout(r, 5000));
+      return { ready: status === 'running', status };
+    }, { retry: 1, timeout: 30_000 }),
+    { maxIterations: 60 } // max 5 minutes of polling
+  )
+  .step('verify', async (ctx) => {
+    const id = (ctx.steps['trigger'] as { deployId: string }).deployId;
+    const health = await cloudProvider.healthCheck(id);
+    return { healthy: health.ok };
+  });
+```
+
 ## How It Works Internally
 
 The workflow engine is a **pure consumer layer** built on top of bunqueue. Zero modifications to the core engine.
@@ -953,10 +1201,15 @@ Workflow DSL (.step / .branch / .waitFor)
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Executor                                                │    │
-│  │  • Resolves current node (step/branch/parallel/waitFor)  │    │
+│  │  • Resolves current node (step/branch/parallel/waitFor/  │    │
+│  │    doUntil/doWhile/forEach/map)                          │    │
 │  │  • Runs step handler with timeout + retry (backoff)      │    │
+│  │  • Schema validation (inputSchema/outputSchema)          │    │
 │  │  • Evaluates branch condition, picks path                │    │
 │  │  • Runs parallel steps via Promise.allSettled             │    │
+│  │  • Executes loops (doUntil/doWhile) with maxIterations   │    │
+│  │  • forEach: iterates items with indexed step names       │    │
+│  │  • map: synchronous data transforms                      │    │
 │  │  • Checks signal availability + timeout for waitFor      │    │
 │  │  • Dispatches sub-workflows, polls until complete         │    │
 │  │  • Runs compensation in reverse on failure               │    │
@@ -984,8 +1237,11 @@ Workflow DSL (.step / .branch / .waitFor)
 5. **Parallel node**: runs all steps via `Promise.allSettled`, saves all results, then advances
 6. **WaitFor node**: checks if the signal exists. If not, sets state to `'waiting'` and schedules a timeout check if configured
 7. **SubWorkflow node**: starts a child execution, polls until it reaches a terminal state, saves child results under `sub:<name>`
-8. **`engine.signal()`** stores the signal payload and re-enqueues the current node
-9. **On failure**: the Executor walks completed steps in reverse, calling each compensate handler
+8. **DoUntil/DoWhile node**: runs loop steps repeatedly, checking condition before (doWhile) or after (doUntil) each iteration
+9. **ForEach node**: extracts items array, runs the step for each with indexed names (`step:0`, `step:1`, ...)
+10. **Map node**: runs a synchronous transform, stores result, then advances
+11. **`engine.signal()`** stores the signal payload and re-enqueues the current node
+12. **On failure**: the Executor walks completed steps in reverse, calling each compensate handler
 
 Each workflow step is a regular bunqueue job. You get all of bunqueue's features for free: SQLite persistence, concurrency control, and monitoring via the dashboard.
 

@@ -1,8 +1,4 @@
-/**
- * WorkflowExecutor - Core execution logic
- * Processes steps as bunqueue jobs, handles transitions, branching, compensation.
- */
-
+/** WorkflowExecutor - Core execution logic */
 import type { Queue } from '../queue/queue';
 import type { Workflow } from './workflow';
 import type { WorkflowStore } from './store';
@@ -15,6 +11,7 @@ import {
   findStepDef,
   buildContext,
 } from './runner';
+import { executeDoUntil, executeDoWhile, executeForEach, executeMap } from './loops';
 
 class WaitForSignalError extends Error {
   constructor(readonly event: string) {
@@ -119,8 +116,6 @@ export class WorkflowExecutor {
     return this.store.list(workflowName, state);
   }
 
-  // ============ Node dispatch ============
-
   private async executeNode(
     exec: Execution,
     node: WorkflowNode,
@@ -131,6 +126,10 @@ export class WorkflowExecutor {
     else if (node.type === 'branch') await this.runBranch(exec, node, idx, wf);
     else if (node.type === 'parallel') await this.runParallel(exec, node, idx, wf);
     else if (node.type === 'subWorkflow') await this.runSubWorkflow(exec, node, idx, wf);
+    else if (node.type === 'doUntil') await this.runLoop(exec, node, idx, wf, executeDoUntil);
+    else if (node.type === 'doWhile') await this.runLoop(exec, node, idx, wf, executeDoWhile);
+    else if (node.type === 'forEach') await this.runForEach(exec, node, idx, wf);
+    else if (node.type === 'map') await this.runMap(exec, node, idx, wf);
     else await this.runWaitFor(exec, node, idx, wf);
   }
 
@@ -232,8 +231,42 @@ export class WorkflowExecutor {
     throw new WaitForSignalError(node.event);
   }
 
-  // ============ Helpers ============
+  private async runLoop(
+    exec: Execution,
+    node: Extract<WorkflowNode, { type: 'doUntil' }> | Extract<WorkflowNode, { type: 'doWhile' }>,
+    idx: number,
+    wf: Workflow,
+    loopFn: typeof executeDoUntil
+  ) {
+    await loopFn(node.def, exec, this.emitter, (e) => {
+      this.store.update(e);
+    });
+    await this.advance(exec, idx + 1, wf);
+  }
 
+  private async runForEach(
+    exec: Execution,
+    node: Extract<WorkflowNode, { type: 'forEach' }>,
+    idx: number,
+    wf: Workflow
+  ) {
+    await executeForEach(node.def, exec, this.emitter, (e) => {
+      this.store.update(e);
+    });
+    await this.advance(exec, idx + 1, wf);
+  }
+
+  private async runMap(
+    exec: Execution,
+    node: Extract<WorkflowNode, { type: 'map' }>,
+    idx: number,
+    wf: Workflow
+  ) {
+    await executeMap(node.def, exec, (e) => {
+      this.store.update(e);
+    });
+    await this.advance(exec, idx + 1, wf);
+  }
   private async advance(exec: Execution, nextIdx: number, wf: Workflow) {
     exec.currentNodeIndex = nextIdx;
     this.store.update(exec);

@@ -88,6 +88,7 @@ describe('Workflow Engine - Realistic Scenarios', () => {
         events.push('charge-attempt');
         throw new Error('Card declined');
       }, {
+        retry: 1,
         compensate: async () => {
           events.push('refund');
         },

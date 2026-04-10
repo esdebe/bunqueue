@@ -59,7 +59,27 @@ export async function executeStepWithRetry(
     });
 
     try {
+      if (def.inputSchema) {
+        try {
+          def.inputSchema.parse(ctx.input);
+        } catch (e) {
+          throw new Error(
+            `Input validation failed for "${def.name}": ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
+          );
+        }
+      }
       const result = await runWithTimeout(def.handler(ctx), def.timeout);
+      if (def.outputSchema) {
+        try {
+          def.outputSchema.parse(result);
+        } catch (e) {
+          throw new Error(
+            `Output validation failed for "${def.name}": ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
+          );
+        }
+      }
       exec.steps[def.name] = {
         status: 'completed',
         result,
@@ -167,6 +187,11 @@ export function findStepDef(wf: Workflow, name: string): StepDefinition | null {
       const found = node.def.steps.find((s) => s.name === name);
       if (found) return found;
     }
+    if (node.type === 'doUntil' || node.type === 'doWhile') {
+      const found = node.def.steps.find((s) => s.name === name);
+      if (found) return found;
+    }
+    if (node.type === 'forEach' && node.def.step.name === name) return node.def.step;
   }
   return null;
 }

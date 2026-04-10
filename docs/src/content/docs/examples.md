@@ -825,6 +825,128 @@ engine.register(apiFlow);
 await engine.start('api-sync');
 ```
 
+### Workflow: forEach with Map Aggregation
+
+Process a list of files, transform the results, and produce a summary:
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const batchFlow = new Workflow<{ files: string[] }>('file-processor')
+  // Iterate over each file
+  .forEach(
+    (ctx) => (ctx.input as { files: string[] }).files,
+    'process-file',
+    async (ctx) => {
+      const file = ctx.steps.__item as string;
+      const index = ctx.steps.__index as number;
+      console.log(`Processing file ${index}: ${file}`);
+      const size = await getFileSize(file);
+      return { file, size, processed: true };
+    },
+    { retry: 2, timeout: 30_000 }
+  )
+
+  // Aggregate results from all files
+  .map('totals', (ctx) => {
+    const results: { file: string; size: number }[] = [];
+    let i = 0;
+    while (ctx.steps[`process-file:${i}`]) {
+      results.push(ctx.steps[`process-file:${i}`] as { file: string; size: number });
+      i++;
+    }
+    return {
+      fileCount: results.length,
+      totalSize: results.reduce((sum, r) => sum + r.size, 0),
+    };
+  })
+
+  // Send report
+  .step('report', async (ctx) => {
+    const totals = ctx.steps['totals'] as { fileCount: number; totalSize: number };
+    await notify(`Processed ${totals.fileCount} files (${totals.totalSize} bytes)`);
+    return { reported: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(batchFlow);
+await engine.start('file-processor', { files: ['a.csv', 'b.csv', 'c.csv'] });
+```
+
+### Workflow: Polling Loop with doUntil
+
+Wait for an external resource to be ready using a poll loop:
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const deployFlow = new Workflow<{ deployId: string }>('deploy-and-wait')
+  .step('trigger', async (ctx) => {
+    const { deployId } = ctx.input as { deployId: string };
+    await cloudProvider.triggerDeploy(deployId);
+    return { deployId, triggered: true };
+  })
+  .doUntil(
+    (ctx) => (ctx.steps['poll'] as { ready: boolean })?.ready === true,
+    (w) => w.step('poll', async (ctx) => {
+      const id = (ctx.steps['trigger'] as { deployId: string }).deployId;
+      const status = await cloudProvider.getStatus(id);
+      await new Promise((r) => setTimeout(r, 5000)); // wait between polls
+      return { ready: status === 'running', currentStatus: status };
+    }, { retry: 1, timeout: 30_000 }),
+    { maxIterations: 60 } // max 5 minutes
+  )
+  .step('verify', async (ctx) => {
+    return { verified: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(deployFlow);
+await engine.start('deploy-and-wait', { deployId: 'deploy-123' });
+```
+
+### Workflow: Schema Validation with Subscribe
+
+Validate data at each step and monitor execution in real-time:
+
+```typescript
+import { z } from 'zod';
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const UserInput = z.object({ email: z.string().email(), name: z.string() });
+const AccountResult = z.object({ userId: z.string(), created: z.boolean() });
+
+const onboardFlow = new Workflow('onboard')
+  .step('create-account', async (ctx) => {
+    const { email, name } = ctx.input as { email: string; name: string };
+    const userId = await accounts.create(email, name);
+    return { userId, created: true };
+  }, {
+    inputSchema: UserInput,      // Validates ctx.input before handler
+    outputSchema: AccountResult, // Validates return value after handler
+  })
+  .step('send-welcome', async (ctx) => {
+    const { userId } = ctx.steps['create-account'] as { userId: string };
+    await emails.sendWelcome(userId);
+    return { sent: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(onboardFlow);
+
+const run = await engine.start('onboard', { email: 'alice@example.com', name: 'Alice' });
+
+// Subscribe to this specific execution's events
+const unsub = engine.subscribe(run.id, (event) => {
+  if (event.type === 'step:completed') console.log(`Step done: ${(event as any).stepName}`);
+  if (event.type === 'step:failed') console.error(`Step failed: ${(event as any).error}`);
+  if (event.type === 'workflow:completed') {
+    console.log('Onboarding complete!');
+    unsub(); // cleanup
+  }
+});
+```
+
 :::tip[Related]
 - [Workflow Engine Guide](/guide/workflow/) - Full API reference and competitor comparison
 - [Quick Start Tutorial](/guide/quickstart/) - Getting started basics

@@ -177,6 +177,55 @@ engine.onAny((e) => metrics.increment(`workflow.${e.type}`));
 
 Eleven event types cover the full lifecycle: `workflow:started`, `step:completed`, `step:retry`, `signal:timeout`, and more.
 
+## Loops, forEach & Map
+
+Iterate with `doUntil` / `doWhile`, process lists with `forEach`, and transform data with `map`:
+
+```typescript
+const pipeline = new Workflow('etl')
+  .step('fetch', async () => ({ records: await db.getAll() }))
+  .forEach(
+    (ctx) => (ctx.steps['fetch'] as any).records,
+    'enrich',
+    async (ctx) => {
+      const record = ctx.steps.__item;
+      return await enrichment.process(record);
+    },
+  )
+  .map('aggregate', (ctx) => {
+    // Collect all forEach results
+    const results = [];
+    let i = 0;
+    while (ctx.steps[`enrich:${i}`]) { results.push(ctx.steps[`enrich:${i}`]); i++; }
+    return { total: results.length };
+  })
+  .doUntil(
+    (ctx) => (ctx.steps['sync'] as any)?.synced === true,
+    (w) => w.step('sync', async () => {
+      const ok = await externalApi.sync();
+      return { synced: ok };
+    }),
+    { maxIterations: 10 }
+  );
+```
+
+## Schema Validation & Subscribe
+
+Validate step inputs/outputs with any `.parse()` schema (Zod, ArkType, Valibot) and monitor specific executions:
+
+```typescript
+import { z } from 'zod';
+
+const flow = new Workflow('validated')
+  .step('process', async (ctx) => ({ id: 'usr_1', valid: true }), {
+    inputSchema: z.object({ email: z.string().email() }),
+    outputSchema: z.object({ id: z.string(), valid: z.boolean() }),
+  });
+
+const run = await engine.start('validated', { email: 'user@test.com' });
+const unsub = engine.subscribe(run.id, (e) => console.log(e.type));
+```
+
 ## Cleanup & Archival
 
 Archive old executions to keep your SQLite lean:
@@ -221,6 +270,6 @@ import { Workflow, Engine } from 'bunqueue/workflow';
 
 Read the full guide: [Workflow Engine Documentation](/guide/workflow/)
 
-<Aside type="tip" title="60+ workflow tests">
-The workflow engine ships with 60+ tests covering linear flows, branching, compensation, signals, timeouts, retry, parallel steps, nested workflows, observability, and archival — in both embedded and TCP modes.
+<Aside type="tip" title="80+ workflow tests">
+The workflow engine ships with 80+ tests covering linear flows, branching, compensation, signals, timeouts, retry, parallel steps, nested workflows, loops, forEach, map, schema validation, subscribe, observability, and archival — in both embedded and TCP modes.
 </Aside>

@@ -524,6 +524,11 @@ await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
 - **Signal timeout** — `waitFor('event', { timeout })` fails if signal doesn't arrive in time
 - **Step retry** — Automatic retry with exponential backoff and jitter
 - **Nested workflows** — Compose workflows with `.subWorkflow()`, child results passed back
+- **Loops** — `doUntil()` and `doWhile()` for conditional iteration with safety limits
+- **forEach** — Iterate over dynamic item lists with indexed step results (`step:0`, `step:1`, ...)
+- **Map** — Synchronous data transforms between steps with `.map()`
+- **Schema validation** — Validate step input/output with Zod, ArkType, Valibot, or any `.parse()` schema
+- **Subscribe** — `engine.subscribe(id, callback)` to monitor a specific execution's events
 - **Observability** — Typed event emitter with 11 event types (`engine.on/onAny`)
 - **Cleanup & archival** — `engine.cleanup()` / `engine.archive()` for execution history management
 - **Step timeouts** — Prevent steps from running indefinitely

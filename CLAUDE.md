@@ -269,7 +269,7 @@ Source: `src/client/bunqueue.ts`
 
 ## Workflow Engine
 
-Multi-step orchestration with saga compensation, branching, parallel steps, retry, nested workflows, observability, and human-in-the-loop signals:
+Multi-step orchestration with saga compensation, branching, parallel steps, retry, nested workflows, loops (doUntil/doWhile), forEach, map, schema validation, subscribe, observability, and human-in-the-loop signals:
 
 ```typescript
 import { Workflow, Engine } from 'bunqueue/workflow';
@@ -286,7 +286,17 @@ const flow = new Workflow('order')
   .branch((ctx) => ctx.steps['classify'].tier)
   .path('vip', (w) => w.step('vip-handler', async () => ({ discount: 20 })))
   .path('basic', (w) => w.step('basic-handler', async () => ({ discount: 0 })))
-  .waitFor('approval', { timeout: 86400000 })  // pauses until engine.signal(), 24h timeout
+  .forEach(                                        // iterate over items
+    (ctx) => ctx.input.items,
+    'process-item', async (ctx) => { return { item: ctx.steps.__item }; },
+  )
+  .map('summary', (ctx) => ({ total: 42 }))       // synchronous transform
+  .doUntil(                                         // loop until condition
+    (ctx) => (ctx.steps['poll'] as any)?.ready,
+    (w) => w.step('poll', async () => ({ ready: true })),
+    { maxIterations: 10 },
+  )
+  .waitFor('approval', { timeout: 86400000 })      // pauses until engine.signal(), 24h timeout
   .subWorkflow('payment', (ctx) => ({ amount: 99 }))  // nested workflow
   .step('finalize', async (ctx) => {
     const decision = ctx.signals['approval'];
@@ -300,11 +310,12 @@ engine.on('step:retry', (e) => logger.warn(e));
 const run = await engine.start('order', { orderId: 'ORD-1' });
 await engine.signal(run.id, 'approval', { approved: true });
 engine.archive(7 * 24 * 60 * 60 * 1000); // archive old executions
+const unsub = engine.subscribe(run.id, (e) => console.log(e.type)); // per-execution subscribe
 ```
 
-Key: `Workflow` = pure DSL builder (step/branch/path/parallel/waitFor/subWorkflow). `Engine` = facade over Queue + Worker + SQLite Store + Executor + Emitter. Each step runs as a bunqueue job on `__wf:steps` queue. Features: retry with exponential backoff, parallel via Promise.allSettled, nested workflows via polling, signal timeout, typed events (11 types), cleanup/archival. Compensation runs in reverse order on failure.
+Key: `Workflow` = pure DSL builder (step/branch/path/parallel/waitFor/subWorkflow/doUntil/doWhile/forEach/map). `Engine` = facade over Queue + Worker + SQLite Store + Executor + Emitter. Each step runs as a bunqueue job on `__wf:steps` queue. Features: retry with exponential backoff, parallel via Promise.allSettled, nested workflows via polling, signal timeout, loops (doUntil/doWhile/forEach), map transforms, schema validation (duck-typed .parse()), per-execution subscribe, typed events (11 types), cleanup/archival. Compensation runs in reverse order on failure.
 
-Source: `src/client/workflow/` (workflow.ts, engine.ts, executor.ts, store.ts, runner.ts, emitter.ts, types.ts)
+Source: `src/client/workflow/` (workflow.ts, engine.ts, executor.ts, store.ts, runner.ts, emitter.ts, loops.ts, types.ts)
 
 ## Client SDK
 

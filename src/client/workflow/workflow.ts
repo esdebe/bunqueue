@@ -12,6 +12,9 @@ import type {
   StepContext,
   BranchCondition,
   SubWorkflowInputMapper,
+  LoopCondition,
+  ForEachItemsExtractor,
+  MapTransformFn,
 } from './types';
 
 export class Workflow<TInput = unknown> {
@@ -32,6 +35,8 @@ export class Workflow<TInput = unknown> {
         compensate: options?.compensate as CompensateHandler | undefined,
         retry: options?.retry ?? 3,
         timeout: options?.timeout ?? 30_000,
+        inputSchema: options?.inputSchema,
+        outputSchema: options?.outputSchema,
       },
     });
     return this;
@@ -95,6 +100,73 @@ export class Workflow<TInput = unknown> {
     return this;
   }
 
+  /** Repeat steps until condition returns true (checked after each iteration) */
+  doUntil(
+    condition: LoopCondition,
+    builder: (w: Workflow<TInput>) => Workflow<TInput>,
+    options?: { maxIterations?: number }
+  ): this {
+    const sub = new Workflow<TInput>(`${this.name}:doUntil`);
+    builder(sub);
+    const steps = sub.nodes
+      .filter((n): n is { type: 'step'; def: StepDefinition } => n.type === 'step')
+      .map((n) => n.def);
+    if (steps.length === 0) throw new Error('doUntil() requires at least one step');
+    this.nodes.push({
+      type: 'doUntil',
+      def: { condition, steps, maxIterations: options?.maxIterations ?? 100 },
+    });
+    return this;
+  }
+
+  /** Repeat steps while condition returns true (checked before each iteration) */
+  doWhile(
+    condition: LoopCondition,
+    builder: (w: Workflow<TInput>) => Workflow<TInput>,
+    options?: { maxIterations?: number }
+  ): this {
+    const sub = new Workflow<TInput>(`${this.name}:doWhile`);
+    builder(sub);
+    const steps = sub.nodes
+      .filter((n): n is { type: 'step'; def: StepDefinition } => n.type === 'step')
+      .map((n) => n.def);
+    if (steps.length === 0) throw new Error('doWhile() requires at least one step');
+    this.nodes.push({
+      type: 'doWhile',
+      def: { condition, steps, maxIterations: options?.maxIterations ?? 100 },
+    });
+    return this;
+  }
+
+  /** Iterate over items, executing a step for each */
+  forEach(
+    items: ForEachItemsExtractor,
+    name: string,
+    handler: StepHandler<TInput>,
+    options?: StepOptions<TInput> & { maxIterations?: number }
+  ): this {
+    const step: StepDefinition = {
+      name,
+      handler: handler as StepHandler,
+      compensate: options?.compensate as CompensateHandler | undefined,
+      retry: options?.retry ?? 3,
+      timeout: options?.timeout ?? 30_000,
+      inputSchema: options?.inputSchema,
+      outputSchema: options?.outputSchema,
+    };
+    this.nodes.push({
+      type: 'forEach',
+      def: { items, step, maxIterations: options?.maxIterations ?? 1000 },
+    });
+    return this;
+  }
+
+  /** Transform step results into a new value stored under the given name */
+  map(name: string, transform: MapTransformFn): this {
+    this.nodes.push({ type: 'map', def: { name, transform } });
+    return this;
+  }
+
   /** Get flat list of step names for validation */
   getStepNames(): string[] {
     const names: string[] = [];
@@ -109,6 +181,12 @@ export class Workflow<TInput = unknown> {
         for (const s of node.def.steps) names.push(s.name);
       } else if (node.type === 'subWorkflow') {
         names.push(`sub:${node.name}`);
+      } else if (node.type === 'doUntil' || node.type === 'doWhile') {
+        for (const s of node.def.steps) names.push(s.name);
+      } else if (node.type === 'forEach') {
+        names.push(node.def.step.name);
+      } else if (node.type === 'map') {
+        names.push(node.def.name);
       }
     }
     return names;

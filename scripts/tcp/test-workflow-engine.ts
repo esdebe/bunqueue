@@ -501,6 +501,166 @@ async function test13_nestedWorkflow() {
   }
 }
 
+async function test14_doUntilLoop() {
+  console.log('\n14. doUntil loop...');
+  try {
+    let counter = 0;
+    const flow = new Workflow('tcp-do-until')
+      .doUntil(
+        (ctx) => (ctx.steps['inc'] as { count: number })?.count >= 3,
+        (w) => w.step('inc', async () => { counter++; return { count: counter }; }, { retry: 1 }),
+      );
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+    const run = await engine.start('tcp-do-until');
+    await new Promise((r) => setTimeout(r, 8000));
+
+    const exec = engine.getExecution(run.id);
+    if (exec?.state !== 'completed') { fail('doUntil', `state=${exec?.state}`); await cleanup(); return; }
+    if (counter !== 3) { fail('doUntil', `counter=${counter}`); await cleanup(); return; }
+    pass('doUntil loop completed after 3 iterations');
+    await cleanup();
+  } catch (e) { fail('doUntil', String(e)); await cleanup(); }
+}
+
+async function test15_doWhileLoop() {
+  console.log('\n15. doWhile loop...');
+  try {
+    let counter = 0;
+    const flow = new Workflow('tcp-do-while')
+      .doWhile(
+        (ctx) => {
+          const val = (ctx.steps['proc'] as { value: number })?.value ?? 0;
+          return val < 3;
+        },
+        (w) => w.step('proc', async () => { counter++; return { value: counter }; }, { retry: 1 }),
+      );
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+    const run = await engine.start('tcp-do-while');
+    await new Promise((r) => setTimeout(r, 8000));
+
+    const exec = engine.getExecution(run.id);
+    if (exec?.state !== 'completed') { fail('doWhile', `state=${exec?.state}`); await cleanup(); return; }
+    if (counter !== 3) { fail('doWhile', `counter=${counter}`); await cleanup(); return; }
+    pass('doWhile loop completed after 3 iterations');
+    await cleanup();
+  } catch (e) { fail('doWhile', String(e)); await cleanup(); }
+}
+
+async function test16_forEach() {
+  console.log('\n16. forEach iteration...');
+  try {
+    const processed: string[] = [];
+    const flow = new Workflow<{ items: string[] }>('tcp-foreach')
+      .forEach(
+        (ctx) => (ctx.input as { items: string[] }).items,
+        'handle',
+        async (ctx) => { const item = ctx.steps.__item as string; processed.push(item); return { item }; },
+        { retry: 1 },
+      );
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+    const run = await engine.start('tcp-foreach', { items: ['a', 'b', 'c'] });
+    await new Promise((r) => setTimeout(r, 8000));
+
+    const exec = engine.getExecution(run.id);
+    if (exec?.state !== 'completed') { fail('forEach', `state=${exec?.state}`); await cleanup(); return; }
+    if (processed.length !== 3) { fail('forEach', `processed=${processed.length}`); await cleanup(); return; }
+    if (!exec.steps['handle:0'] || !exec.steps['handle:1'] || !exec.steps['handle:2']) {
+      fail('forEach', 'missing indexed steps'); await cleanup(); return;
+    }
+    pass('forEach iterated over 3 items');
+    await cleanup();
+  } catch (e) { fail('forEach', String(e)); await cleanup(); }
+}
+
+async function test17_map() {
+  console.log('\n17. map transform...');
+  try {
+    const flow = new Workflow('tcp-map')
+      .step('fetch', async () => ({ values: [1, 2, 3] }), { retry: 1 })
+      .map('sum', (ctx) => {
+        const vals = (ctx.steps['fetch'] as { values: number[] }).values;
+        return { total: vals.reduce((a, b) => a + b, 0) };
+      })
+      .step('use', async (ctx) => {
+        const total = (ctx.steps['sum'] as { total: number }).total;
+        return { doubled: total * 2 };
+      }, { retry: 1 });
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+    const run = await engine.start('tcp-map');
+    await new Promise((r) => setTimeout(r, 6000));
+
+    const exec = engine.getExecution(run.id);
+    if (exec?.state !== 'completed') { fail('map', `state=${exec?.state}`); await cleanup(); return; }
+    if ((exec.steps['sum']?.result as { total: number })?.total !== 6) { fail('map', 'wrong sum'); await cleanup(); return; }
+    if ((exec.steps['use']?.result as { doubled: number })?.doubled !== 12) { fail('map', 'wrong doubled'); await cleanup(); return; }
+    pass('map transformed step results');
+    await cleanup();
+  } catch (e) { fail('map', String(e)); await cleanup(); }
+}
+
+async function test18_subscribe() {
+  console.log('\n18. subscribe to execution events...');
+  try {
+    const events: string[] = [];
+    const flow = new Workflow('tcp-sub')
+      .step('a', async () => ({ ok: true }), { retry: 1 })
+      .step('b', async () => ({ ok: true }), { retry: 1 });
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+    const run = await engine.start('tcp-sub');
+    const unsub = engine.subscribe(run.id, (event) => { events.push(event.type); });
+    await new Promise((r) => setTimeout(r, 5000));
+    unsub();
+
+    if (!events.includes('step:started')) { fail('subscribe', 'no step:started'); await cleanup(); return; }
+    if (!events.includes('step:completed')) { fail('subscribe', 'no step:completed'); await cleanup(); return; }
+    if (!events.includes('workflow:completed')) { fail('subscribe', 'no workflow:completed'); await cleanup(); return; }
+    pass('subscribe received execution events');
+    await cleanup();
+  } catch (e) { fail('subscribe', String(e)); await cleanup(); }
+}
+
+async function test19_schemaValidation() {
+  console.log('\n19. schema validation...');
+  try {
+    const inputSchema = {
+      parse(data: unknown) {
+        const obj = data as Record<string, unknown>;
+        if (typeof obj.email !== 'string') throw new Error('email must be string');
+        return obj;
+      },
+    };
+
+    const flow = new Workflow('tcp-schema')
+      .step('validated', async (ctx) => ctx.input, { retry: 1, inputSchema });
+
+    engine = new Engine({ connection: { port: TCP_PORT } });
+    engine.register(flow);
+
+    // Valid input
+    const run1 = await engine.start('tcp-schema', { email: 'test@test.com' });
+    await new Promise((r) => setTimeout(r, 3000));
+    if (engine.getExecution(run1.id)?.state !== 'completed') { fail('schema', 'valid input failed'); await cleanup(); return; }
+
+    // Invalid input
+    const run2 = await engine.start('tcp-schema', { email: 123 });
+    await new Promise((r) => setTimeout(r, 3000));
+    if (engine.getExecution(run2.id)?.state !== 'failed') { fail('schema', 'invalid input passed'); await cleanup(); return; }
+
+    pass('schema validation works');
+    await cleanup();
+  } catch (e) { fail('schema', String(e)); await cleanup(); }
+}
+
 async function main() {
   console.log('=== Test Workflow Engine (TCP Mode) ===');
   console.log(`Connecting to server on port ${TCP_PORT}\n`);
@@ -518,6 +678,12 @@ async function main() {
   await test11_cleanup();
   await test12_observability();
   await test13_nestedWorkflow();
+  await test14_doUntilLoop();
+  await test15_doWhileLoop();
+  await test16_forEach();
+  await test17_map();
+  await test18_subscribe();
+  await test19_schemaValidation();
 
   // Summary
   console.log('\n=== Summary ===');
