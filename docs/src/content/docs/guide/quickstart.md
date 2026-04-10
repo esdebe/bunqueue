@@ -250,8 +250,45 @@ claude mcp add bunqueue -- bunx bunqueue-mcp
 
 Once connected, agents can add jobs, manage crons, retry failures, set rate limits, and monitor everything. See [MCP Server guide](/guide/mcp/) for the full reference.
 
+## Workflow Engine
+
+Need to orchestrate multi-step processes? bunqueue includes a built-in **Workflow Engine** with branching, saga compensation, and human-in-the-loop signals:
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const flow = new Workflow('order-pipeline')
+  .step('validate', async (ctx) => {
+    return { orderId: ctx.input.orderId };
+  })
+  .step('charge', async (ctx) => {
+    return { txId: 'tx_123' };
+  }, {
+    compensate: async () => {
+      // Auto-rollback if a later step fails
+      await refundPayment('tx_123');
+    },
+  })
+  .waitFor('manager-approval')  // Pauses until signal received
+  .step('ship', async (ctx) => {
+    const approval = ctx.signals['manager-approval'];
+    return { shipped: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(flow);
+
+const run = await engine.start('order-pipeline', { orderId: 'ORD-1' });
+
+// Later, when the manager approves:
+await engine.signal(run.id, 'manager-approval', { approved: true });
+```
+
+Built on top of bunqueue's Queue and Worker — no new infrastructure. [Workflow Engine guide](/guide/workflow/) for the full reference.
+
 ## Next Steps
 
+- [Workflow Engine](/guide/workflow/) - Multi-step orchestration with branching and saga compensation
 - [Simple Mode](/guide/simple-mode/) - All-in-one Queue + Worker with routes, middleware, cron
 - [Queue API](/guide/queue/) - Full queue operations
 - [Worker API](/guide/worker/) - Worker configuration

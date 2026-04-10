@@ -481,6 +481,85 @@ process.on('SIGINT', async () => {
 
 ---
 
+## Workflow Engine
+
+Orchestrate multi-step business processes with branching, saga compensation, and human-in-the-loop signals. Built on top of bunqueue — no new infrastructure.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const orderFlow = new Workflow('order-pipeline')
+  .step('validate', async (ctx) => {
+    const { orderId, amount } = ctx.input as { orderId: string; amount: number };
+    if (amount <= 0) throw new Error('Invalid amount');
+    return { orderId };
+  })
+  .step('reserve-stock', async () => {
+    await inventory.reserve();
+    return { reserved: true };
+  }, {
+    compensate: async () => await inventory.release(), // Auto-rollback on failure
+  })
+  .step('charge', async () => {
+    return { txId: await payments.charge() };
+  }, {
+    compensate: async () => await payments.refund(),
+  })
+  .step('confirm', async (ctx) => {
+    const { txId } = ctx.steps['charge'] as { txId: string };
+    return { emailSent: true, txId };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(orderFlow);
+await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
+```
+
+**Features:**
+
+- **Saga pattern** — Compensation handlers run in reverse when a step fails
+- **Branching** — Route to different paths based on runtime conditions
+- **Human-in-the-loop** — `waitFor('event')` pauses execution, `engine.signal()` resumes it
+- **Step timeouts** — Prevent steps from running indefinitely
+- **Context passing** — Each step accesses input and all previous step results
+- **SQLite persistence** — Execution state survives restarts
+
+**vs Competitors:**
+
+| | **bunqueue** | **Temporal** | **Inngest** | **AWS Step Functions** |
+|---|---|---|---|---|
+| **Infrastructure** | None (embedded) | PostgreSQL + 7 services | Cloud-only | AWS-native |
+| **Saga compensation** | Built-in | Manual | Manual | Manual |
+| **Human-in-the-loop** | `.waitFor()` | Signals API | `step.waitForEvent()` | Callback tasks |
+| **Self-hosted** | Zero-config | Complex | No | No |
+| **Pricing** | Free (MIT) | Free / Cloud $$ | Per-execution | Per-transition |
+
+```typescript
+// Branching
+const flow = new Workflow('tiered')
+  .step('classify', async (ctx) => ({ tier: ctx.input.amount > 1000 ? 'vip' : 'basic' }))
+  .branch((ctx) => ctx.steps['classify'].tier)
+  .path('vip', (w) => w.step('vip-handler', async () => ({ discount: 20 })))
+  .path('basic', (w) => w.step('basic-handler', async () => ({ discount: 0 })))
+  .step('done', async () => ({ processed: true }));
+
+// Human-in-the-loop
+const approvalFlow = new Workflow('expense')
+  .step('submit', async (ctx) => ({ amount: ctx.input.amount }))
+  .waitFor('manager-approval')
+  .step('reimburse', async (ctx) => {
+    const decision = ctx.signals['manager-approval'] as { approved: boolean };
+    return { status: decision.approved ? 'paid' : 'rejected' };
+  });
+
+// Signal a waiting workflow
+await engine.signal(run.id, 'manager-approval', { approved: true });
+```
+
+[Workflow Engine docs →](https://bunqueue.dev/guide/workflow/)
+
+---
+
 <p align="center">
   <strong>bunqueue Dashboard</strong><br/>
   <sub>A visual interface for managing queues, jobs, workers and monitoring in real time. Currently in beta.</sub>
@@ -728,6 +807,7 @@ docker compose --profile monitoring up -d
 **[Read the full documentation →](https://bunqueue.dev/)**
 
 - [Quick Start](https://bunqueue.dev/guide/quickstart/)
+- [Workflow Engine](https://bunqueue.dev/guide/workflow/)
 - [MCP Server (AI Agents)](https://bunqueue.dev/guide/mcp/)
 - [Simple Mode](https://bunqueue.dev/guide/simple-mode/)
 - [Queue API](https://bunqueue.dev/guide/queue/)

@@ -108,6 +108,7 @@ export default defineConfig({
           label: 'Client SDK',
           items: [
             { label: 'Simple Mode', link: '/guide/simple-mode/' },
+            { label: 'Workflow Engine', link: '/guide/workflow/' },
             { label: 'Queue', link: '/guide/queue/' },
             { label: 'Worker', link: '/guide/worker/' },
             { label: 'CPU-Intensive Workers', link: '/guide/cpu-intensive-workers/' },
@@ -203,7 +204,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'keywords',
-            content: 'bun, job queue, message queue, task queue, background jobs, sqlite, redis alternative, bullmq alternative, typescript, cron, scheduler, worker, dlq, dead letter queue, ai agents, mcp server, model context protocol, agentic workflows, claude, cursor, windsurf, ai automation, ai task scheduler, llm tools',
+            content: 'bun, job queue, message queue, task queue, background jobs, sqlite, redis alternative, bullmq alternative, typescript, cron, scheduler, worker, dlq, dead letter queue, ai agents, mcp server, model context protocol, agentic workflows, claude, cursor, windsurf, ai automation, ai task scheduler, llm tools, workflow engine, orchestration, saga pattern, compensation, human in the loop, step functions alternative, temporal alternative, inngest alternative, multi-step workflows, branching workflows',
           },
         },
         {
@@ -331,7 +332,7 @@ export default defineConfig({
             '@type': 'SoftwareApplication',
             name: 'bunqueue',
             alternateName: 'bunQ',
-            description: 'High-performance job queue for Bun & AI agents. Native MCP server, SQLite persistence, DLQ, cron jobs, S3 backups.',
+            description: 'High-performance job queue for Bun & AI agents. Workflow engine with saga compensation and branching. Native MCP server, SQLite persistence, DLQ, cron jobs, S3 backups.',
             applicationCategory: 'DeveloperApplication',
             operatingSystem: 'Cross-platform',
             softwareVersion: pkg.version,
@@ -357,7 +358,7 @@ export default defineConfig({
             installUrl: 'https://www.npmjs.com/package/bunqueue',
             programmingLanguage: ['TypeScript', 'JavaScript'],
             runtimePlatform: 'Bun',
-            keywords: ['job queue', 'message queue', 'bun', 'sqlite', 'typescript', 'bullmq alternative', 'ai agents', 'mcp server', 'agentic workflows'],
+            keywords: ['job queue', 'message queue', 'bun', 'sqlite', 'typescript', 'bullmq alternative', 'ai agents', 'mcp server', 'agentic workflows', 'workflow engine', 'saga pattern', 'orchestration', 'temporal alternative', 'step functions alternative'],
           }),
         },
         // JSON-LD Structured Data - WebSite
@@ -439,8 +440,8 @@ export default defineConfig({
           item.priority = 0.9;
           item.changefreq = 'weekly';
         }
-        // MCP, benchmarks, comparison, use-cases - high priority landing pages
-        else if (url.match(/^\/(guide\/(mcp|benchmarks|comparison|use-cases))\//)) {
+        // MCP, workflow, benchmarks, comparison, use-cases - high priority landing pages
+        else if (url.match(/^\/(guide\/(mcp|workflow|benchmarks|comparison|use-cases))\//)) {
           item.priority = 0.9;
           item.changefreq = 'weekly';
         }

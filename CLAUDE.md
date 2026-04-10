@@ -267,6 +267,38 @@ Key: `Bunqueue` = wrapper around `Queue` + `Worker`. Use `processor` OR `routes`
 
 Source: `src/client/bunqueue.ts`
 
+## Workflow Engine
+
+Multi-step orchestration with saga compensation, branching, and human-in-the-loop signals:
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const flow = new Workflow('order')
+  .step('validate', async (ctx) => { return { orderId: ctx.input.orderId }; })
+  .step('charge', async (ctx) => {
+    return { txId: 'tx_123' };
+  }, { compensate: async () => { /* auto-rollback on failure */ } })
+  .branch((ctx) => ctx.steps['classify'].tier)
+  .path('vip', (w) => w.step('vip-handler', async () => ({ discount: 20 })))
+  .path('basic', (w) => w.step('basic-handler', async () => ({ discount: 0 })))
+  .waitFor('approval')  // pauses until engine.signal()
+  .step('finalize', async (ctx) => {
+    const decision = ctx.signals['approval'];
+    return { done: true };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(flow);
+const run = await engine.start('order', { orderId: 'ORD-1' });
+await engine.signal(run.id, 'approval', { approved: true });
+const exec = engine.getExecution(run.id);
+```
+
+Key: `Workflow` = pure DSL builder (step/branch/path/waitFor). `Engine` = facade over internal Queue + Worker + SQLite Store + Executor. Each step runs as a bunqueue job on `__wf:steps` queue. Compensation runs in reverse order on failure. `waitFor` pauses execution (state='waiting') until `engine.signal()` resumes it.
+
+Source: `src/client/workflow/` (workflow.ts, engine.ts, executor.ts, store.ts, types.ts)
+
 ## Client SDK
 
 ```typescript

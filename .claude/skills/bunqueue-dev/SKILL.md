@@ -32,6 +32,7 @@ src/
     queue/          # Queue with DLQ, stall detection
     worker/         # Worker with heartbeat, ack batching
     tcp/            # Connection pool, reconnection
+    workflow/       # Workflow Engine (Workflow DSL, Engine, Executor, Store)
   domain/           # Pure business logic
     queue/          # Shard, PriorityQueue, DlqShard, UniqueKeyManager
   application/      # Use cases and managers
@@ -39,6 +40,15 @@ src/
   infrastructure/   # Persistence, server, scheduler, backup
   shared/           # Utilities (hash, lock, lru, skipList, minHeap)
 ```
+
+### Workflow Engine
+Located in `src/client/workflow/`. Pure consumer layer on bunqueue (no core modifications).
+- **workflow.ts** — Fluent DSL: `.step()`, `.branch()`, `.path()`, `.waitFor()`
+- **engine.ts** — Public facade: register, start, signal, getExecution, close
+- **executor.ts** — Core logic: step execution, branching, compensation, signals
+- **store.ts** — SQLite persistence for execution state (workflow_executions table)
+- **types.ts** — StepContext, Execution, StepJobData, EngineOptions, etc.
+- Export: `import { Workflow, Engine } from 'bunqueue/workflow'`
 
 ## Code Conventions
 
