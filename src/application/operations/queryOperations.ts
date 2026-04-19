@@ -29,7 +29,17 @@ export interface QueryContext {
 /** Get job by ID */
 export async function getJob(jobId: JobId, ctx: QueryContext): Promise<Job | null> {
   const location = ctx.jobIndex.get(jobId);
-  if (!location) return null;
+  if (!location) {
+    // Fallback: jobIndex may not be populated after restart for completed/DLQ jobs.
+    // Consult SQLite directly so getJob survives recovery.
+    if (ctx.storage) {
+      const job = ctx.storage.getJob(jobId);
+      if (job) return job;
+      const dlqEntry = ctx.storage.getDlqEntry(jobId);
+      if (dlqEntry) return dlqEntry.job;
+    }
+    return ctx.completedJobsData.get(jobId) ?? null;
+  }
 
   switch (location.type) {
     case 'queue': {
@@ -49,6 +59,8 @@ export async function getJob(jobId: JobId, ctx: QueryContext): Promise<Job | nul
       return ctx.storage?.getJob(jobId) ?? ctx.completedJobsData.get(jobId) ?? null;
     case 'dlq': {
       if (ctx.storage) {
+        const dlqEntry = ctx.storage.getDlqEntry(jobId);
+        if (dlqEntry) return dlqEntry.job;
         const job = ctx.storage.getJob(jobId);
         if (job) return job;
       }
@@ -113,6 +125,23 @@ export interface GetJobsContext extends QueryContext {
   shardCount: number;
 }
 
+/** Resolve job state from SQLite when jobIndex has no entry (post-restart recovery). */
+function resolveStateFromStorage(
+  jobId: JobId,
+  storage: QueryContext['storage']
+): JobState | 'unknown' {
+  if (!storage) return 'unknown';
+  if (storage.hasDlqEntry(jobId)) return JobState.Failed;
+  const persisted = storage.getJobStateRaw(jobId);
+  if (persisted === 'completed') return JobState.Completed;
+  if (persisted === 'active') return JobState.Active;
+  if (persisted !== 'waiting' && persisted !== 'delayed') return 'unknown';
+  const row = storage.getJob(jobId);
+  if (!row) return 'unknown';
+  if (row.runAt > Date.now()) return JobState.Delayed;
+  return row.priority > 0 ? JobState.Prioritized : JobState.Waiting;
+}
+
 /** Get job state by ID */
 export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobState | 'unknown'> {
   const location = ctx.jobIndex.get(jobId);
@@ -123,7 +152,7 @@ export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobS
   }
 
   if (!location) {
-    return 'unknown';
+    return resolveStateFromStorage(jobId, ctx.storage);
   }
 
   switch (location.type) {

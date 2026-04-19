@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.7.7] - 2026-04-19
+
+### Fixed
+- **Wrong job state after server restart** (Issue #83) — `getJobState`/`getJob`/`job.getState` returned `unknown`/`null` for completed, failed, and DLQ jobs after restart because `jobIndex` was not repopulated for completed/DLQ jobs during recovery. Now `getJob` and `getJobState` fall back to SQLite when `jobIndex` has no entry, correctly resolving `completed`/`failed`/`prioritized`/`delayed`/`waiting` states post-restart. `recover()` also populates `jobIndex` for restored DLQ entries.
+- **Stale `jobs` row retained when job enters DLQ** — `ack.ts` (MaxAttemptsExceeded), `stallDetection.ts`, `queueManager.failParent`, and `jobManagement.moveToFailed` now call `storage.deleteJob(jobId)` after `saveDlqEntry`. Without this, recovery would re-queue DLQ'd jobs as stalled actives on restart (legacy orphan rows also cleaned up via `loadDlqJobIds` guard in Phase 1 recovery).
+- **Write-buffer/delete race in SQLite persistence** — When a job was inserted through the 10ms-batched `writeBuffer` then immediately deleted (e.g., `removeOnComplete`), the delete ran synchronously while the insert was still pending in the buffer. On flush, the buffered insert wrote an orphan row with stale state. Added `WriteBuffer.removePending(jobId)` invoked from `deleteJob` to cancel pending inserts before SQL DELETE.
+- **DLQ-retried jobs did not survive restart** — `retryDlqJob`, `retryDlqJobs` (bulk), `retryDlqByFilter`, and `processAutoRetry` now re-insert the job into SQLite via `insertJob(job, true)` after pushing to the in-memory queue. Required because the jobs row is deleted when a job enters DLQ.
+
+### Tests
+- New `test/issue-83-jobstate-after-restart.test.ts` (4 tests: completed-state post-restart, `jobProxy.getState` post-restart, failed/DLQ state post-restart, retryDlq-ed job persists across restart).
+
 ## [2.7.6] - 2026-04-17
 
 ### Fixed

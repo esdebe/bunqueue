@@ -1279,6 +1279,7 @@ export class QueueManager {
       const entry = shard.addToDlq(parentJob, FailureReason.Unknown, failError);
       this.jobIndex.set(parentId, { type: 'dlq', queueName: parentJob.queue });
       this.storage?.saveDlqEntry(entry);
+      this.storage?.deleteJob(parentId);
     });
 
     // Broadcast failed event for parent

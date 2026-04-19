@@ -153,6 +153,7 @@ function moveStalliedJobToDlq(
   );
   ctx.jobIndex.set(job.id, { type: 'dlq', queueName: job.queue });
   ctx.storage?.saveDlqEntry(entry);
+  ctx.storage?.deleteJob(job.id);
 }
 
 /** Retry stalled job */

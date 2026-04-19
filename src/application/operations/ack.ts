@@ -144,6 +144,41 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   latencyTracker.ack.observe((Bun.nanoseconds() - startNs) / 1e6);
 }
 
+/** Move a permanently-failed job to DLQ (terminal path in failJob). */
+function moveFailedJobToDlq(
+  job: Job,
+  jobId: JobId,
+  error: string | undefined,
+  shard: Shard,
+  ctx: AckContext
+): void {
+  const entry = shard.addToDlq(job, FailureReason.MaxAttemptsExceeded, error ?? null);
+  ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
+  ctx.storage?.saveDlqEntry(entry);
+  ctx.storage?.deleteJob(jobId);
+  ctx.totalFailed.value++;
+  if (ctx.perQueueMetrics) {
+    const pq = ctx.perQueueMetrics.get(job.queue);
+    if (pq) pq.totalFailed++;
+    else ctx.perQueueMetrics.set(job.queue, { totalCompleted: 0n, totalFailed: 1n });
+  }
+  throughputTracker.failRate.increment();
+  if (job.customId && ctx.customIdMap) ctx.customIdMap.delete(job.customId);
+  ctx.emitDashboardEvent?.('dlq:added', {
+    queue: job.queue,
+    jobId: String(jobId),
+    reason: FailureReason.MaxAttemptsExceeded,
+  });
+  if (job.parentId) {
+    ctx.emitDashboardEvent?.('flow:failed', {
+      parentJobId: String(job.parentId),
+      failedChildId: String(jobId),
+      queue: job.queue,
+      error: error ?? 'Max attempts exceeded',
+    });
+  }
+}
+
 /**
  * Mark job as failed
  */
@@ -207,38 +242,7 @@ export async function failJob(
         ctx.customIdMap.delete(job.customId);
       }
     } else {
-      const entry = shard.addToDlq(job, FailureReason.MaxAttemptsExceeded, error ?? null);
-      ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
-      ctx.storage?.saveDlqEntry(entry);
-      ctx.totalFailed.value++;
-      if (ctx.perQueueMetrics) {
-        const pq = ctx.perQueueMetrics.get(job.queue);
-        if (pq) {
-          pq.totalFailed++;
-        } else {
-          ctx.perQueueMetrics.set(job.queue, { totalCompleted: 0n, totalFailed: 1n });
-        }
-      }
-      throughputTracker.failRate.increment();
-      // Release customId when job goes to DLQ
-      if (job.customId && ctx.customIdMap) {
-        ctx.customIdMap.delete(job.customId);
-      }
-      // Emit dlq:added dashboard event
-      ctx.emitDashboardEvent?.('dlq:added', {
-        queue: job.queue,
-        jobId: String(jobId),
-        reason: FailureReason.MaxAttemptsExceeded,
-      });
-      // Emit flow:failed if this job is part of a flow
-      if (job.parentId) {
-        ctx.emitDashboardEvent?.('flow:failed', {
-          parentJobId: String(job.parentId),
-          failedChildId: String(jobId),
-          queue: job.queue,
-          error: error ?? 'Max attempts exceeded',
-        });
-      }
+      moveFailedJobToDlq(job, jobId, error, shard, ctx);
     }
   });
 

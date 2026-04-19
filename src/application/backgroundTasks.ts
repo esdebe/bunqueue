@@ -191,6 +191,9 @@ export function recover(ctx: BackgroundContext): void {
 
   // Load completed job IDs from SQLite for dependency checking
   const completedInDb = ctx.storage.loadCompletedJobIds();
+  // Load DLQ job IDs so Phase 1 can skip stale active rows for DLQ'd jobs
+  // (legacy DBs predate the DLQ-row cleanup fix in failJob).
+  const dlqJobIds = ctx.storage.loadDlqJobIds();
 
   const now = Date.now();
 
@@ -211,6 +214,15 @@ export function recover(ctx: BackgroundContext): void {
       // These jobs will be re-created by the cron scheduler at the next tick.
       // Re-queuing them would cause the "starts right away" bug (#73).
       if (job.uniqueKey?.startsWith('cron:')) {
+        ctx.storage.deleteJob(job.id);
+        ctx.registerQueueName(job.queue);
+        continue;
+      }
+
+      // Skip jobs already present in DLQ (stale 'active' row from before the
+      // failJob fix). Drop the orphan row so Phase 2 and subsequent queries
+      // don't double-count it.
+      if (dlqJobIds.has(job.id)) {
         ctx.storage.deleteJob(job.id);
         ctx.registerQueueName(job.queue);
         continue;
@@ -316,6 +328,8 @@ export function recover(ctx: BackgroundContext): void {
     const shard = ctx.shards[idx];
     for (const entry of entries) {
       shard.restoreDlqEntry(queue, entry);
+      // Populate jobIndex so getJob/getJobState resolve DLQ'd jobs post-restart.
+      ctx.jobIndex.set(entry.job.id, { type: 'dlq', queueName: queue });
     }
     ctx.registerQueueName(queue);
   }

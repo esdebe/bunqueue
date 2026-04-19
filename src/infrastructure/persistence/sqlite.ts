@@ -284,6 +284,7 @@ export class SqliteStorage {
   }
 
   deleteJob(jobId: JobId): void {
+    this.writeBuffer.removePending(jobId);
     this.safeWrite(() => {
       this.statements.get('deleteJob')!.run(jobId);
     });
@@ -327,6 +328,41 @@ export class SqliteStorage {
       .query<{ job_id: string }, [string]>('SELECT job_id FROM job_results WHERE job_id = ?')
       .get(String(jobId));
     return row !== null;
+  }
+
+  /** Check if a job has a DLQ entry (used for state/job fallback after restart) */
+  hasDlqEntry(jobId: JobId): boolean {
+    const row = this.db
+      .query<{ job_id: string }, [string]>('SELECT job_id FROM dlq WHERE job_id = ? LIMIT 1')
+      .get(String(jobId));
+    return row !== null;
+  }
+
+  /** Get latest DLQ entry for a job (used for getJob fallback after restart) */
+  getDlqEntry(jobId: JobId): DlqEntry | null {
+    const row = this.db
+      .query<
+        { entry: Uint8Array },
+        [string]
+      >('SELECT entry FROM dlq WHERE job_id = ? ORDER BY entered_at DESC LIMIT 1')
+      .get(String(jobId));
+    if (!row) return null;
+    const entry = unpack<DlqEntry | null>(row.entry, null, `getDlqEntry:${String(jobId)}`);
+    return entry?.job ? reconstructDlqEntry(entry) : null;
+  }
+
+  /** Load all DLQ job IDs (used by recovery to skip stale active rows) */
+  loadDlqJobIds(): Set<JobId> {
+    const rows = this.db.query<{ job_id: string }, []>('SELECT job_id FROM dlq').all();
+    return new Set(rows.map((r) => r.job_id as JobId));
+  }
+
+  /** Get the persisted `state` column for a job. Returns null if the row is missing. */
+  getJobStateRaw(jobId: JobId): string | null {
+    const row = this.db
+      .query<{ state: string }, [string]>('SELECT state FROM jobs WHERE id = ?')
+      .get(String(jobId));
+    return row?.state ?? null;
   }
 
   /** Load all completed job IDs (for dependency recovery) */

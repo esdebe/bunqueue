@@ -108,6 +108,8 @@ export function retryDlqJob(queue: string, jobId: JobId, ctx: DlqContext): Job |
   const isDelayed = job.runAt > now;
   shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
   ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+  // Re-insert jobs row (deleted when job entered DLQ) so retry survives restart
+  ctx.storage?.insertJob(job, true);
 
   return job;
 }
@@ -143,6 +145,7 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
     const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+    ctx.storage?.insertJob(job, true);
   }
 
   return count;
@@ -177,6 +180,7 @@ export function retryDlqByFilter(queue: string, ctx: DlqContext, filter: DlqFilt
     const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+    ctx.storage?.insertJob(job, true);
     count++;
   }
 
@@ -217,6 +221,7 @@ export function processAutoRetry(queue: string, ctx: DlqContext): number {
     const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+    ctx.storage?.insertJob(job, true);
     count++;
   }
 

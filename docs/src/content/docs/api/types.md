@@ -153,7 +153,13 @@ interface Job<T = unknown> {
   /** Remove this job from the queue */
   remove(): Promise<void>;
 
-  /** Retry this failed job */
+  /**
+   * Retry this job. State-dispatched per BullMQ v5 contract:
+   * - `failed` → requeue from DLQ (throws if not present)
+   * - `active` → move to waiting (throws if move fails)
+   * - `waiting`/`prioritized`/`delayed` → no-op
+   * - other states → throws
+   */
   retry(): Promise<void>;
 
   /**
@@ -196,7 +202,10 @@ interface Job<T = unknown> {
   /** Change the job's priority */
   changePriority(opts: ChangePriorityOpts): Promise<void>;
 
-  /** Extend the job's lock duration */
+  /**
+   * Extend the job's lock duration. Returns the new duration on success, 0 if the lock
+   * could not be extended (wrong token, lock expired, or no active lock).
+   */
   extendLock(token: string, duration: number): Promise<number>;
 
   /** Clear job logs, optionally keeping the last N entries */
@@ -225,7 +234,10 @@ interface Job<T = unknown> {
   /** Remove this job's dependency relationship with its parent */
   removeChildDependency(): Promise<boolean>;
 
-  /** Remove the deduplication key associated with this job */
+  /**
+   * Remove the deduplication key associated with this job.
+   * @throws Not implemented — no server primitive available. Use `queue.removeDeduplicationKey()` instead.
+   */
   removeDeduplicationKey(): Promise<boolean>;
 
   /** Remove all unprocessed child jobs of this job */
@@ -270,6 +282,7 @@ interface Job<T = unknown> {
    * @param token - Lock token (optional in embedded mode)
    * @param opts - Options including child reference
    * @returns true if job was moved
+   * @throws In TCP mode — no server command available. Embedded mode only.
    */
   moveToWaitingChildren(
     token?: string,

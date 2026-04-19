@@ -274,6 +274,18 @@ export class WriteBuffer {
     return this.activeBuffer.length + this.flushBuffer.length;
   }
 
+  /**
+   * Remove any pending buffered inserts for a given jobId.
+   * Prevents a buffered insert from flushing to disk after an immediate deleteJob,
+   * which would leave an orphan row with stale state.
+   */
+  removePending(jobId: string): void {
+    const i = this.activeBuffer.findIndex((j) => j.id === jobId);
+    if (i !== -1) this.activeBuffer.splice(i, 1);
+    const j = this.flushBuffer.findIndex((j) => j.id === jobId);
+    if (j !== -1) this.flushBuffer.splice(j, 1);
+  }
+
   /** Stop auto-flush timer and flush pending jobs */
   stop(): void {
     // Clear auto-flush timer

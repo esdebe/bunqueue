@@ -284,6 +284,7 @@ export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promi
       return dlqEntry;
     });
     ctx.storage?.saveDlqEntry(entry);
+    ctx.storage?.deleteJob(jobId);
     return true;
   }
   return false;
